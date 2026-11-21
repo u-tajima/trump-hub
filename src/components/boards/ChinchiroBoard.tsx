@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Dices, Hand, Trophy, Volume2, VolumeX } from 'lucide-react';
 import type { ChinchiroClientState } from '../../games/chinchiro';
-import { type BowlSimMode, ChinchiroBowl3D } from '../ChinchiroBowl3D';
+import { ChinchiroBowl3D, type ChinchiroBowl3DHandle } from '../ChinchiroBowl3D';
 import { Dice3D } from '../Dice3D';
 
 interface ChinchiroBoardProps {
@@ -9,67 +9,76 @@ interface ChinchiroBoardProps {
   onAction: (action: { type: string; payload?: unknown }) => void;
 }
 
+type UiMode = 'idle' | 'shaking' | 'settling' | 'replaying';
+
 export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction }) => {
-  const [simMode, setSimMode] = useState<BowlSimMode>('idle');
-  const [targetDice, setTargetDice] = useState<[number, number, number]>([1, 2, 3]);
+  const bowlRef = useRef<ChinchiroBowl3DHandle | null>(null);
+  const [uiMode, setUiMode] = useState<UiMode>('idle');
   const [bowlLabel, setBowlLabel] = useState<string>('茶碗を振ってスタート');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
-  const awaitingResultRef = useRef<boolean>(false);
-  const prevLogRef = useRef<string>(state.lastLog);
+  const prevSeqRef = useRef<number>(state.rollSeq);
+  const ignoreNextSeqRef = useRef<number | null>(null);
   const pendingLabelRef = useRef<string>('');
+  const rollSeqRef = useRef<number>(state.rollSeq);
+  rollSeqRef.current = state.rollSeq;
 
   const current = state.players[state.turnIndex];
   const isMyTurn = state.phase === 'playing' && current.id === state.myId;
   const dealer = state.players[state.dealerIndex];
 
-  const activeHand =
-    current.currentHand ??
-    state.players.find((p) => p.currentHand !== null)?.currentHand ??
-    null;
-
   useEffect(() => {
-    if (prevLogRef.current === state.lastLog) return;
-    prevLogRef.current = state.lastLog;
+    if (state.rollSeq === prevSeqRef.current) return;
+    prevSeqRef.current = state.rollSeq;
 
-    const dice: [number, number, number] = activeHand?.dice ?? [
-      Math.floor(Math.random() * 6) + 1,
-      Math.floor(Math.random() * 6) + 1,
-      Math.floor(Math.random() * 6) + 1,
-    ];
-    pendingLabelRef.current = activeHand?.label ?? state.lastLog;
-    setTargetDice(dice);
+    const hand = state.lastRolledHand;
+    if (!hand) return;
 
-    if (awaitingResultRef.current) {
-      awaitingResultRef.current = false;
-      setSimMode('settling');
-      setBowlLabel('出目を判定中…');
-    } else {
-      setSimMode('shaking');
-      setBowlLabel('茶碗を振っています…');
-      const timer = window.setTimeout(() => {
-        setSimMode('settling');
-        setBowlLabel('出目を判定中…');
-      }, 780);
-      return () => window.clearTimeout(timer);
+    const roller = state.players.find((p) => p.id === state.lastRolledPlayerId);
+    const resultLabel = roller ? `${roller.name}: ${hand.label}` : hand.label;
+
+    // 自分の物理ロールで確定した直後の反映なら、すでに茶碗内で自然静止しているため再再生しない
+    if (ignoreNextSeqRef.current === state.rollSeq) {
+      ignoreNextSeqRef.current = null;
+      setUiMode('idle');
+      setBowlLabel(resultLabel);
+      return;
     }
-  }, [state.lastLog]);
 
-  const handleSettled = useCallback(() => {
-    setSimMode('idle');
+    // 相手・CPUのロールは cannon-es 事前計算リマップ再生で自然にその出目で静止させる
+    pendingLabelRef.current = resultLabel;
+    setUiMode('replaying');
+    setBowlLabel(roller ? `${roller.name} が振っています…` : '茶碗を振っています…');
+    bowlRef.current?.playTargetRoll(hand.dice);
+  }, [state.rollSeq, state.lastRolledHand, state.lastRolledPlayerId, state.players]);
+
+  const handleInteractiveSettled = useCallback(
+    (dice: [number, number, number]) => {
+      ignoreNextSeqRef.current = rollSeqRef.current + 1;
+      setUiMode('idle');
+      setBowlLabel(`[${dice.join('-')}] 判定中…`);
+      onAction({ type: 'roll', payload: { dice } });
+    },
+    [onAction]
+  );
+
+  const handleReplaySettled = useCallback(() => {
+    setUiMode('idle');
     setBowlLabel(pendingLabelRef.current || '確定！');
   }, []);
 
   const handleStartShake = () => {
-    if (!isMyTurn || simMode !== 'idle') return;
-    setSimMode('shaking');
-    setBowlLabel('「止める！」で出目を決定');
+    if (!isMyTurn || uiMode !== 'idle') return;
+    setUiMode('shaking');
+    setBowlLabel('「止める！」で茶碗を止める');
+    bowlRef.current?.startInteractiveShake();
   };
 
   const handleStop = () => {
-    if (!isMyTurn || simMode !== 'shaking') return;
-    awaitingResultRef.current = true;
-    onAction({ type: 'roll' });
+    if (!isMyTurn || uiMode !== 'shaking') return;
+    setUiMode('settling');
+    setBowlLabel('自然停止を待っています…');
+    bowlRef.current?.stopInteractiveShake();
   };
 
   return (
@@ -90,14 +99,15 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
         </button>
       </div>
 
+      {/* cannon-es 剛体物理 + Three.js 斜め俯瞰 3D茶碗ステージ */}
       <div className="chinchiro-bowl-stage">
         <ChinchiroBowl3D
-          mode={simMode}
-          targetDice={targetDice}
+          ref={bowlRef}
           soundEnabled={soundEnabled}
-          onSettled={handleSettled}
+          onInteractiveSettled={handleInteractiveSettled}
+          onReplaySettled={handleReplaySettled}
         />
-        <div className={`bowl-result-banner ${simMode === 'idle' && activeHand ? 'pop' : ''}`}>
+        <div className={`bowl-result-banner ${uiMode === 'idle' && state.lastRolledHand ? 'pop' : ''}`}>
           {bowlLabel}
         </div>
       </div>
@@ -145,7 +155,7 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
 
       {state.phase === 'playing' ? (
         <div className="sticky-bottom-bar">
-          {simMode === 'shaking' && isMyTurn ? (
+          {uiMode === 'shaking' && isMyTurn ? (
             <button
               type="button"
               className="danger-btn full-width"
@@ -158,14 +168,14 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
             <button
               type="button"
               className="primary-btn full-width"
-              disabled={!isMyTurn || simMode !== 'idle'}
+              disabled={!isMyTurn || uiMode !== 'idle'}
               onClick={handleStartShake}
             >
               <Dices size={18} />
-              {simMode === 'settling'
-                ? '判定中…'
-                : simMode === 'shaking'
-                ? `${current.name} が振っています…`
+              {uiMode === 'settling'
+                ? '自然停止を待っています…'
+                : uiMode === 'replaying'
+                ? 'ダイスが転がっています…'
                 : isMyTurn
                 ? `茶碗を振る（残り ${current.rollsLeft} 回）`
                 : `${current.name} のターン`}

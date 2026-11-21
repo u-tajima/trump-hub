@@ -1,37 +1,80 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useImperativeHandle, useRef } from 'react';
+import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import './ChinchiroBowl3D.css';
 
-export type BowlSimMode = 'idle' | 'shaking' | 'settling';
+export interface ChinchiroBowl3DHandle {
+  startInteractiveShake: () => void;
+  stopInteractiveShake: () => void;
+  playTargetRoll: (targetDice: [number, number, number]) => void;
+}
 
 interface ChinchiroBowl3DProps {
-  mode: BowlSimMode;
-  targetDice: [number, number, number];
   soundEnabled: boolean;
-  onSettled?: () => void;
+  onInteractiveSettled: (dice: [number, number, number]) => void;
+  onReplaySettled: () => void;
 }
 
-const DIE_SIZE = 0.72;
+const DIE_SIZE = 0.68;
 const DIE_HALF = DIE_SIZE / 2;
-const BOWL_MAX_R = 2.15;
+const FIXED_DT = 1 / 60;
 
-function bowlSurfaceY(r: number): number {
-  const flatR = 1.05;
-  if (r <= flatR) {
-    return 0.12 + 0.04 * (r / flatR) * (r / flatR);
-  }
-  const d = r - flatR;
-  return 0.16 + d * d * 0.92;
+// BoxGeometry の面順: [0:+x, 1:-x, 2:+y, 3:-y, 4:+z, 5:-z]
+const LOCAL_FACE_AXES = [
+  new THREE.Vector3(1, 0, 0),
+  new THREE.Vector3(-1, 0, 0),
+  new THREE.Vector3(0, 1, 0),
+  new THREE.Vector3(0, -1, 0),
+  new THREE.Vector3(0, 0, 1),
+  new THREE.Vector3(0, 0, -1),
+];
+
+const DEFAULT_FACE_VALUES = [3, 4, 1, 6, 2, 5];
+
+// 対面和 = 7 を維持しながら、指定ローカル面 topFaceIdx に targetValue が来る 6面配列を生成
+function buildRemappedFaceValues(topFaceIdx: number, targetValue: number): number[] {
+  const oppIdx = topFaceIdx % 2 === 0 ? topFaceIdx + 1 : topFaceIdx - 1;
+  const oppVal = 7 - targetValue;
+  const remainingPairs: [number, number][] = (
+    [
+      [1, 6],
+      [2, 5],
+      [3, 4],
+    ] as [number, number][]
+  ).filter(([a, b]) => a !== targetValue && b !== targetValue);
+
+  const result = Array<number>(6).fill(1);
+  result[topFaceIdx] = targetValue;
+  result[oppIdx] = oppVal;
+
+  const remainingIdxPairs: [number, number][] = (
+    [
+      [0, 1],
+      [2, 3],
+      [4, 5],
+    ] as [number, number][]
+  ).filter(([a, b]) => a !== topFaceIdx && b !== topFaceIdx);
+
+  remainingIdxPairs.forEach(([ia, ib], i) => {
+    result[ia] = remainingPairs[i][0];
+    result[ib] = remainingPairs[i][1];
+  });
+  return result;
 }
 
-function bowlNormal(x: number, z: number): THREE.Vector3 {
-  const r = Math.hypot(x, z);
-  if (r < 0.001) return new THREE.Vector3(0, 1, 0);
-  const flatR = 1.05;
-  const slope = r <= flatR ? (0.08 * r) / (flatR * flatR) : 1.84 * (r - flatR);
-  const nx = -(x / r) * slope;
-  const nz = -(z / r) * slope;
-  return new THREE.Vector3(nx, 1, nz).normalize();
+function getTopFaceIndex(q: CANNON.Quaternion): { index: number; alignment: number } {
+  const tq = new THREE.Quaternion(q.x, q.y, q.z, q.w);
+  let bestIdx = 2;
+  let bestY = -2;
+  const tmp = new THREE.Vector3();
+  for (let i = 0; i < 6; i++) {
+    tmp.copy(LOCAL_FACE_AXES[i]).applyQuaternion(tq);
+    if (tmp.y > bestY) {
+      bestY = tmp.y;
+      bestIdx = i;
+    }
+  }
+  return { index: bestIdx, alignment: bestY };
 }
 
 const PIP_COORDS: Record<number, [number, number][]> = {
@@ -50,24 +93,23 @@ function createDieFaceTexture(value: number): THREE.CanvasTexture {
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
-  const bg = ctx.createRadialGradient(size * 0.38, size * 0.35, 10, size * 0.5, size * 0.5, size * 0.75);
+  const bg = ctx.createRadialGradient(size * 0.36, size * 0.34, 12, size * 0.5, size * 0.5, size * 0.75);
   bg.addColorStop(0, '#ffffff');
-  bg.addColorStop(0.75, '#f4f1ea');
-  bg.addColorStop(1, '#dcd6c8');
+  bg.addColorStop(0.75, '#f5f2ea');
+  bg.addColorStop(1, '#d8d2c3');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, size, size);
 
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.14)';
   ctx.lineWidth = 10;
   ctx.strokeRect(5, 5, size - 10, size - 10);
 
   const coords = PIP_COORDS[value] ?? PIP_COORDS[1];
-  const radius = value === 1 ? size * 0.14 : size * 0.085;
+  const radius = value === 1 ? size * 0.145 : size * 0.088;
 
   for (const [u, v] of coords) {
     const cx = u * size;
     const cy = v * size;
-
     const pipGrad = ctx.createRadialGradient(
       cx - radius * 0.25,
       cy - radius * 0.25,
@@ -85,7 +127,6 @@ function createDieFaceTexture(value: number): THREE.CanvasTexture {
       pipGrad.addColorStop(0.6, '#0f172a');
       pipGrad.addColorStop(1, '#020617');
     }
-
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fillStyle = pipGrad;
@@ -118,482 +159,756 @@ function createBowlInteriorTexture(): THREE.CanvasTexture {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
-  ctx.strokeStyle = 'rgba(245, 198, 102, 0.22)';
+  ctx.strokeStyle = 'rgba(245, 198, 102, 0.24)';
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(0, size * 0.16);
   ctx.lineTo(size, size * 0.16);
   ctx.stroke();
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-  ctx.lineWidth = 2;
-  for (let y = 40; y < size; y += 28) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(size, y);
-    ctx.stroke();
-  }
-
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
-function targetQuaternionForFace(value: number, yawRad: number): THREE.Quaternion {
-  const qFace = new THREE.Quaternion();
-  const euler = new THREE.Euler();
-  switch (value) {
-    case 1:
-      euler.set(0, 0, 0);
-      break;
-    case 6:
-      euler.set(Math.PI, 0, 0);
-      break;
-    case 2:
-      euler.set(-Math.PI / 2, 0, 0);
-      break;
-    case 5:
-      euler.set(Math.PI / 2, 0, 0);
-      break;
-    case 3:
-      euler.set(0, 0, Math.PI / 2);
-      break;
-    case 4:
-      euler.set(0, 0, -Math.PI / 2);
-      break;
-    default:
-      euler.set(0, 0, 0);
+function bowlVisualY(r: number): number {
+  const flatR = 1.15;
+  if (r <= flatR) return 0.14;
+  const d = r - flatR;
+  return 0.14 + d * d * 0.88;
+}
+
+// cannon-es の茶碗＆ダイス物理ワールドを構築する共通ファクトリ
+function createPhysicsRig() {
+  const world = new CANNON.World();
+  world.gravity.set(0, -24, 0);
+  world.broadphase = new CANNON.NaiveBroadphase();
+  (world.solver as CANNON.GSSolver).iterations = 14;
+  world.allowSleep = false;
+
+  const bowlMat = new CANNON.Material('bowl');
+  const dieMat = new CANNON.Material('die');
+
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(bowlMat, dieMat, {
+      friction: 0.38,
+      restitution: 0.36,
+    })
+  );
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(dieMat, dieMat, {
+      friction: 0.25,
+      restitution: 0.45,
+    })
+  );
+
+  // キネマティック剛体の茶碗（底＋2段16角形お椀斜面＋飛び出し防止天井）
+  const bowlBody = new CANNON.Body({
+    type: CANNON.Body.KINEMATIC,
+    material: bowlMat,
+    position: new CANNON.Vec3(0, 0, 0),
+  });
+
+  // 底面プレート（上面が y = 0.14）
+  bowlBody.addShape(
+    new CANNON.Box(new CANNON.Vec3(1.22, 0.14, 1.22)),
+    new CANNON.Vec3(0, 0.0, 0)
+  );
+
+  const segments = 16;
+  // 下段の緩やかなお椀斜面（bowlVisualY に合わせて外側へ開く -1.02 rad）
+  for (let i = 0; i < segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const r = 1.56;
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+    const qYaw = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
+    const qTilt = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), -1.02);
+    const q = qYaw.mult(qTilt);
+    bowlBody.addShape(
+      new CANNON.Box(new CANNON.Vec3(0.12, 0.48, 0.56)),
+      new CANNON.Vec3(x, 0.25, z),
+      q
+    );
   }
-  qFace.setFromEuler(euler);
-  const qYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawRad);
-  return qYaw.multiply(qFace);
+
+  // 上段のお椀壁（bowlVisualY に合わせて外側へ開く -0.52 rad）
+  for (let i = 0; i < segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const r = 2.24;
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+    const qYaw = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
+    const qTilt = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), -0.52);
+    const q = qYaw.mult(qTilt);
+    bowlBody.addShape(
+      new CANNON.Box(new CANNON.Vec3(0.12, 0.68, 0.62)),
+      new CANNON.Vec3(x, 1.0, z),
+      q
+    );
+  }
+
+  // 見えない垂直ガード壁（激しく振っても茶碗外へロストしない）
+  for (let i = 0; i < segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const r = 2.54;
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+    const qYaw = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
+    bowlBody.addShape(
+      new CANNON.Box(new CANNON.Vec3(0.12, 0.72, 0.65)),
+      new CANNON.Vec3(x, 2.2, z),
+      qYaw
+    );
+  }
+
+  // 見えない上部キャップ
+  bowlBody.addShape(
+    new CANNON.Box(new CANNON.Vec3(2.8, 0.15, 2.8)),
+    new CANNON.Vec3(0, 2.95, 0)
+  );
+
+  world.addBody(bowlBody);
+
+  // 3つの立方体剛体ダイス
+  const dieShape = new CANNON.Box(new CANNON.Vec3(DIE_HALF, DIE_HALF, DIE_HALF));
+  const initialOffsets: [number, number][] = [
+    [-0.75, 0.35],
+    [0.05, -0.55],
+    [0.75, 0.32],
+  ];
+
+  const dieBodies = initialOffsets.map(([x, z]) => {
+    const body = new CANNON.Body({
+      mass: 1,
+      material: dieMat,
+      shape: dieShape,
+      position: new CANNON.Vec3(x, 0.14 + DIE_HALF + 0.02, z),
+      linearDamping: 0.14,
+      angularDamping: 0.18,
+    });
+    world.addBody(body);
+    return body;
+  });
+
+  return { world, bowlBody, dieBodies };
+}
+
+interface RecordedFrame {
+  bowlPos: [number, number, number];
+  bowlQuat: [number, number, number, number];
+  dicePos: [number, number, number][];
+  diceQuat: [number, number, number, number][];
+  maxImpact: number;
+}
+
+interface RecordedRoll {
+  frames: RecordedFrame[];
+  topFaceIndices: number[];
+}
+
+// 相手/CPU用: ヘッドレス cannon-es で「茶碗を少し揺らす→止める→自然静止」を完全シミュレートして記録
+// 最終静止面を事前に把握し、再生前にマテリアルを割り当てることで着地後の不自然な回転をゼロにする
+function presimulateRecordedRoll(): RecordedRoll {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { world, bowlBody, dieBodies } = createPhysicsRig();
+
+    // 初期状態にランダムな姿勢・初速を与える
+    const slots: [number, number][] = [
+      [-0.72, 0.34],
+      [0.04, -0.56],
+      [0.72, 0.3],
+    ];
+    dieBodies.forEach((b, i) => {
+      const [sx, sz] = slots[i];
+      const q = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          Math.random() * Math.PI * 2,
+          Math.random() * Math.PI * 2,
+          Math.random() * Math.PI * 2
+        )
+      );
+      b.position.set(sx, 0.9 + Math.random() * 0.45, sz);
+      b.quaternion.set(q.x, q.y, q.z, q.w);
+      b.velocity.set((Math.random() - 0.5) * 5.2, 2.2 + Math.random() * 2.0, (Math.random() - 0.5) * 5.2);
+      b.angularVelocity.set(
+        (Math.random() - 0.5) * 18,
+        (Math.random() - 0.5) * 18,
+        (Math.random() - 0.5) * 18
+      );
+    });
+
+    let stepImpact = 0;
+    dieBodies.forEach((b) => {
+      b.addEventListener('collide', (ev: { contact: CANNON.ContactEquation }) => {
+        const imp = Math.abs(ev.contact.getImpactVelocityAlongNormal());
+        if (imp > stepImpact) stepImpact = imp;
+      });
+    });
+
+    const frames: RecordedFrame[] = [];
+    const shakeSteps = 26; // 約0.43秒 茶碗を振る
+    let bx = 0;
+    let by = 0;
+    let bz = 0;
+    let rx = 0;
+    let rz = 0;
+    let stillFrames = 0;
+
+    for (let step = 0; step < 300; step++) {
+      stepImpact = 0;
+      let nextBx: number;
+      let nextBy: number;
+      let nextBz: number;
+      let nextRx: number;
+      let nextRz: number;
+
+      if (step < shakeSteps) {
+        const t = (step + 1) * FIXED_DT;
+        nextBx = Math.sin(t * 18) * 0.38;
+        nextBz = Math.cos(t * 14) * 0.24;
+        nextBy = Math.abs(Math.sin(t * 18)) * 0.08;
+        nextRz = -Math.sin(t * 18) * 0.14;
+        nextRx = Math.cos(t * 14) * 0.11;
+      } else {
+        // 茶碗を滑らかに水平・中央へ戻す
+        nextBx = bx * 0.72;
+        nextBy = by * 0.72;
+        nextBz = bz * 0.72;
+        nextRx = rx * 0.72;
+        nextRz = rz * 0.72;
+        if (Math.abs(nextBx) < 0.002) nextBx = 0;
+        if (Math.abs(nextBy) < 0.002) nextBy = 0;
+        if (Math.abs(nextBz) < 0.002) nextBz = 0;
+        if (Math.abs(nextRx) < 0.002) nextRx = 0;
+        if (Math.abs(nextRz) < 0.002) nextRz = 0;
+      }
+
+      bowlBody.velocity.set((nextBx - bx) / FIXED_DT, (nextBy - by) / FIXED_DT, (nextBz - bz) / FIXED_DT);
+      bowlBody.position.set(nextBx, nextBy, nextBz);
+      bowlBody.quaternion.setFromEuler(nextRx, 0, nextRz);
+      bx = nextBx;
+      by = nextBy;
+      bz = nextBz;
+      rx = nextRx;
+      rz = nextRz;
+
+      world.step(FIXED_DT);
+
+      frames.push({
+        bowlPos: [bowlBody.position.x, bowlBody.position.y, bowlBody.position.z],
+        bowlQuat: [
+          bowlBody.quaternion.x,
+          bowlBody.quaternion.y,
+          bowlBody.quaternion.z,
+          bowlBody.quaternion.w,
+        ],
+        dicePos: dieBodies.map((b) => [b.position.x, b.position.y, b.position.z]),
+        diceQuat: dieBodies.map((b) => [b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w]),
+        maxImpact: stepImpact,
+      });
+
+      if (step > shakeSteps + 24) {
+        const allStill = dieBodies.every(
+          (b) => b.velocity.length() < 0.05 && b.angularVelocity.length() < 0.07
+        );
+        if (allStill) {
+          stillFrames++;
+          if (stillFrames >= 12) break;
+        } else {
+          stillFrames = 0;
+        }
+      }
+    }
+
+    const allFlat = dieBodies.every((b) => getTopFaceIndex(b.quaternion).alignment > 0.91);
+    const allInside = dieBodies.every((b) => b.position.y > 0.1 && b.position.y < 1.8);
+    if ((allFlat && allInside) || attempt === 5) {
+      return {
+        frames,
+        topFaceIndices: dieBodies.map((b) => getTopFaceIndex(b.quaternion).index),
+      };
+    }
+  }
+
+  // フォールバック（通常到達しない）
+  return {
+    frames: [],
+    topFaceIndices: [2, 2, 2],
+  };
 }
 
 class DiceSoundSynth {
   private ctx: AudioContext | null = null;
   private lastPlayed = 0;
 
-  playClack(intensity = 0.6) {
+  playClack(intensity = 0.5) {
     const nowMs = performance.now();
-    if (nowMs - this.lastPlayed < 42) return;
+    if (nowMs - this.lastPlayed < 38) return;
     this.lastPlayed = nowMs;
-
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return;
       if (!this.ctx) this.ctx = new AudioCtx();
-      if (this.ctx.state === 'suspended') {
-        void this.ctx.resume();
-      }
+      if (this.ctx.state === 'suspended') void this.ctx.resume();
+
       const t = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
-      const baseFreq = 1100 + Math.random() * 650;
-      osc.frequency.setValueAtTime(baseFreq, t);
-      osc.frequency.exponentialRampToValueAtTime(380, t + 0.045);
+      osc.frequency.setValueAtTime(1050 + Math.random() * 600, t);
+      osc.frequency.exponentialRampToValueAtTime(340, t + 0.04);
 
-      const vol = Math.min(0.16, Math.max(0.02, intensity * 0.14));
+      const vol = Math.min(0.15, Math.max(0.015, intensity * 0.13));
       gain.gain.setValueAtTime(vol, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start(t);
-      osc.stop(t + 0.055);
+      osc.stop(t + 0.05);
     } catch {
-      // ignore audio block
+      // ignore
     }
   }
 }
 
-interface SimDie {
-  mesh: THREE.Mesh;
-  pos: THREE.Vector3;
-  vel: THREE.Vector3;
-  omega: THREE.Vector3;
-  startQuat: THREE.Quaternion;
-  targetQuat: THREE.Quaternion;
-  startPos: THREE.Vector3;
-  targetPos: THREE.Vector3;
-  settledSoundPlayed: boolean;
-}
+type InternalSimState = 'idle' | 'shaking' | 'settlingInteractive' | 'replaying';
 
-const REST_POSITIONS: [number, number][] = [
-  [-0.78, 0.36],
-  [0.05, -0.58],
-  [0.78, 0.32],
-];
+export const ChinchiroBowl3D = React.forwardRef<ChinchiroBowl3DHandle, ChinchiroBowl3DProps>(
+  ({ soundEnabled, onInteractiveSettled, onReplaySettled }, ref) => {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const soundEnabledRef = useRef(soundEnabled);
+    const onInteractiveSettledRef = useRef(onInteractiveSettled);
+    const onReplaySettledRef = useRef(onReplaySettled);
 
-export const ChinchiroBowl3D: React.FC<ChinchiroBowl3DProps> = ({
-  mode,
-  targetDice,
-  soundEnabled,
-  onSettled,
-}) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const modeRef = useRef<BowlSimMode>(mode);
-  const targetDiceRef = useRef<[number, number, number]>(targetDice);
-  const soundEnabledRef = useRef<boolean>(soundEnabled);
-  const onSettledRef = useRef(onSettled);
-  const settleStartRef = useRef<number>(0);
-  const settledFiredRef = useRef<boolean>(false);
-  const triggerTransitionRef = useRef<((nextMode: BowlSimMode) => void) | null>(null);
+    soundEnabledRef.current = soundEnabled;
+    onInteractiveSettledRef.current = onInteractiveSettled;
+    onReplaySettledRef.current = onReplaySettled;
 
-  soundEnabledRef.current = soundEnabled;
-  onSettledRef.current = onSettled;
-  targetDiceRef.current = targetDice;
+    const actionsRef = useRef<ChinchiroBowl3DHandle | null>(null);
+    useImperativeHandle(ref, () => ({
+      startInteractiveShake: () => actionsRef.current?.startInteractiveShake(),
+      stopInteractiveShake: () => actionsRef.current?.stopInteractiveShake(),
+      playTargetRoll: (dice) => actionsRef.current?.playTargetRoll(dice),
+    }));
 
-  useEffect(() => {
-    modeRef.current = mode;
-    triggerTransitionRef.current?.(mode);
-  }, [mode, targetDice]);
+    useEffect(() => {
+      const container = containerRef.current;
+      if (!container) return;
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+      const width = container.clientWidth || 340;
+      const height = 260;
 
-    const width = container.clientWidth || 340;
-    const height = 250;
+      // Three.js シーン構築
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(37, width / height, 0.1, 60);
+      camera.position.set(0, 6.2, 5.5);
+      camera.lookAt(0, 0.4, 0.05);
 
-    const scene = new THREE.Scene();
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.12;
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 60);
-    camera.position.set(0, 6.2, 5.4);
-    camera.lookAt(0, 0.35, 0.05);
+      scene.add(new THREE.HemisphereLight(0xfff8e7, 0x102a1d, 0.95));
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
+      const dirLight = new THREE.DirectionalLight(0xfff4d6, 2.0);
+      dirLight.position.set(4.5, 9.5, 4.2);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 1024;
+      dirLight.shadow.mapSize.height = 1024;
+      dirLight.shadow.camera.near = 1;
+      dirLight.shadow.camera.far = 22;
+      dirLight.shadow.camera.left = -4.2;
+      dirLight.shadow.camera.right = 4.2;
+      dirLight.shadow.camera.top = 4.2;
+      dirLight.shadow.camera.bottom = -4.2;
+      dirLight.shadow.bias = -0.001;
+      scene.add(dirLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xfff8e7, 0x102a1d, 0.9);
-    scene.add(hemiLight);
+      const rimLight = new THREE.PointLight(0x60a5fa, 0.65, 14);
+      rimLight.position.set(-4.5, 4.0, -4.0);
+      scene.add(rimLight);
 
-    const dirLight = new THREE.DirectionalLight(0xfff4d6, 1.9);
-    dirLight.position.set(4.5, 9.5, 4.0);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    dirLight.shadow.camera.near = 1;
-    dirLight.shadow.camera.far = 22;
-    const dCam = 4.2;
-    dirLight.shadow.camera.left = -dCam;
-    dirLight.shadow.camera.right = dCam;
-    dirLight.shadow.camera.top = dCam;
-    dirLight.shadow.camera.bottom = -dCam;
-    dirLight.shadow.bias = -0.001;
-    scene.add(dirLight);
+      const tableGeo = new THREE.CircleGeometry(7.5, 48);
+      const tableMat = new THREE.ShadowMaterial({ opacity: 0.42 });
+      const tableMesh = new THREE.Mesh(tableGeo, tableMat);
+      tableMesh.rotation.x = -Math.PI / 2;
+      tableMesh.position.y = -0.02;
+      tableMesh.receiveShadow = true;
+      scene.add(tableMesh);
 
-    const rimLight = new THREE.PointLight(0x60a5fa, 0.65, 14);
-    rimLight.position.set(-4.5, 4.0, -4.0);
-    scene.add(rimLight);
+      // 茶碗の見た目メッシュグループ
+      const bowlGroup = new THREE.Group();
+      scene.add(bowlGroup);
 
-    const tableGeo = new THREE.CircleGeometry(7.5, 48);
-    const tableMat = new THREE.ShadowMaterial({ opacity: 0.42 });
-    const tableMesh = new THREE.Mesh(tableGeo, tableMat);
-    tableMesh.rotation.x = -Math.PI / 2;
-    tableMesh.position.y = -0.02;
-    tableMesh.receiveShadow = true;
-    scene.add(tableMesh);
+      const outerPoints: THREE.Vector2[] = [
+        new THREE.Vector2(0.0, 0.0),
+        new THREE.Vector2(1.18, 0.0),
+        new THREE.Vector2(1.25, 0.14),
+        new THREE.Vector2(1.7, 0.42),
+        new THREE.Vector2(2.24, 1.0),
+        new THREE.Vector2(2.55, 1.65),
+        new THREE.Vector2(2.46, 1.7),
+      ];
+      const outerGeo = new THREE.LatheGeometry(outerPoints, 48);
+      const outerMat = new THREE.MeshStandardMaterial({
+        color: 0x1a1412,
+        roughness: 0.22,
+        metalness: 0.18,
+      });
+      const outerMesh = new THREE.Mesh(outerGeo, outerMat);
+      outerMesh.castShadow = true;
+      outerMesh.receiveShadow = true;
+      bowlGroup.add(outerMesh);
 
-    const bowlGroup = new THREE.Group();
-    scene.add(bowlGroup);
+      const innerPoints: THREE.Vector2[] = [];
+      for (let i = 0; i <= 20; i++) {
+        const r = (i / 20) * 2.42;
+        innerPoints.push(new THREE.Vector2(r, bowlVisualY(r)));
+      }
+      const innerGeo = new THREE.LatheGeometry(innerPoints, 48);
+      const innerTex = createBowlInteriorTexture();
+      const innerMat = new THREE.MeshStandardMaterial({
+        map: innerTex,
+        roughness: 0.34,
+        metalness: 0.08,
+        side: THREE.DoubleSide,
+      });
+      const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+      innerMesh.receiveShadow = true;
+      bowlGroup.add(innerMesh);
 
-    const outerPoints: THREE.Vector2[] = [
-      new THREE.Vector2(0.0, 0.0),
-      new THREE.Vector2(1.15, 0.0),
-      new THREE.Vector2(1.22, 0.14),
-      new THREE.Vector2(1.65, 0.38),
-      new THREE.Vector2(2.22, 0.95),
-      new THREE.Vector2(2.55, 1.62),
-      new THREE.Vector2(2.46, 1.68),
-    ];
-    const outerGeo = new THREE.LatheGeometry(outerPoints, 48);
-    const outerMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1412,
-      roughness: 0.22,
-      metalness: 0.18,
-    });
-    const outerMesh = new THREE.Mesh(outerGeo, outerMat);
-    outerMesh.castShadow = true;
-    outerMesh.receiveShadow = true;
-    bowlGroup.add(outerMesh);
+      const rimGeo = new THREE.TorusGeometry(2.48, 0.065, 16, 64);
+      const rimMat = new THREE.MeshStandardMaterial({
+        color: 0xd99b26,
+        roughness: 0.25,
+        metalness: 0.82,
+      });
+      const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+      rimMesh.rotation.x = Math.PI / 2;
+      rimMesh.position.y = 1.67;
+      rimMesh.castShadow = true;
+      bowlGroup.add(rimMesh);
 
-    const innerPoints: THREE.Vector2[] = [];
-    for (let i = 0; i <= 20; i++) {
-      const r = (i / 20) * 2.42;
-      innerPoints.push(new THREE.Vector2(r, bowlSurfaceY(r)));
-    }
-    const innerGeo = new THREE.LatheGeometry(innerPoints, 48);
-    const innerTex = createBowlInteriorTexture();
-    const innerMat = new THREE.MeshStandardMaterial({
-      map: innerTex,
-      roughness: 0.34,
-      metalness: 0.08,
-      side: THREE.DoubleSide,
-    });
-    const innerMesh = new THREE.Mesh(innerGeo, innerMat);
-    innerMesh.receiveShadow = true;
-    bowlGroup.add(innerMesh);
-
-    const rimGeo = new THREE.TorusGeometry(2.48, 0.065, 16, 64);
-    const rimMat = new THREE.MeshStandardMaterial({
-      color: 0xd99b26,
-      roughness: 0.25,
-      metalness: 0.82,
-    });
-    const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-    rimMesh.rotation.x = Math.PI / 2;
-    rimMesh.position.y = 1.65;
-    rimMesh.castShadow = true;
-    bowlGroup.add(rimMesh);
-
-    const faceOrder = [3, 4, 1, 6, 2, 5];
-    const dieMaterials = faceOrder.map(
-      (v) =>
-        new THREE.MeshStandardMaterial({
+      // 1..6 のダイス面マテリアルをキャッシュ
+      const matByValue: Record<number, THREE.MeshStandardMaterial> = {};
+      for (let v = 1; v <= 6; v++) {
+        matByValue[v] = new THREE.MeshStandardMaterial({
           map: createDieFaceTexture(v),
           roughness: 0.22,
           metalness: 0.05,
-        })
-    );
-    const dieGeo = new THREE.BoxGeometry(DIE_SIZE, DIE_SIZE, DIE_SIZE);
-
-    const soundSynth = new DiceSoundSynth();
-
-    const diceBodies: SimDie[] = REST_POSITIONS.map(([rx, rz], idx) => {
-      const mesh = new THREE.Mesh(dieGeo, dieMaterials);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      const y = bowlSurfaceY(Math.hypot(rx, rz)) + DIE_HALF;
-      mesh.position.set(rx, y, rz);
-      const q = targetQuaternionForFace(idx + 1, idx * 0.4 - 0.3);
-      mesh.quaternion.copy(q);
-      bowlGroup.add(mesh);
-
-      return {
-        mesh,
-        pos: new THREE.Vector3(rx, y, rz),
-        vel: new THREE.Vector3(),
-        omega: new THREE.Vector3(),
-        startQuat: q.clone(),
-        targetQuat: q.clone(),
-        startPos: new THREE.Vector3(rx, y, rz),
-        targetPos: new THREE.Vector3(rx, y, rz),
-        settledSoundPlayed: false,
-      };
-    });
-
-    triggerTransitionRef.current = (nextMode: BowlSimMode) => {
-      if (nextMode === 'shaking') {
-        settledFiredRef.current = false;
-        for (const d of diceBodies) {
-          d.vel.set(
-            (Math.random() - 0.5) * 9.5,
-            3.5 + Math.random() * 4.0,
-            (Math.random() - 0.5) * 9.5
-          );
-          d.omega.set(
-            (Math.random() - 0.5) * 18,
-            (Math.random() - 0.5) * 18,
-            (Math.random() - 0.5) * 18
-          );
-        }
-        if (soundEnabledRef.current) soundSynth.playClack(0.8);
-      } else if (nextMode === 'settling') {
-        settleStartRef.current = performance.now();
-        settledFiredRef.current = false;
-        const vals = targetDiceRef.current;
-
-        const baseAngle = Math.random() * Math.PI * 2;
-        diceBodies.forEach((d, idx) => {
-          const a = baseAngle + (idx * Math.PI * 2) / 3 + (Math.random() - 0.5) * 0.28;
-          const dist = 0.62 + Math.random() * 0.25;
-          const tx = Math.cos(a) * dist;
-          const tz = Math.sin(a) * dist;
-          const ty = bowlSurfaceY(Math.hypot(tx, tz)) + DIE_HALF;
-
-          d.startPos.copy(d.pos);
-          d.targetPos.set(tx, ty, tz);
-          d.startQuat.copy(d.mesh.quaternion);
-          d.targetQuat.copy(targetQuaternionForFace(vals[idx], (Math.random() - 0.5) * Math.PI * 1.4));
-          d.settledSoundPlayed = false;
         });
       }
-    };
 
-    const handleResize = () => {
-      if (!container) return;
-      const w = container.clientWidth || 340;
-      camera.aspect = w / height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, height);
-    };
-    window.addEventListener('resize', handleResize);
+      const dieGeo = new THREE.BoxGeometry(DIE_SIZE, DIE_SIZE, DIE_SIZE);
+      const { world, bowlBody, dieBodies } = createPhysicsRig();
+      const soundSynth = new DiceSoundSynth();
 
-    let rafId = 0;
-    let lastTime = performance.now();
-    const tmpQuat = new THREE.Quaternion();
-    const tmpAxis = new THREE.Vector3();
+      // 各ダイスの現在の6面値マッピング
+      const dieFaceMaps: number[][] = [
+        [...DEFAULT_FACE_VALUES],
+        [...DEFAULT_FACE_VALUES],
+        [...DEFAULT_FACE_VALUES],
+      ];
 
-    const animate = (now: number) => {
-      const dt = Math.min(0.032, (now - lastTime) / 1000);
-      lastTime = now;
-      const curMode = modeRef.current;
+      const dieMeshes = dieBodies.map((body, idx) => {
+        const mesh = new THREE.Mesh(
+          dieGeo,
+          dieFaceMaps[idx].map((v) => matByValue[v])
+        );
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
 
-      if (curMode === 'shaking') {
-        const t = now / 1000;
-        bowlGroup.position.x = Math.sin(t * 21) * 0.34;
-        bowlGroup.position.z = Math.cos(t * 17) * 0.22;
-        bowlGroup.position.y = Math.abs(Math.sin(t * 21)) * 0.1;
-        bowlGroup.rotation.z = -Math.sin(t * 21) * 0.14;
-        bowlGroup.rotation.x = Math.cos(t * 17) * 0.11;
+        body.addEventListener('collide', (ev: { contact: CANNON.ContactEquation }) => {
+          if (!soundEnabledRef.current) return;
+          const impact = Math.abs(ev.contact.getImpactVelocityAlongNormal());
+          if (impact > 1.4) {
+            soundSynth.playClack(Math.min(1, impact / 11));
+          }
+        });
+        return mesh;
+      });
 
-        for (const d of diceBodies) {
-          d.vel.y -= 28 * dt;
-          d.vel.x += Math.cos(t * 21) * 18 * dt + (Math.random() - 0.5) * 14 * dt;
-          d.vel.z += Math.sin(t * 17) * 18 * dt + (Math.random() - 0.5) * 14 * dt;
+      const applyFaceMap = (dieIdx: number, faceValues: number[]) => {
+        dieFaceMaps[dieIdx] = faceValues;
+        dieMeshes[dieIdx].material = faceValues.map((v) => matByValue[v]);
+      };
 
-          d.pos.addScaledVector(d.vel, dt);
+      let simState: InternalSimState = 'idle';
+      let shakeTime = 0;
+      let stillFrames = 0;
+      let settleFrames = 0;
+      let bowlX = 0;
+      let bowlY = 0;
+      let bowlZ = 0;
+      let bowlRx = 0;
+      let bowlRz = 0;
+      let replayFrames: RecordedFrame[] = [];
+      let replayCursor = 0;
 
-          let r = Math.hypot(d.pos.x, d.pos.z);
-          if (r > BOWL_MAX_R - DIE_HALF) {
-            const scale = (BOWL_MAX_R - DIE_HALF) / r;
-            d.pos.x *= scale;
-            d.pos.z *= scale;
-            r = BOWL_MAX_R - DIE_HALF;
+      const resetBowlImmediate = () => {
+        bowlX = 0;
+        bowlY = 0;
+        bowlZ = 0;
+        bowlRx = 0;
+        bowlRz = 0;
+        bowlBody.position.set(0, 0, 0);
+        bowlBody.quaternion.set(0, 0, 0, 1);
+        bowlBody.velocity.set(0, 0, 0);
+        bowlBody.angularVelocity.set(0, 0, 0);
+      };
+
+      actionsRef.current = {
+        startInteractiveShake: () => {
+          // 標準のサイコロ配列に戻す
+          for (let i = 0; i < 3; i++) {
+            applyFaceMap(i, [...DEFAULT_FACE_VALUES]);
+          }
+          replayFrames = [];
+          replayCursor = 0;
+          simState = 'shaking';
+          shakeTime = 0;
+          stillFrames = 0;
+          settleFrames = 0;
+
+          dieBodies.forEach((b) => {
+            b.wakeUp();
+            b.velocity.set(
+              (Math.random() - 0.5) * 6,
+              4.2 + Math.random() * 2.5,
+              (Math.random() - 0.5) * 6
+            );
+            b.angularVelocity.set(
+              (Math.random() - 0.5) * 18,
+              (Math.random() - 0.5) * 18,
+              (Math.random() - 0.5) * 18
+            );
+          });
+        },
+
+        stopInteractiveShake: () => {
+          if (simState !== 'shaking') return;
+          // 急停止テレポートせず、animate 内で滑らかに水平・中央へ減速させる
+          simState = 'settlingInteractive';
+          stillFrames = 0;
+          settleFrames = 0;
+        },
+
+        playTargetRoll: (targetDice: [number, number, number]) => {
+          const recorded = presimulateRecordedRoll();
+          // 物理シミュレーションで自然静止したローカル面に targetDice を事前マッピング
+          for (let i = 0; i < 3; i++) {
+            const remapped = buildRemappedFaceValues(recorded.topFaceIndices[i], targetDice[i]);
+            applyFaceMap(i, remapped);
           }
 
-          const surfY = bowlSurfaceY(r) + DIE_HALF;
-          if (d.pos.y <= surfY) {
-            d.pos.y = surfY;
-            const n = bowlNormal(d.pos.x, d.pos.z);
-            const vn = d.vel.dot(n);
-            if (vn < 0) {
-              d.vel.addScaledVector(n, -1.72 * vn);
-              d.vel.y += 1.6 + Math.random() * 2.2;
-              d.omega.set(
-                (Math.random() - 0.5) * 20,
-                (Math.random() - 0.5) * 16,
-                (Math.random() - 0.5) * 20
-              );
-              if (soundEnabledRef.current && Math.abs(vn) > 2.2) {
-                soundSynth.playClack(Math.min(1, Math.abs(vn) / 10));
+          replayFrames = recorded.frames;
+          replayCursor = 0;
+          if (replayFrames.length > 0) {
+            simState = 'replaying';
+          } else {
+            resetBowlImmediate();
+            simState = 'idle';
+            onReplaySettledRef.current();
+          }
+        },
+      };
+
+      const handleResize = () => {
+        if (!container) return;
+        const w = container.clientWidth || 340;
+        camera.aspect = w / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, height);
+      };
+      window.addEventListener('resize', handleResize);
+
+      let rafId = 0;
+      let lastTime = performance.now();
+      let accumulator = 0;
+
+      const animate = (now: number) => {
+        const dt = Math.min(0.05, (now - lastTime) / 1000);
+        lastTime = now;
+        accumulator += dt;
+
+        while (accumulator >= FIXED_DT) {
+          accumulator -= FIXED_DT;
+
+          if (simState === 'replaying') {
+            const frame = replayFrames[Math.min(replayCursor, replayFrames.length - 1)];
+            bowlBody.position.set(frame.bowlPos[0], frame.bowlPos[1], frame.bowlPos[2]);
+            bowlBody.quaternion.set(
+              frame.bowlQuat[0],
+              frame.bowlQuat[1],
+              frame.bowlQuat[2],
+              frame.bowlQuat[3]
+            );
+            for (let i = 0; i < 3; i++) {
+              const p = frame.dicePos[i];
+              const q = frame.diceQuat[i];
+              dieBodies[i].position.set(p[0], p[1], p[2]);
+              dieBodies[i].quaternion.set(q[0], q[1], q[2], q[3]);
+              dieBodies[i].velocity.set(0, 0, 0);
+              dieBodies[i].angularVelocity.set(0, 0, 0);
+            }
+            if (soundEnabledRef.current && frame.maxImpact > 1.5) {
+              soundSynth.playClack(Math.min(1, frame.maxImpact / 11));
+            }
+            replayCursor++;
+            if (replayCursor >= replayFrames.length) {
+              resetBowlImmediate();
+              simState = 'idle';
+              onReplaySettledRef.current();
+            }
+            continue;
+          }
+
+          if (simState === 'shaking') {
+            shakeTime += FIXED_DT;
+            const nextBx = Math.sin(shakeTime * 18) * 0.4;
+            const nextBz = Math.cos(shakeTime * 14) * 0.25;
+            const nextBy = Math.abs(Math.sin(shakeTime * 18)) * 0.09;
+            const nextRz = -Math.sin(shakeTime * 18) * 0.15;
+            const nextRx = Math.cos(shakeTime * 14) * 0.11;
+
+            // キネマティック速度を設定して摩擦・衝突を物理的に伝える
+            bowlBody.velocity.set(
+              (nextBx - bowlX) / FIXED_DT,
+              (nextBy - bowlY) / FIXED_DT,
+              (nextBz - bowlZ) / FIXED_DT
+            );
+            bowlX = nextBx;
+            bowlY = nextBy;
+            bowlZ = nextBz;
+            bowlRx = nextRx;
+            bowlRz = nextRz;
+            bowlBody.position.set(bowlX, bowlY, bowlZ);
+            bowlBody.quaternion.setFromEuler(bowlRx, 0, bowlRz);
+
+            // 茶碗の底で落ち着きすぎないよう継続的に適度な撹拌を加える
+            for (const b of dieBodies) {
+              if (b.position.y < 0.7 && b.velocity.length() < 3.6) {
+                b.velocity.y += 2.3;
+                b.angularVelocity.x += (Math.random() - 0.5) * 9;
+                b.angularVelocity.z += (Math.random() - 0.5) * 9;
               }
             }
+          } else {
+            // 茶碗を滑らかに水平・中央へ戻す（テレポートによるめり込み防止）
+            const nextBx = Math.abs(bowlX) < 0.002 ? 0 : bowlX * 0.72;
+            const nextBy = Math.abs(bowlY) < 0.002 ? 0 : bowlY * 0.72;
+            const nextBz = Math.abs(bowlZ) < 0.002 ? 0 : bowlZ * 0.72;
+            const nextRx = Math.abs(bowlRx) < 0.002 ? 0 : bowlRx * 0.72;
+            const nextRz = Math.abs(bowlRz) < 0.002 ? 0 : bowlRz * 0.72;
+
+            bowlBody.velocity.set(
+              (nextBx - bowlX) / FIXED_DT,
+              (nextBy - bowlY) / FIXED_DT,
+              (nextBz - bowlZ) / FIXED_DT
+            );
+            bowlBody.angularVelocity.set(0, 0, 0);
+            bowlX = nextBx;
+            bowlY = nextBy;
+            bowlZ = nextBz;
+            bowlRx = nextRx;
+            bowlRz = nextRz;
+            bowlBody.position.set(bowlX, bowlY, bowlZ);
+            bowlBody.quaternion.setFromEuler(bowlRx, 0, bowlRz);
           }
 
-          d.vel.x *= 0.988;
-          d.vel.z *= 0.988;
+          world.step(FIXED_DT);
 
-          const speed = d.omega.length();
-          if (speed > 0.001) {
-            tmpAxis.copy(d.omega).divideScalar(speed);
-            tmpQuat.setFromAxisAngle(tmpAxis, speed * dt);
-            d.mesh.quaternion.premultiply(tmpQuat).normalize();
+          // インタラクティブ停止後の自然静止判定
+          if (simState === 'settlingInteractive') {
+            settleFrames++;
+            const bowlSettled = bowlX === 0 && bowlY === 0 && bowlZ === 0 && bowlRx === 0 && bowlRz === 0;
+            const allSlow =
+              bowlSettled &&
+              dieBodies.every((b) => b.velocity.length() < 0.055 && b.angularVelocity.length() < 0.075);
+
+            if (allSlow) {
+              // 立ち目（斜めに引っかかっている）チェック
+              const allFlat = dieBodies.every((b) => getTopFaceIndex(b.quaternion).alignment > 0.9);
+              if (!allFlat && settleFrames < 260) {
+                // 斜めに引っかかったダイスを軽く小突いて自然に転がす
+                for (const b of dieBodies) {
+                  if (getTopFaceIndex(b.quaternion).alignment <= 0.9) {
+                    b.velocity.x += (Math.random() - 0.5) * 1.6;
+                    b.velocity.z += (Math.random() - 0.5) * 1.6;
+                    b.angularVelocity.x += (Math.random() - 0.5) * 4.5;
+                  }
+                }
+                stillFrames = 0;
+              } else {
+                stillFrames++;
+              }
+            } else {
+              stillFrames = 0;
+            }
+
+            if (stillFrames >= 16 || settleFrames >= 300) {
+              simState = 'idle';
+              const results = dieBodies.map((b, i) => {
+                const topIdx = getTopFaceIndex(b.quaternion).index;
+                return dieFaceMaps[i][topIdx];
+              }) as [number, number, number];
+              onInteractiveSettledRef.current(results);
+            }
           }
-          d.mesh.position.copy(d.pos);
         }
+
+        // 物理ボディ → Three.js メッシュへ完全同期
+        bowlGroup.position.set(bowlBody.position.x, bowlBody.position.y, bowlBody.position.z);
+        bowlGroup.quaternion.set(
+          bowlBody.quaternion.x,
+          bowlBody.quaternion.y,
+          bowlBody.quaternion.z,
+          bowlBody.quaternion.w
+        );
 
         for (let i = 0; i < 3; i++) {
-          for (let j = i + 1; j < 3; j++) {
-            const a = diceBodies[i];
-            const b = diceBodies[j];
-            const diff = new THREE.Vector3().subVectors(b.pos, a.pos);
-            const dist = diff.length();
-            const minD = DIE_SIZE * 1.12;
-            if (dist < minD && dist > 0.001) {
-              const n = diff.divideScalar(dist);
-              const overlap = (minD - dist) * 0.5;
-              a.pos.addScaledVector(n, -overlap);
-              b.pos.addScaledVector(n, overlap);
-
-              const relV = new THREE.Vector3().subVectors(a.vel, b.vel);
-              const sep = relV.dot(n);
-              if (sep > 0) {
-                a.vel.addScaledVector(n, -sep * 0.9);
-                b.vel.addScaledVector(n, sep * 0.9);
-                if (soundEnabledRef.current && sep > 2.0) {
-                  soundSynth.playClack(0.7);
-                }
-              }
-              a.mesh.position.copy(a.pos);
-              b.mesh.position.copy(b.pos);
-            }
-          }
+          const b = dieBodies[i];
+          const m = dieMeshes[i];
+          m.position.set(b.position.x, b.position.y, b.position.z);
+          m.quaternion.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
         }
-      } else if (curMode === 'settling') {
-        bowlGroup.position.lerp(new THREE.Vector3(0, 0, 0), Math.min(1, dt * 10));
-        bowlGroup.rotation.x *= Math.max(0, 1 - dt * 10);
-        bowlGroup.rotation.z *= Math.max(0, 1 - dt * 10);
 
-        const elapsed = now - settleStartRef.current;
-        const delays = [0, 190, 380];
-        const dur = 680;
-        let allDone = true;
+        renderer.render(scene, camera);
+        rafId = requestAnimationFrame(animate);
+      };
 
-        diceBodies.forEach((d, idx) => {
-          const localT = Math.max(0, elapsed - delays[idx]);
-          const p = Math.min(1, localT / dur);
-          if (p < 1) allDone = false;
-
-          const ease = 1 - Math.pow(1 - p, 3);
-          d.pos.lerpVectors(d.startPos, d.targetPos, ease);
-          const bounce = p < 1 ? Math.abs(Math.sin(p * Math.PI * 2.5)) * (1 - p) * 0.85 : 0;
-          const minSurf = bowlSurfaceY(Math.hypot(d.pos.x, d.pos.z)) + DIE_HALF;
-          d.pos.y = Math.max(minSurf, d.pos.y) + bounce;
-
-          d.mesh.position.copy(d.pos);
-          d.mesh.quaternion.slerpQuaternions(d.startQuat, d.targetQuat, ease);
-
-          if (p >= 0.95 && !d.settledSoundPlayed) {
-            d.settledSoundPlayed = true;
-            if (soundEnabledRef.current) soundSynth.playClack(0.55);
-          }
-        });
-
-        if (allDone && !settledFiredRef.current) {
-          settledFiredRef.current = true;
-          onSettledRef.current?.();
-        }
-      } else {
-        bowlGroup.position.lerp(new THREE.Vector3(0, 0, 0), Math.min(1, dt * 8));
-        bowlGroup.rotation.x *= Math.max(0, 1 - dt * 8);
-        bowlGroup.rotation.z *= Math.max(0, 1 - dt * 8);
-      }
-
-      renderer.render(scene, camera);
       rafId = requestAnimationFrame(animate);
-    };
 
-    rafId = requestAnimationFrame(animate);
+      return () => {
+        cancelAnimationFrame(rafId);
+        window.removeEventListener('resize', handleResize);
+        dieGeo.dispose();
+        Object.values(matByValue).forEach((m) => {
+          m.map?.dispose();
+          m.dispose();
+        });
+        outerGeo.dispose();
+        outerMat.dispose();
+        innerGeo.dispose();
+        innerTex.dispose();
+        innerMat.dispose();
+        rimGeo.dispose();
+        rimMat.dispose();
+        tableGeo.dispose();
+        tableMat.dispose();
+        renderer.dispose();
+      };
+    }, []);
 
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', handleResize);
-      dieGeo.dispose();
-      dieMaterials.forEach((m) => {
-        m.map?.dispose();
-        m.dispose();
-      });
-      outerGeo.dispose();
-      outerMat.dispose();
-      innerGeo.dispose();
-      innerTex.dispose();
-      innerMat.dispose();
-      rimGeo.dispose();
-      rimMat.dispose();
-      tableGeo.dispose();
-      tableMat.dispose();
-      renderer.dispose();
-    };
-  }, []);
-
-  return <div ref={containerRef} className="chinchiro-canvas-host" />;
-};
+    return <div ref={containerRef} className="chinchiro-canvas-host" />;
+  }
+);

@@ -42,6 +42,7 @@ describe('Daifugo engine', () => {
   it('supports revolution, 8-cut, suit lock, and spade-3 return', () => {
     const players = makePlayers(2);
     const state = initDaifugo(players, GAME_REGISTRY.daifugo.defaultRules);
+    // 手札を明示的にセットしてテスト
     state.turnIndex = 0;
     state.players[0].hand = [
       c('spade', 4),
@@ -53,6 +54,7 @@ describe('Daifugo engine', () => {
     ];
     state.players[1].hand = [c('joker', 0), c('spade', 3), c('club', 5)];
 
+    // 4枚出しで革命
     let res = applyDaifugoAction(state, 'p1', {
       type: 'play',
       payload: { cardIds: ['spade-4', 'heart-4', 'diamond-4', 'club-4'] },
@@ -60,80 +62,23 @@ describe('Daifugo engine', () => {
     expect(res.error).toBeUndefined();
     expect(res.state.revolution).toBe(true);
 
+    // p2 パスで場が流れる
     res = applyDaifugoAction(res.state, 'p2', { type: 'pass' });
     expect(res.state.table.length).toBe(0);
 
+    // p1 が8切り
     res = applyDaifugoAction(res.state, 'p1', { type: 'play', payload: { cardIds: ['spade-8'] } });
     expect(res.state.table.length).toBe(0);
     expect(res.state.turnIndex).toBe(0);
 
+    // p1 が ♥9 -> p2 がジョーカー -> p1 が♠3返しで場が流れる
     res.state.players[0].hand = [c('spade', 3), c('heart', 9), c('club', 6)];
     res = applyDaifugoAction(res.state, 'p1', { type: 'play', payload: { cardIds: ['heart-9'] } });
     res = applyDaifugoAction(res.state, 'p2', { type: 'play', payload: { cardIds: ['joker-1'] } });
     expect(canPlayOnTable([c('spade', 3)], res.state).ok).toBe(true);
     res = applyDaifugoAction(res.state, 'p1', { type: 'play', payload: { cardIds: ['spade-3'] } });
     expect(res.error).toBeUndefined();
-    expect(res.state.table.length).toBe(0);
-  });
-
-  it('supports 7-pass, 10-discard, 5-skip, and sandstorm', () => {
-    const players = makePlayers(3);
-    const rules = {
-      ...GAME_REGISTRY.daifugo.defaultRules,
-      sevenPass: true,
-      tenDiscard: true,
-      fiveSkip: true,
-      sandstorm: true,
-    };
-    const state = initDaifugo(players, rules);
-    state.turnIndex = 0;
-    state.players[0].hand = [c('spade', 7), c('heart', 4), c('club', 6)];
-    state.players[1].hand = [c('diamond', 9), c('spade', 10)];
-
-    let res = applyDaifugoAction(state, 'p1', { type: 'play', payload: { cardIds: ['spade-7'] } });
-    expect(res.state.pendingEffect?.type).toBe('sevenPass');
-    res = applyDaifugoAction(res.state, 'p1', { type: 'resolveSevenPass', payload: { cardIds: ['heart-4'] } });
-    expect(res.state.pendingEffect).toBeNull();
-    expect(res.state.players[1].hand.some((card) => card.id === 'heart-4')).toBe(true);
-  });
-});
-
-describe('Poker engine', () => {
-  it('evaluates poker hands and completes bet -> draw -> showdown', () => {
-    const royal = [c('spade', 1), c('spade', 13), c('spade', 12), c('spade', 11), c('spade', 10)];
-    expect(evaluatePokerHand(royal).category).toBe(9);
-    expect(evaluatePokerHand(royal).name).toBe('ロイヤルフラッシュ');
-
-    const players = makePlayers(2);
-    let state = initPoker(players, GAME_REGISTRY.poker.defaultRules);
-    expect(state.subPhase).toBe('bet1');
-    state = applyPokerAction(state, 'p2', { type: 'call' }).state;
-    state = applyPokerAction(state, 'p1', { type: 'call' }).state;
-    expect(state.subPhase).toBe('draw');
-    state = applyPokerAction(state, 'p2', { type: 'draw', payload: { discardIds: [] } }).state;
-    state = applyPokerAction(state, 'p1', { type: 'draw', payload: { discardIds: [] } }).state;
-    expect(state.subPhase).toBe('bet2');
-    state = applyPokerAction(state, 'p2', { type: 'call' }).state;
-    state = applyPokerAction(state, 'p1', { type: 'call' }).state;
-    expect(state.subPhase).toBe('showdown');
-  });
-});
-
-describe('Texas Holdem engine', () => {
-  it('evaluates best 5 of 7 cards and progresses preflop to showdown', () => {
-    const seven = [
-      c('spade', 1), c('spade', 13), c('spade', 12), c('spade', 11), c('spade', 10),
-      c('heart', 2), c('club', 3),
-    ];
-    expect(evaluateBestSeven(seven)?.name).toBe('ロイヤルフラッシュ');
-
-    const players = makePlayers(2);
-    let state = initHoldem(players, GAME_REGISTRY.holdem.defaultRules);
-    expect(state.subPhase).toBe('preflop');
-    state = applyHoldemAction(state, 'p1', { type: 'call' }).state;
-    state = applyHoldemAction(state, 'p2', { type: 'call' }).state;
-    expect(state.subPhase).toBe('flop');
-    expect(state.communityCards.length).toBe(3);
+    expect(res.state.table.length).toBe(0); // スペ3返しで流れる
   });
 });
 
@@ -145,6 +90,7 @@ describe('Sevens engine', () => {
     state.board.spade[1] = true;
     expect(canPlaceNormalCard('spade', 13, state)).toBe(true);
 
+    // passLimit=0 -> 1回目で超過してドボン
     state.turnIndex = 0;
     const res = applySevensAction(state, 'p1', { type: 'pass' });
     expect(res.state.players[0].eliminated).toBe(true);
@@ -190,13 +136,13 @@ describe('Doubt engine', () => {
   it('handles play and doubt resolution', () => {
     const players = makePlayers(2);
     const state = initDoubt(players, GAME_REGISTRY.doubt.defaultRules);
-    state.players[0].hand = [c('spade', 5), c('heart', 2)];
+    state.players[0].hand = [c('spade', 5), c('heart', 2)]; // 1(A) ではない
     const res1 = applyDoubtAction(state, 'p1', { type: 'play', payload: { cardIds: ['spade-5'] } });
     expect(res1.state.subPhase).toBe('doubtWindow');
 
     const res2 = applyDoubtAction(res1.state, 'p2', { type: 'doubt' });
     expect(res2.state.lastReveal?.wasLie).toBe(true);
-    expect(res2.state.players[0].hand.length).toBe(2);
+    expect(res2.state.players[0].hand.length).toBe(2); // 引き取り
   });
 });
 
@@ -208,7 +154,7 @@ describe('Memory engine', () => {
     let res = applyMemoryAction(state, 'p1', { type: 'flip', payload: { index: rank1Tiles[0].index } });
     res = applyMemoryAction(res.state, 'p1', { type: 'flip', payload: { index: rank1Tiles[1].index } });
     expect(res.state.players[0].pairs).toBe(1);
-    expect(res.state.turnIndex).toBe(0);
+    expect(res.state.turnIndex).toBe(0); // extra turn
   });
 });
 
@@ -259,9 +205,79 @@ describe('Chinchiro engine', () => {
     expect(evaluateChinchiroDice([2, 2, 5]).strength).toBe(15);
 
     const players = makePlayers(2);
-    const state = initChinchiro(players, { rounds: 3, startPoints: 100, shonbenEnabled: false });
-    const res = applyChinchiroAction(state, 'p1', { type: 'roll' });
+    const state = initChinchiro(players, { rounds: 3, startPoints: 100, shonbenEnabled: true });
+    const res = applyChinchiroAction(state, 'p1', {
+      type: 'roll',
+      payload: { dice: [1, 1, 1] },
+    });
     expect(res.error).toBeUndefined();
-    expect(res.state.players[0].currentHand).not.toBeNull();
+    expect(res.state.rollSeq).toBe(1);
+    expect(res.state.lastRolledPlayerId).toBe('p1');
+    expect(res.state.lastRolledHand?.rank).toBe('pinzoro');
+    expect(res.state.players[0].currentHand?.dice).toEqual([1, 1, 1]);
+  });
+});
+
+describe('Daifugo extended rules', () => {
+  it('supports 7-pass, 10-discard, 5-skip, and sandstorm', () => {
+    const players = makePlayers(3);
+    const rules = {
+      ...GAME_REGISTRY.daifugo.defaultRules,
+      sevenPass: true,
+      tenDiscard: true,
+      fiveSkip: true,
+      sandstorm: true,
+    };
+    const state = initDaifugo(players, rules);
+    state.turnIndex = 0;
+    state.players[0].hand = [c('spade', 7), c('heart', 4), c('club', 6)];
+    state.players[1].hand = [c('diamond', 9), c('spade', 10)];
+
+    // 7渡し発動
+    let res = applyDaifugoAction(state, 'p1', { type: 'play', payload: { cardIds: ['spade-7'] } });
+    expect(res.state.pendingEffect?.type).toBe('sevenPass');
+    res = applyDaifugoAction(res.state, 'p1', { type: 'resolveSevenPass', payload: { cardIds: ['heart-4'] } });
+    expect(res.state.pendingEffect).toBeNull();
+    expect(res.state.players[1].hand.some((card) => card.id === 'heart-4')).toBe(true);
+  });
+});
+
+describe('Poker engine', () => {
+  it('evaluates poker hands and completes bet -> draw -> showdown', () => {
+    const royal = [c('spade', 1), c('spade', 13), c('spade', 12), c('spade', 11), c('spade', 10)];
+    expect(evaluatePokerHand(royal).category).toBe(9);
+    expect(evaluatePokerHand(royal).name).toBe('ロイヤルフラッシュ');
+
+    const players = makePlayers(2);
+    let state = initPoker(players, GAME_REGISTRY.poker.defaultRules);
+    expect(state.subPhase).toBe('bet1');
+    state = applyPokerAction(state, 'p2', { type: 'call' }).state;
+    state = applyPokerAction(state, 'p1', { type: 'call' }).state;
+    expect(state.subPhase).toBe('draw');
+    state = applyPokerAction(state, 'p2', { type: 'draw', payload: { discardIds: [] } }).state;
+    state = applyPokerAction(state, 'p1', { type: 'draw', payload: { discardIds: [] } }).state;
+    expect(state.subPhase).toBe('bet2');
+    state = applyPokerAction(state, 'p2', { type: 'call' }).state;
+    state = applyPokerAction(state, 'p1', { type: 'call' }).state;
+    expect(state.subPhase).toBe('showdown');
+  });
+});
+
+describe('Texas Holdem engine', () => {
+  it('evaluates best 5 of 7 cards and progresses preflop to showdown', () => {
+    const seven = [
+      c('spade', 1), c('spade', 13), c('spade', 12), c('spade', 11), c('spade', 10),
+      c('heart', 2), c('club', 3),
+    ];
+    expect(evaluateBestSeven(seven)?.name).toBe('ロイヤルフラッシュ');
+
+    const players = makePlayers(2);
+    let state = initHoldem(players, GAME_REGISTRY.holdem.defaultRules);
+    expect(state.subPhase).toBe('preflop');
+    // preflop -> flop
+    state = applyHoldemAction(state, 'p1', { type: 'call' }).state;
+    state = applyHoldemAction(state, 'p2', { type: 'call' }).state;
+    expect(state.subPhase).toBe('flop');
+    expect(state.communityCards.length).toBe(3);
   });
 });

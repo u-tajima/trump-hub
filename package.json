@@ -1,7 +1,7 @@
 {
   "name": "table-hub",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "cannon-es": "^0.20.0",
     "lucide-react": "^1.77.0",
     "peerjs": "^1.5.5",
     "qrcode.react": "^4.2.0",

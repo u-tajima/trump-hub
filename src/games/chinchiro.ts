@@ -1,18 +1,18 @@
 import type { ChinchiroRules, PlayerInfo } from '../types/game';
 
 export type ChinchiroRank =
-  | 'pinzoro'
-  | 'arashi'
-  | 'shigoro'
-  | 'normal'
-  | 'menashi'
-  | 'shonben'
-  | 'hifumi';
+  | 'pinzoro'   // 1-1-1 (5x)
+  | 'arashi'    // 2-2-2 .. 6-6-6 (3x)
+  | 'shigoro'   // 4-5-6 (2x)
+  | 'normal'    // pair + single (1x)
+  | 'menashi'   // no pair (lose 1x)
+  | 'shonben'   // out of bowl (lose 1x)
+  | 'hifumi';   // 1-2-3 (lose 2x)
 
 export interface ChinchiroHand {
   dice: [number, number, number];
   rank: ChinchiroRank;
-  strength: number;
+  strength: number; // higher is stronger
   multiplier: number;
   label: string;
 }
@@ -34,6 +34,9 @@ export interface ChinchiroInternalState {
   round: number;
   dealerIndex: number;
   turnIndex: number;
+  rollSeq: number;
+  lastRolledPlayerId: string | null;
+  lastRolledHand: ChinchiroHand | null;
   phase: 'playing' | 'finished';
   lastLog: string;
 }
@@ -91,6 +94,9 @@ export function initChinchiro(playersInfo: PlayerInfo[], rules: ChinchiroRules):
     round: 1,
     dealerIndex: 0,
     turnIndex: 0,
+    rollSeq: 0,
+    lastRolledPlayerId: null,
+    lastRolledHand: null,
     phase: 'playing',
     lastLog: `第1局スタート！親は ${players[0].name} です`,
   };
@@ -153,19 +159,32 @@ function settleRound(state: ChinchiroInternalState): ChinchiroInternalState {
 export function applyChinchiroAction(
   state: ChinchiroInternalState,
   playerId: string,
-  action: { type: string }
+  action: { type: string; payload?: unknown }
 ): { state: ChinchiroInternalState; error?: string } {
   if (state.phase !== 'playing') return { state, error: 'ゲームは終了しています' };
   const current = state.players[state.turnIndex];
   if (current.id !== playerId) return { state, error: 'あなたのターンではありません' };
   if (action.type !== 'roll') return { state, error: '不明なアクションです' };
 
-  const isShonben = state.rules.shonbenEnabled && Math.random() < 0.03;
-  const dice: [number, number, number] = [
-    Math.floor(Math.random() * 6) + 1,
-    Math.floor(Math.random() * 6) + 1,
-    Math.floor(Math.random() * 6) + 1,
-  ];
+  const payload = action.payload as { dice?: [number, number, number]; isShonben?: boolean } | undefined;
+  const validPayloadDice =
+    Array.isArray(payload?.dice) &&
+    payload.dice.length === 3 &&
+    payload.dice.every((n) => Number.isInteger(n) && n >= 1 && n <= 6);
+
+  const isShonben = validPayloadDice
+    ? Boolean(state.rules.shonbenEnabled && payload?.isShonben)
+    : typeof payload?.isShonben === 'boolean'
+    ? state.rules.shonbenEnabled && payload.isShonben
+    : state.rules.shonbenEnabled && Math.random() < 0.03;
+
+  const dice: [number, number, number] = validPayloadDice
+    ? [payload!.dice![0], payload!.dice![1], payload!.dice![2]]
+    : [
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+      ];
   const hand = evaluateChinchiroDice(dice, isShonben);
   const rollsLeft = current.rollsLeft - 1;
   const isConfirmed = hand.rank !== 'menashi' || rollsLeft <= 0;
@@ -179,6 +198,9 @@ export function applyChinchiroAction(
   let nextState: ChinchiroInternalState = {
     ...state,
     players,
+    rollSeq: state.rollSeq + 1,
+    lastRolledPlayerId: current.id,
+    lastRolledHand: hand,
     lastLog: `${current.name}: [${hand.dice.join('-')}] → ${hand.label}`,
   };
 
@@ -186,6 +208,7 @@ export function applyChinchiroAction(
     return { state: nextState };
   }
 
+  // まだ振っていないプレイヤーがいるか
   const allDone = players.every((p) => p.doneThisRound);
   if (allDone) {
     return { state: settleRound(nextState) };
