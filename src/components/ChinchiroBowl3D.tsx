@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import './ChinchiroBowl3D.css';
 
 export type BowlSimMode = 'idle' | 'shaking' | 'settling';
 
