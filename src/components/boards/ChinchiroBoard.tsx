@@ -1,74 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Dices, Hand, Trophy } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Dices, Hand, Trophy, Volume2, VolumeX } from 'lucide-react';
 import type { ChinchiroClientState } from '../../games/chinchiro';
-import { Dice3D, DiceCube3D, FACE_TARGET_ROTATION } from '../Dice3D';
+import { type BowlSimMode, ChinchiroBowl3D } from '../ChinchiroBowl3D';
+import { Dice3D } from '../Dice3D';
 
 interface ChinchiroBoardProps {
   state: ChinchiroClientState;
   onAction: (action: { type: string; payload?: unknown }) => void;
 }
 
-interface DieBody {
-  x: number;
-  y: number;
-  z: number;
-  vx: number;
-  vy: number;
-  vz: number;
-  rx: number;
-  ry: number;
-  rz: number;
-  wx: number;
-  wy: number;
-  wz: number;
-}
-
-type SimMode = 'idle' | 'shaking' | 'settling';
-
-const BOWL_RADIUS = 72;
-const DIE_RADIUS = 21;
-const REST_SLOTS: [number, number][] = [
-  [-44, 12],
-  [0, -22],
-  [44, 14],
-];
-
-function createInitialBodies(): [DieBody, DieBody, DieBody] {
-  return REST_SLOTS.map(([x, y], idx) => {
-    const rot = FACE_TARGET_ROTATION[idx + 1];
-    return {
-      x,
-      y,
-      z: 0,
-      vx: 0,
-      vy: 0,
-      vz: 0,
-      rx: rot.rx,
-      ry: rot.ry,
-      rz: rot.rz,
-      wx: 0,
-      wy: 0,
-      wz: 0,
-    };
-  }) as [DieBody, DieBody, DieBody];
-}
-
-function nearestTargetAngle(current: number, targetBase: number, extraTurns = 1): number {
-  const full = Math.round((current - targetBase) / 360) * 360 + targetBase;
-  return full + 360 * extraTurns;
-}
-
 export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction }) => {
-  const [simMode, setSimMode] = useState<SimMode>('idle');
-  const [bodies, setBodies] = useState<[DieBody, DieBody, DieBody]>(() => createInitialBodies());
-  const [bowlPos, setBowlPos] = useState<{ x: number; y: number; rot: number }>({ x: 0, y: 0, rot: 0 });
+  const [simMode, setSimMode] = useState<BowlSimMode>('idle');
+  const [targetDice, setTargetDice] = useState<[number, number, number]>([1, 2, 3]);
   const [bowlLabel, setBowlLabel] = useState<string>('茶碗を振ってスタート');
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
-  const simModeRef = useRef<SimMode>('idle');
-  const bodiesRef = useRef<[DieBody, DieBody, DieBody]>(bodies);
-  const targetDiceRef = useRef<[number, number, number]>([1, 2, 3]);
-  const targetAnglesRef = useRef<{ rx: number; ry: number; rz: number }[]>([]);
-  const settleStartRef = useRef<number>(0);
   const awaitingResultRef = useRef<boolean>(false);
   const prevLogRef = useRef<string>(state.lastLog);
   const pendingLabelRef = useRef<string>('');
@@ -91,189 +37,31 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
       Math.floor(Math.random() * 6) + 1,
       Math.floor(Math.random() * 6) + 1,
     ];
-    targetDiceRef.current = dice;
     pendingLabelRef.current = activeHand?.label ?? state.lastLog;
-
-    const beginSettle = () => {
-      targetAnglesRef.current = dice.map((val, idx) => {
-        const base = FACE_TARGET_ROTATION[val] ?? FACE_TARGET_ROTATION[1];
-        const b = bodiesRef.current[idx];
-        return {
-          rx: nearestTargetAngle(b.rx, base.rx, 1),
-          ry: nearestTargetAngle(b.ry, base.ry, 1),
-          rz: nearestTargetAngle(b.rz, base.rz, 0),
-        };
-      });
-      settleStartRef.current = performance.now();
-      simModeRef.current = 'settling';
-      setSimMode('settling');
-      setBowlPos({ x: 0, y: 0, rot: 0 });
-      setBowlLabel('出目を判定中…');
-    };
+    setTargetDice(dice);
 
     if (awaitingResultRef.current) {
       awaitingResultRef.current = false;
-      beginSettle();
+      setSimMode('settling');
+      setBowlLabel('出目を判定中…');
     } else {
-      bodiesRef.current = bodiesRef.current.map((b) => ({
-        ...b,
-        vx: (Math.random() - 0.5) * 420,
-        vy: (Math.random() - 0.5) * 420,
-        vz: 140 + Math.random() * 100,
-        wx: 520 + Math.random() * 320,
-        wy: 480 + Math.random() * 320,
-        wz: 360 + Math.random() * 240,
-      })) as [DieBody, DieBody, DieBody];
-      simModeRef.current = 'shaking';
       setSimMode('shaking');
       setBowlLabel('茶碗を振っています…');
-      const timer = window.setTimeout(beginSettle, 750);
+      const timer = window.setTimeout(() => {
+        setSimMode('settling');
+        setBowlLabel('出目を判定中…');
+      }, 780);
       return () => window.clearTimeout(timer);
     }
   }, [state.lastLog]);
 
-  useEffect(() => {
-    let rafId = 0;
-    let lastTime = performance.now();
-
-    const step = (now: number) => {
-      const dt = Math.min(0.033, (now - lastTime) / 1000);
-      lastTime = now;
-      const mode = simModeRef.current;
-
-      if (mode === 'shaking') {
-        const t = now / 1000;
-        const bx = Math.sin(t * 24) * 11;
-        const by = Math.cos(t * 19) * 7;
-        const brot = Math.sin(t * 20) * 5;
-        setBowlPos({ x: bx, y: by, rot: brot });
-
-        const next = bodiesRef.current.map((b) => {
-          let { x, y, z, vx, vy, vz, rx, ry, rz, wx, wy, wz } = b;
-          vx += Math.cos(t * 24) * 900 * dt + (Math.random() - 0.5) * 700 * dt;
-          vy += Math.sin(t * 19) * 900 * dt + (Math.random() - 0.5) * 700 * dt;
-          vz -= 980 * dt;
-
-          x += vx * dt;
-          y += vy * dt;
-          z += vz * dt;
-
-          if (z <= 0) {
-            z = 0;
-            vz = 90 + Math.random() * 140;
-            wx = (Math.random() - 0.5) * 900;
-            wy = (Math.random() - 0.5) * 900;
-          }
-
-          const dist = Math.hypot(x, y);
-          const maxR = BOWL_RADIUS - DIE_RADIUS;
-          if (dist > maxR && dist > 0.001) {
-            const nx = x / dist;
-            const ny = y / dist;
-            x = nx * maxR;
-            y = ny * maxR;
-            const dot = vx * nx + vy * ny;
-            if (dot > 0) {
-              vx = (vx - 2 * dot * nx) * 0.85;
-              vy = (vy - 2 * dot * ny) * 0.85;
-            }
-          }
-
-          rx += wx * dt;
-          ry += wy * dt;
-          rz += wz * dt;
-
-          return { x, y, z, vx: vx * 0.985, vy: vy * 0.985, vz, rx, ry, rz, wx, wy, wz };
-        }) as [DieBody, DieBody, DieBody];
-
-        for (let i = 0; i < 3; i++) {
-          for (let j = i + 1; j < 3; j++) {
-            const a = next[i];
-            const b = next[j];
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const d = Math.hypot(dx, dy);
-            const minD = DIE_RADIUS * 1.95;
-            if (d < minD && d > 0.001) {
-              const nx = dx / d;
-              const ny = dy / d;
-              const overlap = (minD - d) * 0.5;
-              a.x -= nx * overlap;
-              a.y -= ny * overlap;
-              b.x += nx * overlap;
-              b.y += ny * overlap;
-
-              const dvx = a.vx - b.vx;
-              const dvy = a.vy - b.vy;
-              const rel = dvx * nx + dvy * ny;
-              if (rel > 0) {
-                a.vx -= rel * nx * 0.9;
-                a.vy -= rel * ny * 0.9;
-                b.vx += rel * nx * 0.9;
-                b.vy += rel * ny * 0.9;
-              }
-            }
-          }
-        }
-
-        bodiesRef.current = next;
-        setBodies(next);
-      } else if (mode === 'settling') {
-        const elapsed = now - settleStartRef.current;
-        const delays = [0, 180, 360];
-        const duration = 620;
-        let allDone = true;
-
-        const next = bodiesRef.current.map((b, idx) => {
-          const localElapsed = Math.max(0, elapsed - delays[idx]);
-          const p = Math.min(1, localElapsed / duration);
-          if (p < 1) allDone = false;
-
-          const ease = 1 - Math.pow(1 - p, 3);
-          const [tx, ty] = REST_SLOTS[idx];
-          const target = targetAnglesRef.current[idx] ?? { rx: 0, ry: 0, rz: 0 };
-          const bounceZ = p < 1 ? Math.abs(Math.sin(p * Math.PI * 2.5)) * (1 - p) * 28 : 0;
-
-          return {
-            ...b,
-            x: b.x + (tx - b.x) * Math.min(1, ease * 0.25 + (p === 1 ? 1 : 0)),
-            y: b.y + (ty - b.y) * Math.min(1, ease * 0.25 + (p === 1 ? 1 : 0)),
-            z: bounceZ,
-            rx: b.rx + (target.rx - b.rx) * Math.min(1, ease * 0.28 + (p === 1 ? 1 : 0)),
-            ry: b.ry + (target.ry - b.ry) * Math.min(1, ease * 0.28 + (p === 1 ? 1 : 0)),
-            rz: b.rz + (target.rz - b.rz) * Math.min(1, ease * 0.28 + (p === 1 ? 1 : 0)),
-          };
-        }) as [DieBody, DieBody, DieBody];
-
-        bodiesRef.current = next;
-        setBodies(next);
-
-        if (allDone) {
-          simModeRef.current = 'idle';
-          setSimMode('idle');
-          setBowlLabel(pendingLabelRef.current || '確定！');
-        }
-      }
-
-      rafId = requestAnimationFrame(step);
-    };
-
-    rafId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafId);
+  const handleSettled = useCallback(() => {
+    setSimMode('idle');
+    setBowlLabel(pendingLabelRef.current || '確定！');
   }, []);
 
   const handleStartShake = () => {
     if (!isMyTurn || simMode !== 'idle') return;
-    bodiesRef.current = bodiesRef.current.map((b) => ({
-      ...b,
-      vx: (Math.random() - 0.5) * 480,
-      vy: (Math.random() - 0.5) * 480,
-      vz: 160 + Math.random() * 120,
-      wx: 640 + Math.random() * 360,
-      wy: 580 + Math.random() * 360,
-      wz: 420 + Math.random() * 260,
-    })) as [DieBody, DieBody, DieBody];
-    simModeRef.current = 'shaking';
     setSimMode('shaking');
     setBowlLabel('「止める！」で出目を決定');
   };
@@ -291,20 +79,24 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
           第 {state.round} / {state.rules.rounds} 局
         </span>
         <span className="flag-badge warn">親: {dealer.name}</span>
+        <button
+          type="button"
+          className="chip-btn"
+          onClick={() => setSoundEnabled((v) => !v)}
+          aria-label="効果音切替"
+        >
+          {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+          {soundEnabled ? '音ON' : '音OFF'}
+        </button>
       </div>
 
       <div className="chinchiro-bowl-stage">
-        <div
-          className="chinchiro-bowl-3d"
-          style={{
-            transform: `translate3d(${bowlPos.x}px, ${bowlPos.y}px, 0) rotate(${bowlPos.rot}deg)`,
-          }}
-        >
-          <div className="bowl-inner-shadow" />
-          {bodies.map((b, idx) => (
-            <DiceCube3D key={idx} x={b.x} y={b.y} z={b.z} rx={b.rx} ry={b.ry} rz={b.rz} />
-          ))}
-        </div>
+        <ChinchiroBowl3D
+          mode={simMode}
+          targetDice={targetDice}
+          soundEnabled={soundEnabled}
+          onSettled={handleSettled}
+        />
         <div className={`bowl-result-banner ${simMode === 'idle' && activeHand ? 'pop' : ''}`}>
           {bowlLabel}
         </div>
