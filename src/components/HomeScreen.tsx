@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DoorOpen, PlusCircle, Sparkles, Users } from 'lucide-react';
+import { DoorOpen, PlusCircle, Sparkles, Users, Wrench } from 'lucide-react';
 import { GAME_LIST, GAME_REGISTRY, type GameCategory } from '../games/registry';
 import type { GameId, GameRulesMap } from '../types/game';
 import { normalizeRoomCode } from '../utils/roomCode';
@@ -14,6 +14,7 @@ interface HomeScreenProps {
   error: string | null;
   onCreateRoom: (gameId: GameId, rules: GameRulesMap[GameId]) => void;
   onJoinRoom: (roomCode: string) => void;
+  onOpenTools: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -24,6 +25,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   error,
   onCreateRoom,
   onJoinRoom,
+  onOpenTools,
 }) => {
   const [tab, setTab] = useState<'join' | 'create'>(initialRoomCode ? 'join' : 'create');
   const [categoryFilter, setCategoryFilter] = useState<'all' | GameCategory>('all');
@@ -85,7 +87,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {error && <div className="error-banner">{error}</div>}
 
-      <div className="tab-bar">
+      <div className="tab-bar" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <button
           type="button"
           className={`tab-btn ${tab === 'create' ? 'active' : ''}`}
@@ -101,6 +103,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
           <DoorOpen size={18} />
           部屋に入る
+        </button>
+        <button
+          type="button"
+          className="tab-btn"
+          onClick={onOpenTools}
+        >
+          <Wrench size={18} />
+          ツール
         </button>
       </div>
 

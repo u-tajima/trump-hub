@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameBoard } from './components/GameBoard';
 import { HomeScreen } from './components/HomeScreen';
 import { LobbyScreen } from './components/LobbyScreen';
+import { ToolModeScreen } from './components/ToolModeScreen';
 import {
   type AnyInternalState,
   applyGameAction,
@@ -37,6 +38,7 @@ export function App() {
 
   const [lobby, setLobby] = useState<LobbyState | null>(null);
   const [clientGameState, setClientGameState] = useState<unknown>(null);
+  const [toolMode, setToolMode] = useState<boolean>(false);
 
   const hostSessionRef = useRef<HostPeerSession | null>(null);
   const guestSessionRef = useRef<GuestPeerSession | null>(null);
@@ -99,6 +101,7 @@ export function App() {
     };
   }, []);
 
+  // ホスト側ゲームループ (Bot思考・タイムアウト処理)
   useEffect(() => {
     if (role !== 'host' || lobby?.phase !== 'playing') return;
     const intervalMs = lobby.config.gameId === 'speed' ? 500 : 850;
@@ -303,7 +306,9 @@ export function App() {
     <div className="app-shell">
       {toast && <div className="toast-banner">{toast}</div>}
 
-      {!lobby ? (
+      {toolMode ? (
+        <ToolModeScreen onBack={() => setToolMode(false)} />
+      ) : !lobby ? (
         <HomeScreen
           playerName={playerName}
           onChangeName={handleNameChange}
@@ -312,6 +317,7 @@ export function App() {
           error={error}
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
+          onOpenTools={() => setToolMode(true)}
         />
       ) : lobby.phase === 'lobby' || !clientGameState ? (
         <LobbyScreen
