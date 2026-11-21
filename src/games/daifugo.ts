@@ -1,4 +1,4 @@
-import { type Card, type Suit, formatCardShort } from '../types/card';
+import { type Card, type Suit, formatCardShort, formatRank } from '../types/card';
 import type { DaifugoRules, PlayerInfo } from '../types/game';
 import { createDeck, daifugoStrength, dealCards, shuffle, sortCardsByRank } from '../utils/deck';
 
@@ -13,6 +13,11 @@ export interface TablePlay {
   suits: Suit[];
   isJokerSingle: boolean;
 }
+
+export type DaifugoPendingEffect =
+  | { type: 'sevenPass'; playerId: string; count: number }
+  | { type: 'tenDiscard'; playerId: string; count: number }
+  | { type: 'queenBomber'; playerId: string };
 
 export interface DaifugoPlayerState {
   id: string;
@@ -32,6 +37,8 @@ export interface DaifugoInternalState {
   revolution: boolean;
   elevenBack: boolean;
   suitLock: Suit[] | null;
+  numberLock: boolean;
+  pendingEffect: DaifugoPendingEffect | null;
   lastPlayerId: string | null;
   finishedOrder: string[];
   foulOrder: string[];
@@ -61,6 +68,8 @@ export interface DaifugoClientState {
   revolution: boolean;
   elevenBack: boolean;
   suitLock: Suit[] | null;
+  numberLock: boolean;
+  pendingEffect: DaifugoPendingEffect | null;
   phase: 'playing' | 'finished';
   lastLog: string;
 }
@@ -94,12 +103,14 @@ export function initDaifugo(
     revolution: false,
     elevenBack: false,
     suitLock: null,
+    numberLock: false,
+    pendingEffect: null,
     lastPlayerId: null,
     finishedOrder: [],
     foulOrder: [],
     winnerIdsLastGame: previousFinishedOrder,
     phase: 'playing',
-    lastLog: `${players[startIdx].name} のターンからスタート！`,
+    lastLog: `${players[startIdx].name} のターンからスタート`,
   };
 }
 
@@ -185,7 +196,15 @@ export function parsePlay(cards: Card[], rules: DaifugoRules): Omit<TablePlay, '
   return null;
 }
 
-export function canPlayOnTable(cards: Card[], state: DaifugoInternalState): { ok: boolean; reason?: string; parsed?: Omit<TablePlay, 'playerId'> } {
+function isSandstormPlay(cards: Card[], rules: DaifugoRules): boolean {
+  if (!rules.sandstorm || cards.length !== 3) return false;
+  return cards.every((c) => c.suit === 'joker' || c.rank === 3) && cards.some((c) => c.rank === 3);
+}
+
+export function canPlayOnTable(
+  cards: Card[],
+  state: DaifugoInternalState
+): { ok: boolean; reason?: string; parsed?: Omit<TablePlay, 'playerId'> } {
   const parsed = parsePlay(cards, state.rules);
   if (!parsed) {
     return { ok: false, reason: 'その組み合わせでは出せません' };
@@ -193,6 +212,10 @@ export function canPlayOnTable(cards: Card[], state: DaifugoInternalState): { ok
 
   const top = state.table.length > 0 ? state.table[state.table.length - 1] : null;
   if (!top) {
+    return { ok: true, parsed };
+  }
+
+  if (isSandstormPlay(cards, state.rules)) {
     return { ok: true, parsed };
   }
 
@@ -207,18 +230,17 @@ export function canPlayOnTable(cards: Card[], state: DaifugoInternalState): { ok
   }
 
   if (parsed.kind !== top.kind || parsed.length !== top.length) {
-    return { ok: false, reason: '場と同じ枚数・出し方（単体/複数/階段）で出してください' };
+    return { ok: false, reason: '場と同じ枚数・出し方で出してください' };
   }
 
   if (state.suitLock && state.suitLock.length > 0 && !parsed.isJokerSingle) {
     if (parsed.kind === 'staircase') {
       if (parsed.suits[0] !== state.suitLock[0]) {
-        return { ok: false, reason: `スートしばり中（${state.suitLock.join(',')}）です` };
+        return { ok: false, reason: 'スートしばり中です' };
       }
     } else {
       const normalSuits = cards.filter((c) => c.suit !== 'joker').map((c) => c.suit);
-      const allMatch = normalSuits.every((s) => state.suitLock!.includes(s));
-      if (!allMatch) {
+      if (!normalSuits.every((s) => state.suitLock!.includes(s))) {
         return { ok: false, reason: 'スートしばり中です' };
       }
     }
@@ -232,12 +254,20 @@ export function canPlayOnTable(cards: Card[], state: DaifugoInternalState): { ok
     return { ok: false, reason: 'ジョーカーには♠3返しのみ出せます' };
   }
 
+  if (state.numberLock) {
+    const expectedRank = rev ? top.effectiveRank - 1 : top.effectiveRank + 1;
+    if (parsed.effectiveRank !== expectedRank) {
+      return { ok: false, reason: '激しば（数しばり）中です！連番のみ出せます' };
+    }
+    return { ok: true, parsed };
+  }
+
   const stronger = rev
     ? parsed.effectiveRank < top.effectiveRank
     : parsed.effectiveRank > top.effectiveRank;
 
   if (!stronger) {
-    return { ok: false, reason: rev ? '場より弱い（数字が小さい）カードが必要です' : '場より強いカードが必要です' };
+    return { ok: false, reason: rev ? '場より弱いカードが必要です' : '場より強いカードが必要です' };
   }
 
   return { ok: true, parsed };
@@ -253,39 +283,53 @@ function isFoulFinishCards(cards: Card[], state: DaifugoInternalState): boolean 
     if (rev && c.rank === 3) return true;
   }
   const top = state.table.length > 0 ? state.table[state.table.length - 1] : null;
-  if (state.rules.spade3Return && top?.isJokerSingle && cards.length === 1 && cards[0].suit === 'spade' && cards[0].rank === 3) {
+  if (
+    state.rules.spade3Return &&
+    top?.isJokerSingle &&
+    cards.length === 1 &&
+    cards[0].suit === 'spade' &&
+    cards[0].rank === 3
+  ) {
     return true;
   }
   return false;
 }
 
 function clearTable(state: DaifugoInternalState, nextTurnIdx: number, log: string): DaifugoInternalState {
-  const players = state.players.map((p) => ({
-    ...p,
-    passed: false,
-  }));
+  const players = state.players.map((p) => ({ ...p, passed: false }));
   return {
     ...state,
     players,
     table: [],
     elevenBack: false,
     suitLock: null,
+    numberLock: false,
+    pendingEffect: null,
     lastPlayerId: null,
     turnIndex: nextTurnIdx,
     lastLog: log,
   };
 }
 
-function findNextActivePlayerIndex(state: DaifugoInternalState, fromIdx: number, includePassed = false): number {
+function findNextActivePlayerIndex(
+  state: DaifugoInternalState,
+  fromIdx: number,
+  includePassed = false,
+  skipSteps = 1
+): number {
   const n = state.players.length;
-  for (let step = 1; step <= n; step++) {
-    const idx = (fromIdx + step) % n;
-    const p = state.players[idx];
-    if (p.finishRank === null && !p.foulFinish && (includePassed || !p.passed)) {
-      return idx;
+  let cur = fromIdx;
+  for (let k = 0; k < skipSteps; k++) {
+    for (let step = 1; step <= n; step++) {
+      const idx = (cur + step) % n;
+      const p = state.players[idx];
+      if (p.finishRank === null && !p.foulFinish && (includePassed || !p.passed)) {
+        cur = idx;
+        break;
+      }
     }
   }
-  return fromIdx;
+  return cur;
 }
 
 function finalizeIfGameOver(state: DaifugoInternalState): DaifugoInternalState {
@@ -294,8 +338,7 @@ function finalizeIfGameOver(state: DaifugoInternalState): DaifugoInternalState {
     const players = [...state.players];
     const finishedOrder = [...state.finishedOrder];
     if (remaining.length === 1) {
-      const last = remaining[0];
-      finishedOrder.push(last.id);
+      finishedOrder.push(remaining[0].id);
     }
     const fullOrder = [...finishedOrder, ...state.foulOrder];
     fullOrder.forEach((id, idx) => {
@@ -306,11 +349,32 @@ function finalizeIfGameOver(state: DaifugoInternalState): DaifugoInternalState {
       ...state,
       players,
       finishedOrder: fullOrder,
+      pendingEffect: null,
       phase: 'finished',
-      lastLog: `ゲーム終了！ 1位(大富豪): ${players.find((p) => p.finishRank === 1)?.name ?? ''}`,
+      lastLog: `ゲーム終了！ 大富豪: ${players.find((p) => p.finishRank === 1)?.name ?? ''}`,
     };
   }
   return state;
+}
+
+function checkPlayerFinish(
+  state: DaifugoInternalState,
+  playerIdx: number
+): DaifugoInternalState {
+  const p = state.players[playerIdx];
+  if (p.hand.length > 0 || p.finishRank !== null || p.foulFinish) return state;
+
+  const players = state.players.map((pl) => ({ ...pl }));
+  const finishedOrder = [...state.finishedOrder];
+  const rank = finishedOrder.length + 1;
+  players[playerIdx].finishRank = rank;
+  finishedOrder.push(p.id);
+  return finalizeIfGameOver({
+    ...state,
+    players,
+    finishedOrder,
+    lastLog: `${state.lastLog} / ${p.name} ${rank}位上がり`,
+  });
 }
 
 export function applyDaifugoAction(
@@ -320,6 +384,88 @@ export function applyDaifugoAction(
 ): { state: DaifugoInternalState; error?: string } {
   if (state.phase !== 'playing') {
     return { state, error: 'ゲームは終了しています' };
+  }
+
+  if (state.pendingEffect) {
+    const eff = state.pendingEffect;
+    if (eff.playerId !== playerId) {
+      return { state, error: '効果の選択待ちです' };
+    }
+    const actorIdx = state.players.findIndex((p) => p.id === playerId);
+    const actor = state.players[actorIdx];
+
+    if (eff.type === 'sevenPass' && action.type === 'resolveSevenPass') {
+      const cardIds = (action.payload as { cardIds?: string[] })?.cardIds ?? [];
+      const need = Math.min(eff.count, actor.hand.length);
+      if (cardIds.length !== need) {
+        return { state, error: `渡すカードを ${need}枚 選んでください` };
+      }
+      const nextReceiverIdx = findNextActivePlayerIndex(state, actorIdx, true, 1);
+      const passedCards = actor.hand.filter((c) => cardIds.includes(c.id));
+      const players = state.players.map((p, idx) => {
+        if (idx === actorIdx) return { ...p, hand: p.hand.filter((c) => !cardIds.includes(c.id)) };
+        if (idx === nextReceiverIdx) return { ...p, hand: sortCardsByRank([...p.hand, ...passedCards], true) };
+        return p;
+      });
+      let nextState: DaifugoInternalState = {
+        ...state,
+        players,
+        pendingEffect: null,
+        lastLog: `${actor.name} が ${players[nextReceiverIdx].name} に ${passedCards.length}枚 渡しました`,
+      };
+      nextState = checkPlayerFinish(nextState, actorIdx);
+      if (nextState.phase === 'finished') return { state: nextState };
+      nextState.turnIndex = findNextActivePlayerIndex(nextState, actorIdx, false, 1);
+      return { state: nextState };
+    }
+
+    if (eff.type === 'tenDiscard' && action.type === 'resolveTenDiscard') {
+      const cardIds = (action.payload as { cardIds?: string[] })?.cardIds ?? [];
+      const need = Math.min(eff.count, actor.hand.length);
+      if (cardIds.length !== need) {
+        return { state, error: `捨てるカードを ${need}枚 選んでください` };
+      }
+      const players = state.players.map((p, idx) =>
+        idx === actorIdx ? { ...p, hand: p.hand.filter((c) => !cardIds.includes(c.id)) } : p
+      );
+      let nextState: DaifugoInternalState = {
+        ...state,
+        players,
+        pendingEffect: null,
+        lastLog: `${actor.name} が10捨てで ${need}枚 捨てました`,
+      };
+      nextState = checkPlayerFinish(nextState, actorIdx);
+      if (nextState.phase === 'finished') return { state: nextState };
+      nextState.turnIndex = findNextActivePlayerIndex(nextState, actorIdx, false, 1);
+      return { state: nextState };
+    }
+
+    if (eff.type === 'queenBomber' && action.type === 'resolveQueenBomber') {
+      const targetRank = (action.payload as { rank?: number })?.rank;
+      if (!targetRank || targetRank < 1 || targetRank > 13) {
+        return { state, error: '1〜13の数字を選んでください' };
+      }
+      let removedTotal = 0;
+      const players = state.players.map((p) => {
+        const nextHand = p.hand.filter((c) => c.rank !== targetRank);
+        removedTotal += p.hand.length - nextHand.length;
+        return { ...p, hand: nextHand };
+      });
+      let nextState: DaifugoInternalState = {
+        ...state,
+        players,
+        pendingEffect: null,
+        lastLog: `Qボンバー発動！ 「${formatRank(targetRank as Card['rank'])}」を計 ${removedTotal}枚 爆破しました`,
+      };
+      for (let i = 0; i < players.length; i++) {
+        nextState = checkPlayerFinish(nextState, i);
+        if (nextState.phase === 'finished') return { state: nextState };
+      }
+      nextState.turnIndex = findNextActivePlayerIndex(nextState, actorIdx, false, 1);
+      return { state: nextState };
+    }
+
+    return { state, error: '特殊効果の選択を完了してください' };
   }
 
   const currentPlayer = state.players[state.turnIndex];
@@ -345,14 +491,13 @@ export function applyDaifugoAction(
       const lastIdx = players.findIndex((p) => p.id === state.lastPlayerId);
       let resumeIdx = lastIdx >= 0 ? lastIdx : state.turnIndex;
       if (players[resumeIdx].finishRank !== null || players[resumeIdx].foulFinish) {
-        resumeIdx = findNextActivePlayerIndex(nextState, resumeIdx, true);
+        resumeIdx = findNextActivePlayerIndex(nextState, resumeIdx, true, 1);
       }
       nextState = clearTable(nextState, resumeIdx, `場が流れました！ ${players[resumeIdx].name} のターン`);
       return { state: nextState };
     }
 
-    const nextIdx = findNextActivePlayerIndex(nextState, state.turnIndex, false);
-    nextState.turnIndex = nextIdx;
+    nextState.turnIndex = findNextActivePlayerIndex(nextState, state.turnIndex, false, 1);
     return { state: nextState };
   }
 
@@ -373,36 +518,48 @@ export function applyDaifugoAction(
 
     const parsed = check.parsed;
     const prevTop = state.table.length > 0 ? state.table[state.table.length - 1] : null;
+    const revBefore = isReversed(state);
 
     const newHand = currentPlayer.hand.filter((c) => !cardIds.includes(c.id));
-    let players = state.players.map((p, idx) =>
+    const players = state.players.map((p, idx) =>
       idx === state.turnIndex ? { ...p, hand: newHand } : p
     );
 
     let revolution = state.revolution;
     let elevenBack = state.elevenBack;
     let suitLock = state.suitLock;
-    let finishedOrder = [...state.finishedOrder];
-    let foulOrder = [...state.foulOrder];
+    let numberLock = state.numberLock;
+    const finishedOrder = [...state.finishedOrder];
+    const foulOrder = [...state.foulOrder];
     const logs: string[] = [`${currentPlayer.name}: ${selectedCards.map(formatCardShort).join(' ')}`];
 
-    if (state.rules.revolution && selectedCards.length >= 4) {
+    const isRevTrigger =
+      (parsed.kind === 'group' && state.rules.revolution && selectedCards.length >= 4) ||
+      (parsed.kind === 'staircase' && state.rules.kaidanRevolution && selectedCards.length >= 4);
+    if (isRevTrigger) {
       revolution = !revolution;
-      logs.push(revolution ? '🔥革命！' : '🔥革命返し！');
+      logs.push(revolution ? '[革命]' : '[革命返し]');
     }
 
     if (state.rules.elevenBack && selectedCards.some((c) => c.rank === 11)) {
       elevenBack = true;
-      logs.push('🔄11バック！');
+      logs.push('[11バック]');
     }
 
     if (state.rules.suitLock && prevTop && !suitLock && !parsed.isJokerSingle && !prevTop.isJokerSingle) {
       if (parsed.suits.length > 0 && parsed.suits.length === prevTop.suits.length) {
-        const sameSuits = parsed.suits.every((s, i) => s === prevTop.suits[i]);
-        if (sameSuits) {
+        if (parsed.suits.every((s, i) => s === prevTop.suits[i])) {
           suitLock = parsed.suits;
-          logs.push('🔒しばり発生！');
+          logs.push('[スートしばり]');
         }
+      }
+    }
+
+    if (state.rules.numberLock && prevTop && !numberLock && !parsed.isJokerSingle && !prevTop.isJokerSingle) {
+      const expectedStep = revBefore ? prevTop.effectiveRank - 1 : prevTop.effectiveRank + 1;
+      if (parsed.effectiveRank === expectedStep) {
+        numberLock = true;
+        logs.push('[激しば]');
       }
     }
 
@@ -412,12 +569,12 @@ export function applyDaifugoAction(
       if (isFoulFinishCards(selectedCards, state)) {
         players[state.turnIndex].foulFinish = true;
         foulOrder.unshift(currentPlayer.id);
-        logs.push('💀反則上がり！');
+        logs.push('[反則上がり]');
       } else {
         const rank = finishedOrder.length + 1;
         players[state.turnIndex].finishRank = rank;
         finishedOrder.push(currentPlayer.id);
-        logs.push(`🎉${rank}位上がり！`);
+        logs.push(`[${rank}位上がり]`);
 
         if (
           state.rules.miyakoochi &&
@@ -430,7 +587,7 @@ export function applyDaifugoAction(
             prevKing.foulFinish = true;
             foulOrder.unshift(prevKing.id);
             miyakoochiTriggered = true;
-            logs.push(`⚡${prevKing.name} が都落ち！`);
+            logs.push(`[${prevKing.name} 都落ち]`);
           }
         }
       }
@@ -444,11 +601,17 @@ export function applyDaifugoAction(
       revolution,
       elevenBack,
       suitLock,
+      numberLock,
       lastPlayerId: currentPlayer.id,
       finishedOrder,
       foulOrder,
       lastLog: logs.join(' '),
     };
+
+    nextState = finalizeIfGameOver(nextState);
+    if (nextState.phase === 'finished') {
+      return { state: nextState };
+    }
 
     const isEightCut = state.rules.eightCut && selectedCards.some((c) => c.rank === 8);
     const isSpade3 =
@@ -457,24 +620,44 @@ export function applyDaifugoAction(
       selectedCards.length === 1 &&
       selectedCards[0].suit === 'spade' &&
       selectedCards[0].rank === 3;
+    const isSandstorm = isSandstormPlay(selectedCards, state.rules);
 
-    nextState = finalizeIfGameOver(nextState);
-    if (nextState.phase === 'finished') {
-      return { state: nextState };
-    }
-
-    if (isEightCut || isSpade3) {
-      const reason = isSpade3 ? '♠3返し！' : '✂️8切り！';
+    if (isEightCut || isSpade3 || isSandstorm) {
+      const reason = isSandstorm ? '[砂嵐]' : isSpade3 ? '[スペ3返し]' : '[8切り]';
       let resumeIdx = state.turnIndex;
       if (players[resumeIdx].finishRank !== null || players[resumeIdx].foulFinish) {
-        resumeIdx = findNextActivePlayerIndex(nextState, resumeIdx, true);
+        resumeIdx = findNextActivePlayerIndex(nextState, resumeIdx, true, 1);
       }
       nextState = clearTable(nextState, resumeIdx, `${logs.join(' ')} ${reason} 場が流れます`);
       return { state: nextState };
     }
 
-    const nextIdx = findNextActivePlayerIndex(nextState, state.turnIndex, false);
-    nextState.turnIndex = nextIdx;
+    if (newHand.length > 0) {
+      const sevenCount = selectedCards.filter((c) => c.rank === 7).length;
+      if (state.rules.sevenPass && sevenCount > 0) {
+        nextState.pendingEffect = { type: 'sevenPass', playerId: currentPlayer.id, count: sevenCount };
+        nextState.lastLog = `${logs.join(' ')} → 7渡し：渡すカードを${Math.min(sevenCount, newHand.length)}枚選択`;
+        return { state: nextState };
+      }
+
+      const tenCount = selectedCards.filter((c) => c.rank === 10).length;
+      if (state.rules.tenDiscard && tenCount > 0) {
+        nextState.pendingEffect = { type: 'tenDiscard', playerId: currentPlayer.id, count: tenCount };
+        nextState.lastLog = `${logs.join(' ')} → 10捨て：捨てるカードを${Math.min(tenCount, newHand.length)}枚選択`;
+        return { state: nextState };
+      }
+
+      const queenCount = selectedCards.filter((c) => c.rank === 12).length;
+      if (state.rules.queenBomber && queenCount > 0) {
+        nextState.pendingEffect = { type: 'queenBomber', playerId: currentPlayer.id };
+        nextState.lastLog = `${logs.join(' ')} → Qボンバー：爆破する数字を選択`;
+        return { state: nextState };
+      }
+    }
+
+    const fiveCount = state.rules.fiveSkip ? selectedCards.filter((c) => c.rank === 5).length : 0;
+    const stepCount = 1 + fiveCount;
+    nextState.turnIndex = findNextActivePlayerIndex(nextState, state.turnIndex, false, stepCount);
     if (miyakoochiTriggered) {
       nextState = finalizeIfGameOver(nextState);
     }
@@ -485,6 +668,20 @@ export function applyDaifugoAction(
 }
 
 export function computeDaifugoBotAction(state: DaifugoInternalState): { type: string; payload?: unknown } {
+  if (state.pendingEffect) {
+    const eff = state.pendingEffect;
+    const actor = state.players.find((p) => p.id === eff.playerId)!;
+    if (eff.type === 'sevenPass') {
+      const ids = actor.hand.slice(0, Math.min(eff.count, actor.hand.length)).map((c) => c.id);
+      return { type: 'resolveSevenPass', payload: { cardIds: ids } };
+    }
+    if (eff.type === 'tenDiscard') {
+      const ids = actor.hand.slice(0, Math.min(eff.count, actor.hand.length)).map((c) => c.id);
+      return { type: 'resolveTenDiscard', payload: { cardIds: ids } };
+    }
+    return { type: 'resolveQueenBomber', payload: { rank: actor.hand[0]?.rank || 3 } };
+  }
+
   const bot = state.players[state.turnIndex];
   const hand = bot.hand;
 
@@ -548,6 +745,8 @@ export function sanitizeDaifugoState(state: DaifugoInternalState, playerId: stri
     revolution: state.revolution,
     elevenBack: state.elevenBack,
     suitLock: state.suitLock,
+    numberLock: state.numberLock,
+    pendingEffect: state.pendingEffect,
     phase: state.phase,
     lastLog: state.lastLog,
   };

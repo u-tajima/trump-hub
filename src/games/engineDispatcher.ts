@@ -48,6 +48,13 @@ import {
   sanitizeOldMaidState,
 } from './oldMaid';
 import {
+  applyPokerAction,
+  computePokerBotAction,
+  initPoker,
+  type PokerInternalState,
+  sanitizePokerState,
+} from './poker';
+import {
   applyReversiAction,
   computeReversiBotAction,
   initReversi,
@@ -79,6 +86,7 @@ import type {
   MemoryRules,
   OldMaidRules,
   PlayerInfo,
+  PokerRules,
   ReversiRules,
   SevensRules,
   SpeedRules,
@@ -91,6 +99,7 @@ export type AnyInternalState =
   | OldMaidInternalState
   | DoubtInternalState
   | MemoryInternalState
+  | PokerInternalState
   | ReversiInternalState
   | GomokuInternalState
   | Connect4InternalState
@@ -114,6 +123,8 @@ export function initGameEngine(
       return initDoubt(players, rules as DoubtRules);
     case 'memory':
       return initMemory(players, rules as MemoryRules);
+    case 'poker':
+      return initPoker(players, rules as PokerRules);
     case 'reversi':
       return initReversi(players, rules as ReversiRules);
     case 'gomoku':
@@ -144,6 +155,8 @@ export function applyGameAction(
       return applyDoubtAction(state as DoubtInternalState, playerId, action);
     case 'memory':
       return applyMemoryAction(state as MemoryInternalState, playerId, action);
+    case 'poker':
+      return applyPokerAction(state as PokerInternalState, playerId, action);
     case 'reversi':
       return applyReversiAction(state as ReversiInternalState, playerId, action);
     case 'gomoku':
@@ -169,6 +182,8 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizeDoubtState(state as DoubtInternalState, playerId);
     case 'memory':
       return sanitizeMemoryState(state as MemoryInternalState, playerId);
+    case 'poker':
+      return sanitizePokerState(state as PokerInternalState, playerId);
     case 'reversi':
       return sanitizeReversiState(state as ReversiInternalState, playerId);
     case 'gomoku':
@@ -246,6 +261,15 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
       const act = computeMemoryBotAction(s);
       if (!act) return null;
       return applyMemoryAction(s, current.id, act).state;
+    }
+    case 'poker': {
+      const s = state as PokerInternalState;
+      if (s.subPhase === 'showdown') return null;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computePokerBotAction(s);
+      if (!act) return null;
+      return applyPokerAction(s, current.id, act).state;
     }
     case 'reversi': {
       const s = state as ReversiInternalState;
