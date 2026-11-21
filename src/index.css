@@ -370,6 +370,8 @@ body {
 
 .game-icon {
   font-size: 22px;
+  display: inline-flex;
+  color: var(--accent-gold);
 }
 
 .game-players {
@@ -777,6 +779,9 @@ body {
 }
 
 .flag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   font-weight: 800;
   padding: 3px 9px;
@@ -1074,6 +1079,9 @@ body {
 
 .result-card h3 {
   margin: 0 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .result-list {
@@ -1373,12 +1381,7 @@ body {
 
 .dice-trio {
   display: inline-flex;
-  gap: 4px;
-}
-
-.die-char {
-  font-size: 26px;
-  line-height: 1;
+  gap: 6px;
 }
 
 .hand-label {
@@ -1390,4 +1393,181 @@ body {
 .text-muted-sm {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.title-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mini-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.mini-dot.black {
+  background: #0f172a;
+  border: 1px solid #64748b;
+}
+
+.mini-dot.white {
+  background: #f8fafc;
+}
+
+.mini-dot.red {
+  background: #ef4444;
+}
+
+.mini-dot.yellow {
+  background: #eab308;
+}
+
+.bomber-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.poker-showdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.poker-showdown-row {
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px;
+}
+
+.poker-showdown-row.winner {
+  border-color: var(--accent-gold);
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.poker-showdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.hand-rank-badge {
+  background: rgba(16, 185, 129, 0.25);
+  color: #6ee7b7;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dice-cube {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  background: linear-gradient(145deg, #ffffff 0%, #e2e8f0 100%);
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.45), inset 0 -2px 3px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  gap: 2px;
+  place-items: center;
+}
+
+.dice-cube--sm {
+  width: 34px;
+  height: 34px;
+}
+
+.dice-cube--md {
+  width: 44px;
+  height: 44px;
+}
+
+.dice-cube--lg {
+  width: 56px;
+  height: 56px;
+}
+
+.dice-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.dice-pip.active {
+  background: #0f172a;
+}
+
+.dice-pip.red-pip {
+  background: #dc2626;
+  transform: scale(1.25);
+}
+
+.dice-cube--rolling {
+  animation: diceTumble 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes diceTumble {
+  0% {
+    transform: translateY(-18px) rotate(0deg) scale(0.85);
+  }
+  35% {
+    transform: translateY(4px) rotate(140deg) scale(1.1);
+  }
+  65% {
+    transform: translateY(-8px) rotate(260deg) scale(0.95);
+  }
+  100% {
+    transform: translateY(0) rotate(360deg) scale(1);
+  }
+}
+
+.trump-card--enter {
+  animation: cardDealPop 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes cardDealPop {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.hand-shuffling .trump-card:nth-child(odd) {
+  animation: riffleLeft 0.5s ease-in-out;
+}
+
+.hand-shuffling .trump-card:nth-child(even) {
+  animation: riffleRight 0.5s ease-in-out;
+}
+
+@keyframes riffleLeft {
+  0%, 100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateX(14px) translateY(-10px) rotate(6deg);
+  }
+}
+
+@keyframes riffleRight {
+  0%, 100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateX(-14px) translateY(6px) rotate(-6deg);
+  }
 }
