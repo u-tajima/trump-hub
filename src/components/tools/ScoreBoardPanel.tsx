@@ -1,22 +1,24 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRightLeft,
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
+  ChevronsLeft,
+  ChevronsRight,
   Clock,
   Crown,
   Edit3,
   History,
-  Minus,
   Plus,
   RotateCcw,
   Trash2,
   UserCheck,
   UserPlus,
-  X,
 } from 'lucide-react';
 import {
   getScoreBoardZeroSumInfo,
@@ -52,17 +54,37 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
   const [showSavedPicker, setShowSavedPicker] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
 
-  // 「自分」としてマークするエントリーID（未指定時は myPlayerName と一致するメンバーを自動選択）
+  // 「自分」としてマークするエントリーID
   const [manualMyId, setManualMyId] = useState<string | null>(null);
 
   // 点数を押して展開中のエントリーID（null のときは全行閉じてスッキリ表示）
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
 
-  // 点数操作パネル内の入力ステート
-  const [deltaInput, setDeltaInput] = useState<string>('');
+  // 点数操作パネル内の入力ステート（絶対値文字列 + 正負符号）
+  const [absInput, setAbsInput] = useState<string>('0');
+  const [sign, setSign] = useState<1 | -1>(1);
   const [counterpartyId, setCounterpartyId] = useState<string>('');
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editingNameDraft, setEditingNameDraft] = useState<string>('');
+
+  // 長押し連続調整用タイマー参照
+  const holdTimeoutRef = useRef<number | null>(null);
+  const holdIntervalRef = useRef<number | null>(null);
+
+  const stopHoldTimer = () => {
+    if (holdTimeoutRef.current !== null) {
+      window.clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
+    }
+    if (holdIntervalRef.current !== null) {
+      window.clearInterval(holdIntervalRef.current);
+      holdIntervalRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => stopHoldTimer();
+  }, []);
 
   const myEntry = useMemo(() => {
     if (board.entries.length === 0) return null;
@@ -107,23 +129,67 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
 
   const zeroSumInfo = useMemo(() => getScoreBoardZeroSumInfo(board), [board]);
 
-  const step = Math.max(1, unitStep);
-  const quickMagnitudes = useMemo(() => [1 * step, 5 * step, 10 * step, 50 * step], [step]);
+  const singleStep = Math.max(1, unitStep);
+  const doubleStep = singleStep * 10;
 
   const remainHours = Math.max(1, Math.ceil((board.expiresAt - Date.now()) / (60 * 60 * 1000)));
   const remainDaysText =
     remainHours >= 24 ? `${Math.ceil(remainHours / 24)}日保存` : `${remainHours}時間保存`;
 
   const toggleActiveEntry = (entryId: string) => {
+    stopHoldTimer();
     if (activeEntryId === entryId) {
       setActiveEntryId(null);
       setEditingNameId(null);
     } else {
       setActiveEntryId(entryId);
-      setDeltaInput('');
+      setAbsInput('0');
+      setSign(1);
       setCounterpartyId('');
       setEditingNameId(null);
     }
+  };
+
+  // 絶対値を delta 分だけ増減（0未満にはならない）
+  const stepAbsValue = (delta: number) => {
+    setAbsInput((prev) => {
+      const cur = Math.max(0, Math.trunc(Number(prev) || 0));
+      const next = Math.max(0, cur + delta);
+      return String(next);
+    });
+  };
+
+  // くの字 / 二重くの字ボタンの押下＆長押し開始
+  const startHoldStep = (delta: number, e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    stopHoldTimer();
+    stepAbsValue(delta);
+    holdTimeoutRef.current = window.setTimeout(() => {
+      holdIntervalRef.current = window.setInterval(() => {
+        stepAbsValue(delta);
+      }, 75);
+    }, 340);
+  };
+
+  const handleAbsInputChange = (raw: string) => {
+    if (raw === '') {
+      setAbsInput('');
+      return;
+    }
+    // マイナス記号がキーボード入力された場合は符号をマイナスにしつつ絶対値のみ保持
+    if (raw.includes('-')) {
+      setSign(-1);
+    } else if (raw.includes('+')) {
+      setSign(1);
+    }
+    const digitsOnly = raw.replace(/[^0-9]/g, '');
+    if (!digitsOnly) {
+      setAbsInput('');
+      return;
+    }
+    const num = Math.max(0, Math.trunc(Number(digitsOnly)));
+    setAbsInput(String(num));
   };
 
   const handleAddMember = (e: React.FormEvent) => {
@@ -135,50 +201,35 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
     setShowAddForm(false);
   };
 
-  const handleApplyDelta = (targetEntryId: string, signedDelta: number) => {
-    if (!Number.isFinite(signedDelta) || signedDelta === 0) return;
-    const val = Math.trunc(signedDelta);
+  const parsedAbs = Math.max(0, Math.trunc(Number(absInput) || 0));
+  const signedDelta = sign * parsedAbs;
+
+  const handleCommitDelta = (targetEntryId: string) => {
+    if (parsedAbs === 0) return;
     if (counterpartyId && counterpartyId !== targetEntryId) {
       const targetExists = board.entries.some((e) => e.id === counterpartyId);
       if (targetExists) {
-        if (val > 0) {
+        if (signedDelta > 0) {
           onOp({
             type: 'transferScore',
             fromEntryId: counterpartyId,
             toEntryId: targetEntryId,
-            amount: val,
+            amount: parsedAbs,
           });
         } else {
           onOp({
             type: 'transferScore',
             fromEntryId: targetEntryId,
             toEntryId: counterpartyId,
-            amount: Math.abs(val),
+            amount: parsedAbs,
           });
         }
+        setAbsInput('0');
         return;
       }
     }
-    onOp({ type: 'addDelta', entryId: targetEntryId, delta: val });
-  };
-
-  const handleCustomCommit = (targetEntryId: string, mode: 'add' | 'sub' | 'set') => {
-    const raw = Number(deltaInput);
-    if (!Number.isFinite(raw)) return;
-    const val = Math.trunc(raw);
-    if (mode === 'set') {
-      onOp({ type: 'setScore', entryId: targetEntryId, score: val });
-    } else if (val !== 0) {
-      const absVal = Math.abs(val);
-      handleApplyDelta(targetEntryId, mode === 'add' ? absVal : -absVal);
-    }
-    setDeltaInput('');
-  };
-
-  const handleBumpInput = (addAmt: number) => {
-    const cur = Number(deltaInput) || 0;
-    const next = Math.max(0, Math.trunc(cur) + addAmt);
-    setDeltaInput(next > 0 ? String(next) : '');
+    onOp({ type: 'addDelta', entryId: targetEntryId, delta: signedDelta });
+    setAbsInput('0');
   };
 
   const handleSyncRoomMembers = () => {
@@ -196,9 +247,6 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
     const existingNames = new Set(board.entries.map((e) => e.name));
     return roomPlayerNames.filter((n) => !existingNames.has(n)).length;
   }, [isRoomMode, roomPlayerNames, board.entries]);
-
-  const parsedInput = Math.abs(Math.trunc(Number(deltaInput) || 0));
-  const hasRawInput = deltaInput.trim() !== '' && Number.isFinite(Number(deltaInput));
 
   return (
     <div className="scoreboard-wrap">
@@ -348,7 +396,7 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
 
       {/* 操作ヒント（まだ誰も開いていないときのみ控えめに1行表示） */}
       {board.entries.length > 0 && !activeEntryId && (
-        <div className="sb-tap-guide">点数をタップすると加減点パネルが開きます</div>
+        <div className="sb-tap-guide">点数をタップすると点数入力が開きます</div>
       )}
 
       {/* スッキリした得点一覧（点数をタップするとその下に操作ドロワーが展開） */}
@@ -421,96 +469,131 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
                 {/* 点数を押したときだけ出てくる操作ドロワー */}
                 {isOpen && (
                   <div className="sb-drawer">
-                    {/* クイック加減点ボタン（上段：加点 / 下段：減点） */}
-                    <div className="sb-quick-grid">
-                      <div className="sb-quick-row">
-                        {quickMagnitudes.map((m) => (
-                          <button
-                            key={`plus-${m}`}
-                            type="button"
-                            className="sb-quick-btn plus"
-                            onClick={() => handleApplyDelta(entry.id, m)}
-                          >
-                            +{m}
-                          </button>
-                        ))}
+                    {/* 左右くの字・二重くの字（長押し対応）＋正負反転＋絶対値キーボード入力 */}
+                    <div className="sb-stepper-bar">
+                      <button
+                        type="button"
+                        className="sb-chevron-btn double"
+                        onPointerDown={(e) => startHoldStep(-doubleStep, e)}
+                        onPointerUp={stopHoldTimer}
+                        onPointerLeave={stopHoldTimer}
+                        onPointerCancel={stopHoldTimer}
+                        onContextMenu={(e) => e.preventDefault()}
+                        title={`絶対値を -${doubleStep}（長押しで連続減少）`}
+                        aria-label={`絶対値を ${doubleStep} 減らす`}
+                      >
+                        <ChevronsLeft size={18} />
+                        <span className="sb-chevron-sub">-{doubleStep}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="sb-chevron-btn single"
+                        onPointerDown={(e) => startHoldStep(-singleStep, e)}
+                        onPointerUp={stopHoldTimer}
+                        onPointerLeave={stopHoldTimer}
+                        onPointerCancel={stopHoldTimer}
+                        onContextMenu={(e) => e.preventDefault()}
+                        title={`絶対値を -${singleStep}（長押しで連続減少）`}
+                        aria-label={`絶対値を ${singleStep} 減らす`}
+                      >
+                        <ChevronLeft size={18} />
+                        <span className="sb-chevron-sub">-{singleStep}</span>
+                      </button>
+
+                      {/* 正負反転ボタン + 絶対値キーボード入力欄 */}
+                      <div
+                        className={`sb-abs-field ${sign > 0 ? 'is-plus' : 'is-minus'}`}
+                      >
+                        <button
+                          type="button"
+                          className={`sb-sign-toggle-btn ${sign > 0 ? 'plus' : 'minus'}`}
+                          onClick={() => setSign((prev) => (prev === 1 ? -1 : 1))}
+                          title="タップで正負（＋／－）を反転"
+                          aria-label="正負反転"
+                        >
+                          <span className="sb-sign-main">{sign > 0 ? '+' : '−'}</span>
+                          <span className="sb-sign-hint">±反転</span>
+                        </button>
+
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          className="sb-abs-input"
+                          placeholder="0"
+                          value={absInput}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onChange={(e) => handleAbsInputChange(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && parsedAbs > 0) {
+                              e.preventDefault();
+                              handleCommitDelta(entry.id);
+                            } else if (e.key === '-') {
+                              e.preventDefault();
+                              setSign((prev) => (prev === 1 ? -1 : 1));
+                            } else if (e.key === '+') {
+                              e.preventDefault();
+                              setSign(1);
+                            }
+                          }}
+                          aria-label="変動点数の絶対値"
+                        />
                       </div>
-                      <div className="sb-quick-row">
-                        {quickMagnitudes.map((m) => (
-                          <button
-                            key={`minus-${m}`}
-                            type="button"
-                            className="sb-quick-btn minus"
-                            onClick={() => handleApplyDelta(entry.id, -m)}
-                          >
-                            -{m}
-                          </button>
-                        ))}
-                      </div>
+
+                      <button
+                        type="button"
+                        className="sb-chevron-btn single"
+                        onPointerDown={(e) => startHoldStep(singleStep, e)}
+                        onPointerUp={stopHoldTimer}
+                        onPointerLeave={stopHoldTimer}
+                        onPointerCancel={stopHoldTimer}
+                        onContextMenu={(e) => e.preventDefault()}
+                        title={`絶対値を +${singleStep}（長押しで連続増加）`}
+                        aria-label={`絶対値を ${singleStep} 増やす`}
+                      >
+                        <ChevronRight size={18} />
+                        <span className="sb-chevron-sub">+{singleStep}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="sb-chevron-btn double"
+                        onPointerDown={(e) => startHoldStep(doubleStep, e)}
+                        onPointerUp={stopHoldTimer}
+                        onPointerLeave={stopHoldTimer}
+                        onPointerCancel={stopHoldTimer}
+                        onContextMenu={(e) => e.preventDefault()}
+                        title={`絶対値を +${doubleStep}（長押しで連続増加）`}
+                        aria-label={`絶対値を ${doubleStep} 増やす`}
+                      >
+                        <ChevronsRight size={18} />
+                        <span className="sb-chevron-sub">+{doubleStep}</span>
+                      </button>
                     </div>
 
-                    {/* 任意の点数入力＆加減算 */}
-                    <div className="sb-custom-box">
-                      <div className="sb-custom-input-row">
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          className="sb-delta-input"
-                          placeholder="点数を入力 (例: 30)"
-                          value={deltaInput}
-                          onChange={(e) => setDeltaInput(e.target.value)}
-                        />
-                        {quickMagnitudes.slice(0, 3).map((m) => (
-                          <button
-                            key={`bump-${m}`}
-                            type="button"
-                            className="sb-bump-btn"
-                            onClick={() => handleBumpInput(m)}
-                          >
-                            +{m}
-                          </button>
-                        ))}
-                        {deltaInput && (
-                          <button
-                            type="button"
-                            className="sb-bump-btn"
-                            onClick={() => setDeltaInput('')}
-                            aria-label="入力クリア"
-                          >
-                            <X size={13} />
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="sb-commit-row">
-                        <button
-                          type="button"
-                          className="sb-commit-btn minus"
-                          disabled={parsedInput === 0}
-                          onClick={() => handleCustomCommit(entry.id, 'sub')}
-                        >
-                          <Minus size={14} />
-                          {parsedInput > 0 ? `-${parsedInput} 減らす` : '減らす'}
-                        </button>
-                        <button
-                          type="button"
-                          className="sb-commit-btn plus"
-                          disabled={parsedInput === 0}
-                          onClick={() => handleCustomCommit(entry.id, 'add')}
-                        >
-                          <Plus size={14} />
-                          {parsedInput > 0 ? `+${parsedInput} 増やす` : '増やす'}
-                        </button>
-                        <button
-                          type="button"
-                          className="sb-commit-btn neutral"
-                          disabled={!hasRawInput}
-                          onClick={() => handleCustomCommit(entry.id, 'set')}
-                          title="入力した数値に直接変更"
-                        >
-                          直接設定
-                        </button>
-                      </div>
+                    {/* 反映ボタン + リセット */}
+                    <div className="sb-apply-row">
+                      <button
+                        type="button"
+                        className="sb-zero-btn"
+                        disabled={parsedAbs === 0}
+                        onClick={() => setAbsInput('0')}
+                      >
+                        0に戻す
+                      </button>
+                      <button
+                        type="button"
+                        className={`sb-apply-btn ${sign > 0 ? 'plus' : 'minus'}`}
+                        disabled={parsedAbs === 0}
+                        onClick={() => handleCommitDelta(entry.id)}
+                      >
+                        {parsedAbs > 0
+                          ? `${sign > 0 ? `+${parsedAbs}` : `-${parsedAbs}`}点 を反映（→ ${(
+                              entry.score + signedDelta
+                            ).toLocaleString()}点）`
+                          : '数値を入力して反映'}
+                      </button>
                     </div>
 
                     {/* 相手との連動ゼロサム移動（2人以上のとき） */}

@@ -305,131 +305,179 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px 10px 11px;
-  background: rgba(2, 6, 23, 0.55);
+  background: rgba(2, 6, 23, 0.58);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.sb-quick-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.sb-quick-row {
+/* 左右くの字・二重くの字＋正負反転＋絶対値入力バー */
+.sb-stepper-bar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 44px 44px minmax(0, 1fr) 44px 44px;
+  align-items: stretch;
   gap: 5px;
 }
 
-.sb-quick-btn {
-  height: 36px;
-  border-radius: 9px;
-  font-size: 13px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: transform 0.08s ease;
-}
-
-.sb-quick-btn.plus {
-  background: rgba(16, 185, 129, 0.18);
-  border: 1.5px solid rgba(16, 185, 129, 0.5);
-  color: #6ee7b7;
-}
-
-.sb-quick-btn.minus {
-  background: rgba(239, 68, 68, 0.16);
-  border: 1.5px solid rgba(239, 68, 68, 0.45);
-  color: #fca5a5;
-}
-
-.sb-quick-btn:active {
-  transform: scale(0.95);
-}
-
-.sb-custom-box {
+.sb-chevron-btn {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.sb-custom-input-row {
-  display: flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  gap: 1px;
+  height: 46px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(30, 41, 59, 0.85);
+  color: #e2e8f0;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: transform 0.08s ease, border-color 0.12s ease;
 }
 
-.sb-delta-input {
-  flex: 1;
-  min-width: 0;
-  background: rgba(15, 23, 42, 0.9);
-  border: 1.5px solid rgba(148, 163, 184, 0.35);
-  border-radius: 8px;
-  color: #f8fafc;
-  font-size: 14px;
-  font-weight: 800;
-  padding: 6px 10px;
+.sb-chevron-btn.double {
+  background: rgba(30, 41, 59, 0.96);
+  border-color: rgba(96, 165, 250, 0.38);
+  color: #bfdbfe;
 }
 
-.sb-delta-input:focus {
-  outline: none;
+.sb-chevron-btn:active {
+  transform: scale(0.93);
   border-color: #60a5fa;
 }
 
-.sb-bump-btn {
-  height: 32px;
-  padding: 0 8px;
-  border-radius: 7px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(30, 41, 59, 0.8);
-  color: #cbd5e1;
-  font-size: 11px;
+.sb-chevron-sub {
+  font-size: 9px;
   font-weight: 800;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  color: #94a3b8;
+  line-height: 1;
 }
 
-.sb-commit-row {
+.sb-abs-field {
+  display: flex;
+  align-items: stretch;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1.5px solid rgba(148, 163, 184, 0.38);
+  overflow: hidden;
+}
+
+.sb-abs-field.is-plus {
+  border-color: rgba(16, 185, 129, 0.62);
+}
+
+.sb-abs-field.is-minus {
+  border-color: rgba(239, 68, 68, 0.62);
+}
+
+.sb-sign-toggle-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  padding: 0 7px;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+
+.sb-sign-toggle-btn.plus {
+  background: rgba(16, 185, 129, 0.22);
+  color: #34d399;
+}
+
+.sb-sign-toggle-btn.minus {
+  background: rgba(239, 68, 68, 0.22);
+  color: #f87171;
+}
+
+.sb-sign-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+.sb-sign-main {
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.sb-sign-hint {
+  font-size: 8px;
+  font-weight: 800;
+  opacity: 0.85;
+  margin-top: 1px;
+}
+
+.sb-abs-input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #f8fafc;
+  font-size: 19px;
+  font-weight: 900;
+  text-align: center;
+  padding: 0 8px;
+}
+
+.sb-abs-input:focus {
+  outline: none;
+}
+
+/* 反映ボタン行 */
+.sb-apply-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: auto 1fr;
   gap: 6px;
 }
 
-.sb-commit-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 8px;
-  font-size: 12px;
+.sb-zero-btn {
+  height: 38px;
+  padding: 0 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(30, 41, 59, 0.75);
+  color: #94a3b8;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
 }
 
-.sb-commit-btn:disabled {
+.sb-zero-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.sb-apply-btn {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: none;
+  font-size: 13px;
+  font-weight: 900;
+  color: #ffffff;
+  cursor: pointer;
+  transition: transform 0.08s ease, opacity 0.12s ease;
+}
+
+.sb-apply-btn.plus {
+  background: linear-gradient(135deg, #059669, #10b981);
+}
+
+.sb-apply-btn.minus {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+}
+
+.sb-apply-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.sb-commit-btn.plus {
-  background: linear-gradient(135deg, #059669, #10b981);
-  border: none;
-  color: #ffffff;
-}
-
-.sb-commit-btn.minus {
-  background: linear-gradient(135deg, #dc2626, #ef4444);
-  border: none;
-  color: #ffffff;
-}
-
-.sb-commit-btn.neutral {
-  background: rgba(30, 41, 59, 0.9);
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  color: #cbd5e1;
+.sb-apply-btn:not(:disabled):active {
+  transform: scale(0.98);
 }
 
 .sb-transfer-row {
