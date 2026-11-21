@@ -54,6 +54,10 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
   const [showSavedPicker, setShowSavedPicker] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
 
+  // 入力単位（1 / 5 / 10 / 100 / 1000）をパネル内からもいつでも切り替え可能にする
+  const [stepOverride, setStepOverride] = useState<number | null>(null);
+  const activeStep = stepOverride ?? Math.max(1, unitStep);
+
   // 「自分」としてマークするエントリーID
   const [manualMyId, setManualMyId] = useState<string | null>(null);
 
@@ -129,7 +133,7 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
 
   const zeroSumInfo = useMemo(() => getScoreBoardZeroSumInfo(board), [board]);
 
-  const singleStep = Math.max(1, unitStep);
+  const singleStep = activeStep;
   const doubleStep = singleStep * 10;
 
   const remainHours = Math.max(1, Math.ceil((board.expiresAt - Date.now()) / (60 * 60 * 1000)));
@@ -304,6 +308,19 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
         </div>
 
         <div className="scoreboard-action-chips">
+          <select
+            className="sb-unit-select"
+            value={activeStep}
+            onChange={(e) => setStepOverride(Number(e.target.value))}
+            aria-label="入力単位"
+            title="くの字ボタンの増減単位"
+          >
+            <option value={1}>単位: 1点</option>
+            <option value={5}>単位: 5点</option>
+            <option value={10}>単位: 10点</option>
+            <option value={100}>単位: 100点</option>
+            <option value={1000}>単位: 1000点</option>
+          </select>
           <button
             type="button"
             className={`sb-tool-btn ${showAddForm ? 'active' : ''}`}

@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
-  ClipboardList,
   Dices,
   Hand,
   Minus,
@@ -13,14 +12,6 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import {
-  applyScoreBoardOp,
-  createEmptyScoreBoard,
-  loadScoreBoardFromStorage,
-  saveScoreBoardToStorage,
-  type ScoreBoardOp,
-  type ScoreBoardState,
-} from '../utils/scoreBoard';
 import { Dice3D } from './Dice3D';
 import {
   type CustomRouletteSlot,
@@ -28,11 +19,11 @@ import {
   type CustomRouletteTool3DHandle,
 } from './tools/CustomRouletteTool3D';
 import { DiceTool3D, type DiceTool3DHandle } from './tools/DiceTool3D';
-import { ScoreBoardPanel } from './tools/ScoreBoardPanel';
 import './BetControl.css';
 import './ToolModeScreen.css';
 
 interface ToolModeScreenProps {
+  tool: 'dice' | 'roulette';
   onBack: () => void;
 }
 
@@ -117,26 +108,8 @@ function buildWheelSlots(items: RouletteOptionItem[], totalSlots: number): Custo
   return result;
 }
 
-export const ToolModeScreen: React.FC<ToolModeScreenProps> = ({ onBack }) => {
-  const [tool, setTool] = useState<'dice' | 'roulette' | 'score'>('dice');
+export const ToolModeScreen: React.FC<ToolModeScreenProps> = ({ tool, onBack }) => {
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-
-  // ===== 得点管理ツール状態（LocalStorage 3日間保持） =====
-  const [scoreBoard, setScoreBoard] = useState<ScoreBoardState>(() => {
-    const saved = loadScoreBoardFromStorage('tool');
-    if (saved) return saved;
-    const fresh = createEmptyScoreBoard('tool', 'ツール得点表', ['プレイヤー1', 'プレイヤー2']);
-    saveScoreBoardToStorage(fresh);
-    return fresh;
-  });
-
-  const handleScoreOp = useCallback((op: ScoreBoardOp) => {
-    setScoreBoard((prev) => {
-      const next = applyScoreBoardOp(prev, op, 'あなた');
-      saveScoreBoardToStorage(next);
-      return next;
-    });
-  }, []);
 
   // ===== ダイスツール状態 =====
   const diceRef = useRef<DiceTool3DHandle | null>(null);
@@ -258,10 +231,13 @@ export const ToolModeScreen: React.FC<ToolModeScreenProps> = ({ onBack }) => {
       <header className="top-bar">
         <button type="button" className="icon-text-btn" onClick={onBack}>
           <ArrowLeft size={16} />
-          ホーム
+          ツール選択
         </button>
         <div className="top-bar-center">
-          <span className="top-bar-title">3D物理ツール</span>
+          <span className="top-bar-title title-with-icon">
+            {tool === 'dice' ? <Dices size={16} /> : <Target size={16} />}
+            {tool === 'dice' ? '3D物理ダイス' : '3Dカスタムルーレット'}
+          </span>
           <span className="top-bar-code">TOOL MODE</span>
         </div>
         <button
@@ -277,39 +253,7 @@ export const ToolModeScreen: React.FC<ToolModeScreenProps> = ({ onBack }) => {
 
       <main className="game-main">
         <div className="board-container">
-          <div className="tool-mode-tabs">
-            <button
-              type="button"
-              className={`tab-btn ${tool === 'dice' ? 'active' : ''}`}
-              disabled={diceMode !== 'idle' || rouletteSpinning}
-              onClick={() => setTool('dice')}
-            >
-              <Dices size={16} />
-              ダイス
-            </button>
-            <button
-              type="button"
-              className={`tab-btn ${tool === 'roulette' ? 'active' : ''}`}
-              disabled={diceMode !== 'idle' || rouletteSpinning}
-              onClick={() => setTool('roulette')}
-            >
-              <Target size={16} />
-              ルーレット
-            </button>
-            <button
-              type="button"
-              className={`tab-btn ${tool === 'score' ? 'active' : ''}`}
-              disabled={diceMode !== 'idle' || rouletteSpinning}
-              onClick={() => setTool('score')}
-            >
-              <ClipboardList size={16} />
-              得点管理
-            </button>
-          </div>
-
-          {tool === 'score' ? (
-            <ScoreBoardPanel board={scoreBoard} onOp={handleScoreOp} canRestoreSaved />
-          ) : tool === 'dice' ? (
+          {tool === 'dice' ? (
             <>
               {/* 3D物理ダイスステージ */}
               <div className="chinchiro-bowl-stage">
