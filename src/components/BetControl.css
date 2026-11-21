@@ -1,0 +1,151 @@
+/* Poker & Hold'em Raise/Bet Adjuster */
+.bet-adjuster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(10, 20, 32, 0.78);
+  border: 1px solid rgba(245, 198, 102, 0.28);
+  margin-bottom: 8px;
+}
+
+.bet-adjuster-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.bet-adjuster-amount {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fde68a;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.bet-presets-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.bet-preset-btn {
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.bet-preset-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.bet-preset-btn.active {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.24);
+  color: #fde68a;
+}
+
+.bet-preset-btn.allin {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.bet-preset-btn.allin.active {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.28);
+  color: #fff;
+}
+
+.bet-preset-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.bet-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bet-step-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(30, 41, 59, 0.85);
+  color: #f8fafc;
+  font-size: 15px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.bet-step-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bet-range-slider {
+  flex: 1;
+  accent-color: #f59e0b;
+  height: 6px;
+  cursor: pointer;
+}
+
+/* Chinchiro Japanese-style Stake ("張り") Panel */
+.chinchiro-stake-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.92));
+  border: 1.5px solid rgba(217, 155, 38, 0.45);
+}
+
+.chinchiro-stake-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.chinchiro-stake-value {
+  font-size: 15px;
+  font-weight: 900;
+  color: #fbbf24;
+}
+
+.chinchiro-stake-presets {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+
+.stake-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.18);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}

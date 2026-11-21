@@ -207,7 +207,12 @@ describe('Chinchiro engine', () => {
 
     const players = makePlayers(2);
     const state = initChinchiro(players, { rounds: 3, startPoints: 100, shonbenEnabled: true });
-    const res = applyChinchiroAction(state, 'p1', {
+    // 子(p2)が張り額を35点に変更
+    const staked = applyChinchiroAction(state, 'p2', { type: 'setStake', payload: { amount: 35 } });
+    expect(staked.error).toBeUndefined();
+    expect(staked.state.players[1].stake).toBe(35);
+
+    const res = applyChinchiroAction(staked.state, 'p1', {
       type: 'roll',
       payload: { dice: [1, 1, 1] },
     });
@@ -216,6 +221,14 @@ describe('Chinchiro engine', () => {
     expect(res.state.lastRolledPlayerId).toBe('p1');
     expect(res.state.lastRolledHand?.rank).toBe('pinzoro');
     expect(res.state.players[0].currentHand?.dice).toEqual([1, 1, 1]);
+
+    // p2が3の目を出して親のピンゾロ(5倍)に負けると 35 * 5 = 175点移動
+    const settled = applyChinchiroAction(res.state, 'p2', {
+      type: 'roll',
+      payload: { dice: [2, 2, 3] },
+    });
+    expect(settled.state.players[0].points).toBe(275);
+    expect(settled.state.players[1].points).toBe(-75);
   });
 });
 

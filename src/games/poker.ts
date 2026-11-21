@@ -2,13 +2,22 @@ import type { Card } from '../types/card';
 import type { PlayerInfo, PokerRules } from '../types/game';
 import { createDeck, shuffle, sortCardsByRank } from '../utils/deck';
 
-export type PokerHandCategory = 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1;
+export type PokerHandCategory =
+  | 9 // Straight Flush / Royal
+  | 8 // Four of a Kind
+  | 7 // Full House
+  | 6 // Flush
+  | 5 // Straight
+  | 4 // Three of a Kind
+  | 3 // Two Pair
+  | 2 // One Pair
+  | 1; // High Card
 
 export interface EvaluatedPokerHand {
   category: PokerHandCategory;
   tiebreakers: number[];
   name: string;
-  score: number;
+  score: number; // comparable numeric score
 }
 
 export interface PokerPlayerState {
@@ -360,6 +369,7 @@ export function applyPokerAction(
     };
   }
 
+  // bet1 or bet2
   const players = state.players.map((p) => ({ ...p }));
   const me = players[state.turnIndex];
   const toCall = Math.max(0, state.highestBet - me.currentBet);
@@ -379,8 +389,10 @@ export function applyPokerAction(
     pot += paid;
     log = toCall === 0 ? `${me.name} がチェックしました` : `${me.name} がコール (${paid})`;
   } else if (action.type === 'raise') {
-    const add = ((action.payload as { amount?: number })?.amount ?? 20);
+    const rawAdd = (action.payload as { amount?: number })?.amount ?? state.rules.ante * 2;
+    const add = Math.max(1, Math.floor(rawAdd));
     const totalPay = Math.min(me.chips, toCall + add);
+    const actualAdd = Math.max(0, totalPay - toCall);
     me.chips -= totalPay;
     me.currentBet += totalPay;
     me.actedThisRound = true;
@@ -388,7 +400,12 @@ export function applyPokerAction(
     if (me.currentBet > highestBet) {
       highestBet = me.currentBet;
     }
-    log = `${me.name} がレイズ (+${add})`;
+    log =
+      me.chips === 0
+        ? `${me.name} がオールイン (${totalPay})`
+        : toCall === 0
+        ? `${me.name} がベット (${actualAdd})`
+        : `${me.name} がレイズ (+${actualAdd})`;
   } else {
     return { state, error: '不明なアクションです' };
   }
@@ -412,6 +429,7 @@ export function computePokerBotAction(state: PokerInternalState): { type: string
     if (ev.category >= 4) {
       return { type: 'draw', payload: { discardIds: [] } };
     }
+    // ペア以外のカードを交換
     const counts = new Map<number, number>();
     bot.hand.forEach((c) => counts.set(c.rank, (counts.get(c.rank) ?? 0) + 1));
     const discardIds = bot.hand

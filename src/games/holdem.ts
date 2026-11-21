@@ -291,14 +291,21 @@ export function applyHoldemAction(
     pot += paid;
     log = toCall === 0 ? `${me.name} がチェック` : `${me.name} がコール (${paid})`;
   } else if (action.type === 'raise') {
-    const add = (action.payload as { amount?: number })?.amount ?? state.rules.bigBlind;
+    const rawAdd = (action.payload as { amount?: number })?.amount ?? state.rules.bigBlind;
+    const add = Math.max(1, Math.floor(rawAdd));
     const paid = Math.min(me.chips, toCall + add);
+    const actualAdd = Math.max(0, paid - toCall);
     me.chips -= paid;
     me.currentBet += paid;
     me.actedThisRound = true;
     pot += paid;
     if (me.currentBet > highestBet) highestBet = me.currentBet;
-    log = `${me.name} がレイズ (+${add})`;
+    log =
+      me.chips === 0
+        ? `${me.name} がオールイン (${paid})`
+        : toCall === 0
+        ? `${me.name} がベット (${actualAdd})`
+        : `${me.name} がレイズ (+${actualAdd})`;
   } else {
     return { state, error: '不明なアクションです' };
   }

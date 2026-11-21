@@ -1,7 +1,8 @@
-import React from 'react';
-import { Coins, Trophy } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Coins, Minus, Plus, Trophy } from 'lucide-react';
 import type { HoldemClientState } from '../../games/holdem';
 import { PlayingCard } from '../PlayingCard';
+import '../BetControl.css';
 
 interface HoldemBoardProps {
   state: HoldemClientState;
@@ -24,6 +25,24 @@ export const HoldemBoard: React.FC<HoldemBoardProps> = ({ state, onAction }) => 
 
   const me = state.players.find((p) => p.id === state.myId);
   const toCall = me ? Math.max(0, state.highestBet - me.currentBet) : 0;
+  const maxRaise = Math.max(0, (me?.chips ?? 0) - toCall);
+  const step = Math.max(5, Math.floor(state.rules.bigBlind / 2));
+  const minRaise = Math.min(maxRaise, state.rules.bigBlind);
+
+  const [raiseAmount, setRaiseAmount] = useState<number>(minRaise);
+
+  useEffect(() => {
+    setRaiseAmount((prev) => {
+      if (maxRaise <= 0) return 0;
+      if (prev < minRaise || prev > maxRaise) return minRaise;
+      return prev;
+    });
+  }, [minRaise, maxRaise, state.subPhase, state.round]);
+
+  const clampRaise = (val: number) => Math.max(minRaise, Math.min(maxRaise, val));
+  const halfPot = clampRaise(Math.max(minRaise, Math.round(state.pot / 2 / step) * step));
+  const fullPot = clampRaise(Math.max(minRaise, Math.round(state.pot / step) * step));
+  const isAllIn = maxRaise > 0 && raiseAmount >= maxRaise;
 
   return (
     <div className="board-container">
@@ -130,6 +149,82 @@ export const HoldemBoard: React.FC<HoldemBoardProps> = ({ state, onAction }) => 
               <PlayingCard key={card.id} card={card} size="lg" flipIn />
             ))}
           </div>
+
+          {isMyTurn && maxRaise > 0 && (
+            <div className="bet-adjuster">
+              <div className="bet-adjuster-top">
+                <span>{toCall === 0 ? 'ベット額調整' : '上乗せレイズ額'}</span>
+                <span className="bet-adjuster-amount">
+                  <Coins size={13} />
+                  {isAllIn
+                    ? `ALL IN (${toCall + maxRaise})`
+                    : toCall === 0
+                    ? `${raiseAmount}`
+                    : `+${raiseAmount} (計 ${toCall + raiseAmount})`}
+                </span>
+              </div>
+              <div className="bet-presets-row">
+                <button
+                  type="button"
+                  className={`bet-preset-btn ${raiseAmount === minRaise ? 'active' : ''}`}
+                  onClick={() => setRaiseAmount(minRaise)}
+                >
+                  MIN
+                </button>
+                <button
+                  type="button"
+                  className={`bet-preset-btn ${raiseAmount === halfPot ? 'active' : ''}`}
+                  onClick={() => setRaiseAmount(halfPot)}
+                >
+                  1/2 POT
+                </button>
+                <button
+                  type="button"
+                  className={`bet-preset-btn ${raiseAmount === fullPot ? 'active' : ''}`}
+                  onClick={() => setRaiseAmount(fullPot)}
+                >
+                  POT
+                </button>
+                <button
+                  type="button"
+                  className={`bet-preset-btn allin ${isAllIn ? 'active' : ''}`}
+                  onClick={() => setRaiseAmount(maxRaise)}
+                >
+                  ALL IN
+                </button>
+              </div>
+              <div className="bet-slider-row">
+                <button
+                  type="button"
+                  className="bet-step-btn"
+                  disabled={raiseAmount <= minRaise}
+                  onClick={() => setRaiseAmount((v) => clampRaise(v - step))}
+                  aria-label="ベット額を減らす"
+                >
+                  <Minus size={14} />
+                </button>
+                <input
+                  type="range"
+                  className="bet-range-slider"
+                  min={minRaise}
+                  max={maxRaise}
+                  step={step}
+                  value={Math.min(maxRaise, Math.max(minRaise, raiseAmount))}
+                  onChange={(e) => setRaiseAmount(Number(e.target.value))}
+                />
+                <button
+                  type="button"
+                  className="bet-step-btn"
+                  disabled={raiseAmount >= maxRaise}
+                  onClick={() => setRaiseAmount((v) => clampRaise(v + step))}
+                  aria-label="ベット額を増やす"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="action-bar">
             <button
               type="button"
@@ -145,15 +240,19 @@ export const HoldemBoard: React.FC<HoldemBoardProps> = ({ state, onAction }) => 
               disabled={!isMyTurn}
               onClick={() => onAction({ type: 'call' })}
             >
-              {toCall === 0 ? 'チェック' : `コール (${toCall})`}
+              {toCall === 0 ? 'チェック' : `コール (${Math.min(me?.chips ?? 0, toCall)})`}
             </button>
             <button
               type="button"
-              className="primary-btn"
-              disabled={!isMyTurn || (me?.chips ?? 0) <= toCall}
-              onClick={() => onAction({ type: 'raise', payload: { amount: state.rules.bigBlind } })}
+              className={isAllIn ? 'danger-btn' : 'primary-btn'}
+              disabled={!isMyTurn || maxRaise <= 0}
+              onClick={() => onAction({ type: 'raise', payload: { amount: raiseAmount } })}
             >
-              レイズ +{state.rules.bigBlind}
+              {isAllIn
+                ? 'ALL IN'
+                : toCall === 0
+                ? `ベット ${raiseAmount}`
+                : `レイズ +${raiseAmount}`}
             </button>
           </div>
         </div>

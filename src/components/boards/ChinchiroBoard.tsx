@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Dices, Hand, Trophy, Volume2, VolumeX } from 'lucide-react';
-import type { ChinchiroClientState } from '../../games/chinchiro';
+import { Coins, Dices, Hand, Minus, Plus, Trophy, Volume2, VolumeX } from 'lucide-react';
+import { type ChinchiroClientState, getChinchiroMaxStake } from '../../games/chinchiro';
 import { ChinchiroBowl3D, type ChinchiroBowl3DHandle } from '../ChinchiroBowl3D';
 import { Dice3D } from '../Dice3D';
+import '../BetControl.css';
 
 interface ChinchiroBoardProps {
   state: ChinchiroClientState;
@@ -26,6 +27,27 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
   const current = state.players[state.turnIndex];
   const isMyTurn = state.phase === 'playing' && current.id === state.myId;
   const dealer = state.players[state.dealerIndex];
+  const meIdx = state.players.findIndex((p) => p.id === state.myId);
+  const me = meIdx >= 0 ? state.players[meIdx] : state.players[0];
+  const isMeDealer = meIdx === state.dealerIndex;
+  const canAdjustStake =
+    state.phase === 'playing' &&
+    !isMeDealer &&
+    me.rollsLeft === 3 &&
+    !me.doneThisRound &&
+    uiMode === 'idle';
+  const maxStake = getChinchiroMaxStake(me.points);
+
+  const [draftStake, setDraftStake] = useState<number>(me.stake);
+  useEffect(() => {
+    setDraftStake(me.stake);
+  }, [me.stake, state.round]);
+
+  const commitStake = (amount: number) => {
+    const clamped = Math.max(5, Math.min(maxStake, Math.round(amount / 5) * 5));
+    setDraftStake(clamped);
+    onAction({ type: 'setStake', payload: { amount: clamped } });
+  };
 
   useEffect(() => {
     if (state.rollSeq === prevSeqRef.current) return;
@@ -81,6 +103,8 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
     bowlRef.current?.stopInteractiveShake();
   };
 
+  const stakePresets = [10, 20, 30, 50].filter((v) => v < maxStake);
+
   return (
     <div className="board-container">
       <div className="status-flags">
@@ -112,6 +136,74 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
         </div>
       </div>
 
+      {/* 子の張り額（賭け点）調整パネル：振る前なら親の出目を見て調整可能 */}
+      {canAdjustStake && (
+        <div className="chinchiro-stake-panel">
+          <div className="chinchiro-stake-header">
+            <span>
+              <Coins size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+              この局の張り額（賭け点）
+            </span>
+            <span className="chinchiro-stake-value">{draftStake} 点</span>
+          </div>
+          <div className="chinchiro-stake-presets">
+            {stakePresets.map((amt) => (
+              <button
+                key={amt}
+                type="button"
+                className={`bet-preset-btn ${draftStake === amt ? 'active' : ''}`}
+                onClick={() => commitStake(amt)}
+              >
+                {amt}
+              </button>
+            ))}
+            <button
+              type="button"
+              className={`bet-preset-btn allin ${draftStake >= maxStake ? 'active' : ''}`}
+              style={
+                stakePresets.length < 4
+                  ? { gridColumn: `span ${5 - stakePresets.length}` }
+                  : undefined
+              }
+              onClick={() => commitStake(maxStake)}
+            >
+              全ツッパ
+            </button>
+          </div>
+          <div className="bet-slider-row">
+            <button
+              type="button"
+              className="bet-step-btn"
+              disabled={draftStake <= 5}
+              onClick={() => commitStake(draftStake - 5)}
+              aria-label="張り額を減らす"
+            >
+              <Minus size={14} />
+            </button>
+            <input
+              type="range"
+              className="bet-range-slider"
+              min={5}
+              max={maxStake}
+              step={5}
+              value={Math.min(maxStake, Math.max(5, draftStake))}
+              onChange={(e) => setDraftStake(Number(e.target.value))}
+              onPointerUp={() => commitStake(draftStake)}
+              onTouchEnd={() => commitStake(draftStake)}
+            />
+            <button
+              type="button"
+              className="bet-step-btn"
+              disabled={draftStake >= maxStake}
+              onClick={() => commitStake(draftStake + 5)}
+              aria-label="張り額を増やす"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="chinchiro-players">
         {state.players.map((p, idx) => {
           const active = state.phase === 'playing' && idx === state.turnIndex;
@@ -121,7 +213,11 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
               <div className="chinchiro-row-top">
                 <div>
                   <strong>{p.name}</strong>
-                  {isDealer && <span className="badge host ml-8">親</span>}
+                  {isDealer ? (
+                    <span className="badge host ml-8">親</span>
+                  ) : (
+                    <span className="stake-tag-badge">張り {p.stake}点</span>
+                  )}
                 </div>
                 <div className="chinchiro-points">
                   {p.points}点
@@ -177,7 +273,9 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
                 : uiMode === 'replaying'
                 ? 'ダイスが転がっています…'
                 : isMyTurn
-                ? `茶碗を振る（残り ${current.rollsLeft} 回）`
+                ? isMeDealer
+                  ? `親として茶碗を振る（残り ${current.rollsLeft} 回）`
+                  : `${me.stake}点張って茶碗を振る（残り ${current.rollsLeft} 回）`
                 : `${current.name} のターン`}
             </button>
           )}

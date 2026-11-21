@@ -22,6 +22,8 @@ export interface ChinchiroPlayerState {
   name: string;
   isBot: boolean;
   points: number;
+  stake: number;        // 子の張り額（賭け点）
+  stakeSet: boolean;    // この局で張り額を調整済みか（CPU用）
   rollsLeft: number;
   currentHand: ChinchiroHand | null;
   doneThisRound: boolean;
@@ -77,11 +79,14 @@ export function evaluateChinchiroDice(
 }
 
 export function initChinchiro(playersInfo: PlayerInfo[], rules: ChinchiroRules): ChinchiroInternalState {
+  const defaultStake = Math.min(10, rules.startPoints);
   const players: ChinchiroPlayerState[] = playersInfo.map((p) => ({
     id: p.id,
     name: p.name,
     isBot: p.isBot,
     points: rules.startPoints,
+    stake: defaultStake,
+    stakeSet: false,
     rollsLeft: 3,
     currentHand: null,
     doneThisRound: false,
@@ -102,25 +107,29 @@ export function initChinchiro(playersInfo: PlayerInfo[], rules: ChinchiroRules):
   };
 }
 
+export function getChinchiroMaxStake(points: number): number {
+  return Math.max(10, Math.floor(points));
+}
+
 function settleRound(state: ChinchiroInternalState): ChinchiroInternalState {
   const players = state.players.map((p) => ({ ...p, lastDelta: 0 }));
   const dealer = players[state.dealerIndex];
   const dHand = dealer.currentHand!;
-  const baseStake = 10;
 
   for (let i = 0; i < players.length; i++) {
     if (i === state.dealerIndex) continue;
     const child = players[i];
     const cHand = child.currentHand!;
+    const stake = Math.max(5, child.stake);
 
     if (cHand.strength > dHand.strength) {
-      const amt = baseStake * cHand.multiplier;
+      const amt = stake * cHand.multiplier;
       child.points += amt;
       child.lastDelta += amt;
       dealer.points -= amt;
       dealer.lastDelta -= amt;
     } else if (cHand.strength < dHand.strength) {
-      const amt = baseStake * Math.max(dHand.multiplier, cHand.rank === 'hifumi' ? 2 : 1);
+      const amt = stake * Math.max(dHand.multiplier, cHand.rank === 'hifumi' ? 2 : 1);
       child.points -= amt;
       child.lastDelta -= amt;
       dealer.points += amt;
@@ -141,6 +150,8 @@ function settleRound(state: ChinchiroInternalState): ChinchiroInternalState {
   const nextDealer = (state.dealerIndex + 1) % players.length;
   const resetPlayers = players.map((p) => ({
     ...p,
+    stake: Math.min(10, getChinchiroMaxStake(p.points)),
+    stakeSet: false,
     rollsLeft: 3,
     currentHand: null,
     doneThisRound: false,
@@ -162,6 +173,33 @@ export function applyChinchiroAction(
   action: { type: string; payload?: unknown }
 ): { state: ChinchiroInternalState; error?: string } {
   if (state.phase !== 'playing') return { state, error: 'ゲームは終了しています' };
+
+  if (action.type === 'setStake') {
+    const idx = state.players.findIndex((p) => p.id === playerId);
+    if (idx === -1) return { state, error: 'プレイヤーが見つかりません' };
+    if (idx === state.dealerIndex) return { state, error: '親は張り額を設定できません' };
+    const target = state.players[idx];
+    if (target.rollsLeft < 3 || target.doneThisRound) {
+      return { state, error: '振った後は張り額を変更できません' };
+    }
+    const raw = (action.payload as { amount?: number })?.amount;
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+      return { state, error: '張り額が不正です' };
+    }
+    const maxStake = getChinchiroMaxStake(target.points);
+    const clamped = Math.max(5, Math.min(maxStake, Math.round(raw / 5) * 5));
+    const players = state.players.map((p, i) =>
+      i === idx ? { ...p, stake: clamped, stakeSet: true } : p
+    );
+    return {
+      state: {
+        ...state,
+        players,
+        lastLog: `${target.name} が張り額を ${clamped}点 に設定`,
+      },
+    };
+  }
+
   const current = state.players[state.turnIndex];
   if (current.id !== playerId) return { state, error: 'あなたのターンではありません' };
   if (action.type !== 'roll') return { state, error: '不明なアクションです' };
@@ -226,9 +264,30 @@ export function applyChinchiroAction(
   return { state: nextState };
 }
 
-export function computeChinchiroBotAction(state: ChinchiroInternalState): { type: string } | null {
+export function computeChinchiroBotAction(
+  state: ChinchiroInternalState
+): { type: string; payload?: unknown } | null {
   const bot = state.players[state.turnIndex];
   if (bot.doneThisRound) return null;
+
+  // 子のCPUは振る前に親の出目を見て張り額を調整する
+  if (state.turnIndex !== state.dealerIndex && bot.rollsLeft === 3 && !bot.stakeSet) {
+    const dealerHand = state.players[state.dealerIndex]?.currentHand;
+    const maxStake = getChinchiroMaxStake(bot.points);
+    let desired = 10;
+    if (dealerHand) {
+      if (dealerHand.strength <= 12) {
+        // 親が目なし・ヒフミ・1〜2の目なら強気に張る
+        desired = Math.min(maxStake, Math.max(20, Math.round((maxStake * 0.4) / 5) * 5));
+      } else if (dealerHand.strength <= 14) {
+        desired = Math.min(maxStake, 20);
+      } else {
+        desired = 10;
+      }
+    }
+    return { type: 'setStake', payload: { amount: desired } };
+  }
+
   return { type: 'roll' };
 }
 
