@@ -302,13 +302,13 @@ function launchBallInRig(
   ballBody.position.set(x, 0.88, z);
 
   // ホイールは反時計回り (+wheelOmega) に対し、玉は時計回り (+angle方向) に高速発射
-  const speed = 9.8 + Math.random() * 2.4;
+  const speed = 15.2 + Math.random() * 3.2;
   const tx = -Math.sin(startAngle);
   const tz = Math.cos(startAngle);
   ballBody.velocity.set(tx * speed, 0, tz * speed);
   ballBody.angularVelocity.set(0, 0, 0);
 
-  const wheelOmega = 2.1 + Math.random() * 0.55;
+  const wheelOmega = 2.6 + Math.random() * 0.6;
   return { wheelOmega };
 }
 
@@ -320,20 +320,20 @@ function stepRoulettePhysics(
   wheelOmega: number,
   spinFrame: number
 ): { nextWheelAngle: number; nextWheelOmega: number } {
-  const nextWheelOmega = Math.max(0.32, wheelOmega * 0.9965);
+  const nextWheelOmega = Math.max(0.32, wheelOmega * 0.9978);
   const nextWheelAngle = wheelAngle + nextWheelOmega * FIXED_DT;
 
   wheelBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), nextWheelAngle);
   wheelBody.angularVelocity.set(0, nextWheelOmega, 0);
 
-  // 外周トラック周回中は自然な転がり空気抵抗で気持ちよく減速→スロープへ落とす
+  // 外周トラック周回中は緩やかな転がり空気抵抗でじっくり周回→自然にスロープへ落とす
   const r = Math.hypot(ballBody.position.x, ballBody.position.z);
   if (r > R_TRACK_IN - 0.05) {
-    ballBody.velocity.x *= 0.9905;
-    ballBody.velocity.z *= 0.9905;
+    ballBody.velocity.x *= 0.9942;
+    ballBody.velocity.z *= 0.9942;
   } else if (r > R_POCKET_OUT) {
-    ballBody.velocity.x *= 0.994;
-    ballBody.velocity.z *= 0.994;
+    ballBody.velocity.x *= 0.9945;
+    ballBody.velocity.z *= 0.9945;
   } else {
     // ポケット内に入った玉がホイールに馴染みやすいよう軽い相対速度減衰
     const vxWheel = wheelBody.angularVelocity.y * ballBody.position.z;
@@ -344,8 +344,8 @@ function stepRoulettePhysics(
     ballBody.velocity.z = vzWheel + rvz * 0.97;
   }
 
-  // 万が一 260 フレーム以上経過してもスロープ上などに留まっていたら中心方向へわずかに促す
-  if (spinFrame > 260 && r > R_POCKET_OUT - 0.05) {
+  // 万が一 560 フレーム以上経過してもスロープ上などに留まっていたら中心方向へわずかに促す
+  if (spinFrame > 560 && r > R_POCKET_OUT - 0.05) {
     ballBody.velocity.x -= (ballBody.position.x / (r || 1)) * 0.16;
     ballBody.velocity.z -= (ballBody.position.z / (r || 1)) * 0.16;
   }
@@ -405,7 +405,7 @@ function presimulateRouletteSpin(): RecordedRouletteSpin {
     let settledFrames = 0;
     let lastSlot = -1;
 
-    for (let step = 0; step < 440; step++) {
+    for (let step = 0; step < 760; step++) {
       stepImpact = 0;
       const res = stepRoulettePhysics(world, wheelBody, ballBody, wheelAngle, wheelOmega, step);
       wheelAngle = res.nextWheelAngle;
@@ -830,7 +830,7 @@ export const RouletteWheel3D = React.forwardRef<RouletteWheel3DHandle, RouletteW
               lastSlot = -1;
             }
 
-            if (settledFrames >= 22 || spinFrame >= 440) {
+            if (settledFrames >= 22 || spinFrame >= 760) {
               const finalSlot = getSlotIndexFromBall(
                 ballBody.position.x,
                 ballBody.position.z,
