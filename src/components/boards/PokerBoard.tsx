@@ -232,9 +232,16 @@ export const PokerBoard: React.FC<PokerBoardProps> = ({ state, onAction }) => {
                       className="bet-range-slider"
                       min={minRaise}
                       max={maxRaise}
-                      step={step}
+                      step={1}
                       value={Math.min(maxRaise, Math.max(minRaise, raiseAmount))}
-                      onChange={(e) => setRaiseAmount(Number(e.target.value))}
+                      onChange={(e) => {
+                        const raw = Number(e.target.value);
+                        if (raw >= maxRaise - step / 2) {
+                          setRaiseAmount(maxRaise);
+                        } else {
+                          setRaiseAmount(clampRaise(Math.round(raw / step) * step));
+                        }
+                      }}
                     />
                     <button
                       type="button"

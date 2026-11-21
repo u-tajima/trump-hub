@@ -24,7 +24,9 @@ export const Connect4Board: React.FC<Connect4BoardProps> = ({ state, onAction })
               <div className="opp-name">
                 <span className={`mini-dot ${p.disc === 1 ? 'red' : 'yellow'}`} /> {p.name}
               </div>
-              <div className="opp-meta">{active ? 'あなたの番' : '待機'}</div>
+              <div className="opp-meta">
+                {active ? (p.id === state.myId ? 'あなたの番' : '相手の番') : '待機'}
+              </div>
             </div>
           );
         })}

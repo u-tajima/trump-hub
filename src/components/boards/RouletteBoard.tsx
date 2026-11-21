@@ -54,10 +54,15 @@ export const RouletteBoard: React.FC<RouletteBoardProps> = ({ state, onAction })
 
   const me = state.players.find((p) => p.id === state.myId) ?? state.players[0];
   const spinner = state.players.find((p) => p.id === state.spinnerPlayerId) ?? state.players[0];
-  const isSpinner = state.spinnerPlayerId === state.myId;
+  const isHostPlayer = state.players[0]?.id === state.myId;
+  const isSpinner = state.spinnerPlayerId === state.myId || isHostPlayer;
   const chipOptions = useMemo(() => {
     const base = state.rules.minBet;
     return [base, base * 5, base * 10];
+  }, [state.rules.minBet]);
+
+  useEffect(() => {
+    setChipUnit(state.rules.minBet);
   }, [state.rules.minBet]);
 
   // 他プレイヤーのスピン結果を受信したら物理リプレイを再生（自分の物理スピン直後はスキップ）

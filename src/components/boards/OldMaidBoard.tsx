@@ -79,7 +79,13 @@ export const OldMaidBoard: React.FC<OldMaidBoardProps> = ({ state, onAction }) =
                 .sort((a, b) => (a.finishRank ?? 99) - (b.finishRank ?? 99))
                 .map((p) => (
                   <li key={p.id}>
-                    <span>{p.id === state.loserId ? 'ババ残り（負け）' : `${p.finishRank}位`}</span>
+                    <span>
+                      {p.id === state.loserId
+                        ? state.rules.mode === 'jiji'
+                          ? 'ジジ残り（負け）'
+                          : 'ババ残り（負け）'
+                        : `${p.finishRank}位`}
+                    </span>
                     <strong>{p.name}</strong>
                   </li>
                 ))}

@@ -31,17 +31,23 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
     return () => window.clearInterval(id);
   }, [state.subPhase, state.windowEndsAt]);
 
+  const activeSelectedIds = state.myHand
+    .filter((c) => selectedIds.includes(c.id))
+    .map((c) => c.id);
+
   const toggleCard = (id: string) => {
+    if (!isMyTurn) return;
     setSelectedIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= 4) return prev;
-      return [...prev, id];
+      const validPrev = prev.filter((x) => state.myHand.some((c) => c.id === x));
+      if (validPrev.includes(id)) return validPrev.filter((x) => x !== id);
+      if (validPrev.length >= 4) return validPrev;
+      return [...validPrev, id];
     });
   };
 
   const handlePlay = () => {
-    if (!isMyTurn || selectedIds.length === 0) return;
-    onAction({ type: 'play', payload: { cardIds: selectedIds } });
+    if (!isMyTurn || activeSelectedIds.length === 0) return;
+    onAction({ type: 'play', payload: { cardIds: activeSelectedIds } });
     setSelectedIds([]);
   };
 
@@ -128,7 +134,7 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
                 key={card.id}
                 card={card}
                 size="md"
-                selected={selectedIds.includes(card.id)}
+                selected={activeSelectedIds.includes(card.id)}
                 onClick={() => toggleCard(card.id)}
               />
             ))}
@@ -137,12 +143,12 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
             <button
               type="button"
               className="primary-btn full-width"
-              disabled={!isMyTurn || selectedIds.length === 0}
+              disabled={!isMyTurn || activeSelectedIds.length === 0}
               onClick={handlePlay}
             >
-              {selectedIds.length === 0
+              {activeSelectedIds.length === 0
                 ? 'カードを選択（1〜4枚）'
-                : `「${formatRank(state.expectedRank as 1)}」として ${selectedIds.length}枚 出す`}
+                : `「${formatRank(state.expectedRank as 1)}」として ${activeSelectedIds.length}枚 出す`}
             </button>
           </div>
         </div>
