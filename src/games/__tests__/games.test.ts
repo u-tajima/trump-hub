@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../../types/card';
 import type { PlayerInfo } from '../../types/game';
+import { applyChinchiroAction, evaluateChinchiroDice, initChinchiro } from '../chinchiro';
+import { applyConnect4Action, initConnect4 } from '../connect4';
 import { applyDaifugoAction, canPlayOnTable, initDaifugo, parsePlay } from '../daifugo';
 import { applyDoubtAction, initDoubt } from '../doubt';
+import { applyGomokuAction, initGomoku } from '../gomoku';
 import { applyMemoryAction, initMemory } from '../memory';
 import { applyOldMaidAction, initOldMaid } from '../oldMaid';
 import { GAME_REGISTRY } from '../registry';
+import { applyReversiAction, initReversi } from '../reversi';
 import { applySevensAction, canPlaceNormalCard, initSevens } from '../sevens';
 import { applySpeedAction, canPlaceOnSpeedPile, initSpeed } from '../speed';
 
@@ -143,5 +147,59 @@ describe('Memory engine', () => {
     res = applyMemoryAction(res.state, 'p1', { type: 'flip', payload: { index: rank1Tiles[1].index } });
     expect(res.state.players[0].pairs).toBe(1);
     expect(res.state.turnIndex).toBe(0);
+  });
+});
+
+describe('Reversi engine', () => {
+  it('flips opponent stones on valid move', () => {
+    const players = makePlayers(2);
+    const state = initReversi(players, { boardSize: 8, parallelSetup: false });
+    const res = applyReversiAction(state, 'p1', { type: 'place', payload: { row: 2, col: 3 } });
+    expect(res.error).toBeUndefined();
+    expect(res.state.board[3][3]).toBe(1);
+    expect(res.state.turnIndex).toBe(1);
+  });
+});
+
+describe('Gomoku engine', () => {
+  it('detects 5-in-a-row win', () => {
+    const players = makePlayers(2);
+    let state = initGomoku(players, { boardSize: 9, allowOverline: true });
+    for (let cIdx = 0; cIdx < 4; cIdx++) {
+      state = applyGomokuAction(state, 'p1', { type: 'place', payload: { row: 0, col: cIdx } }).state;
+      state = applyGomokuAction(state, 'p2', { type: 'place', payload: { row: 1, col: cIdx } }).state;
+    }
+    const winRes = applyGomokuAction(state, 'p1', { type: 'place', payload: { row: 0, col: 4 } });
+    expect(winRes.state.phase).toBe('finished');
+    expect(winRes.state.winnerId).toBe('p1');
+  });
+});
+
+describe('Connect4 engine', () => {
+  it('drops discs to bottom and detects vertical win', () => {
+    const players = makePlayers(2);
+    let state = initConnect4(players, { cols: 7, rows: 6 });
+    for (let i = 0; i < 3; i++) {
+      state = applyConnect4Action(state, 'p1', { type: 'drop', payload: { col: 0 } }).state;
+      state = applyConnect4Action(state, 'p2', { type: 'drop', payload: { col: 1 } }).state;
+    }
+    const winRes = applyConnect4Action(state, 'p1', { type: 'drop', payload: { col: 0 } });
+    expect(winRes.state.phase).toBe('finished');
+    expect(winRes.state.winnerId).toBe('p1');
+  });
+});
+
+describe('Chinchiro engine', () => {
+  it('evaluates dice ranks and progresses rounds', () => {
+    expect(evaluateChinchiroDice([1, 1, 1]).rank).toBe('pinzoro');
+    expect(evaluateChinchiroDice([4, 5, 6]).rank).toBe('shigoro');
+    expect(evaluateChinchiroDice([1, 2, 3]).rank).toBe('hifumi');
+    expect(evaluateChinchiroDice([2, 2, 5]).strength).toBe(15);
+
+    const players = makePlayers(2);
+    let state = initChinchiro(players, { rounds: 3, startPoints: 100, shonbenEnabled: false });
+    const res = applyChinchiroAction(state, 'p1', { type: 'roll' });
+    expect(res.error).toBeUndefined();
+    expect(res.state.players[0].currentHand).not.toBeNull();
   });
 });

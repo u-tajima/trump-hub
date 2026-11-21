@@ -1,18 +1,26 @@
 import React, { useState } from 'react';
 import { ArrowLeft, BookOpen, RotateCcw, X } from 'lucide-react';
+import type { ChinchiroClientState } from '../games/chinchiro';
+import type { Connect4ClientState } from '../games/connect4';
 import type { DaifugoClientState } from '../games/daifugo';
 import type { DoubtClientState } from '../games/doubt';
+import type { GomokuClientState } from '../games/gomoku';
 import type { MemoryClientState } from '../games/memory';
 import type { OldMaidClientState } from '../games/oldMaid';
+import type { ReversiClientState } from '../games/reversi';
 import { GAME_REGISTRY } from '../games/registry';
 import type { SevensClientState } from '../games/sevens';
 import type { SpeedClientState } from '../games/speed';
 import type { GameId, GameRulesMap } from '../types/game';
 import { RuleConfigurator } from './RuleConfigurator';
+import { ChinchiroBoard } from './boards/ChinchiroBoard';
+import { Connect4Board } from './boards/Connect4Board';
 import { DaifugoBoard } from './boards/DaifugoBoard';
 import { DoubtBoard } from './boards/DoubtBoard';
+import { GomokuBoard } from './boards/GomokuBoard';
 import { MemoryBoard } from './boards/MemoryBoard';
 import { OldMaidBoard } from './boards/OldMaidBoard';
+import { ReversiBoard } from './boards/ReversiBoard';
 import { SevensBoard } from './boards/SevensBoard';
 import { SpeedBoard } from './boards/SpeedBoard';
 
@@ -88,6 +96,18 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         )}
         {gameId === 'memory' && (
           <MemoryBoard state={gameState as MemoryClientState} onAction={onAction} />
+        )}
+        {gameId === 'reversi' && (
+          <ReversiBoard state={gameState as ReversiClientState} onAction={onAction} />
+        )}
+        {gameId === 'gomoku' && (
+          <GomokuBoard state={gameState as GomokuClientState} onAction={onAction} />
+        )}
+        {gameId === 'connect4' && (
+          <Connect4Board state={gameState as Connect4ClientState} onAction={onAction} />
+        )}
+        {gameId === 'chinchiro' && (
+          <ChinchiroBoard state={gameState as ChinchiroClientState} onAction={onAction} />
         )}
       </main>
 

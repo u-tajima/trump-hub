@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DoorOpen, PlusCircle, Sparkles, Users } from 'lucide-react';
-import { GAME_LIST, GAME_REGISTRY } from '../games/registry';
+import { GAME_LIST, GAME_REGISTRY, type GameCategory } from '../games/registry';
 import type { GameId, GameRulesMap } from '../types/game';
 import { normalizeRoomCode } from '../utils/roomCode';
 import { RuleConfigurator } from './RuleConfigurator';
@@ -25,6 +25,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onJoinRoom,
 }) => {
   const [tab, setTab] = useState<'join' | 'create'>(initialRoomCode ? 'join' : 'create');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | GameCategory>('all');
   const [roomInput, setRoomInput] = useState<string>(initialRoomCode ?? '');
   const [selectedGame, setSelectedGame] = useState<GameId>('daifugo');
   const [rulesByGame, setRulesByGame] = useState<GameRulesMap>(() => ({
@@ -34,8 +35,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     oldmaid: { ...GAME_REGISTRY.oldmaid.defaultRules },
     doubt: { ...GAME_REGISTRY.doubt.defaultRules },
     memory: { ...GAME_REGISTRY.memory.defaultRules },
+    reversi: { ...GAME_REGISTRY.reversi.defaultRules },
+    gomoku: { ...GAME_REGISTRY.gomoku.defaultRules },
+    connect4: { ...GAME_REGISTRY.connect4.defaultRules },
+    chinchiro: { ...GAME_REGISTRY.chinchiro.defaultRules },
   }));
   const [showRules, setShowRules] = useState(false);
+
+  const visibleGames =
+    categoryFilter === 'all'
+      ? GAME_LIST
+      : GAME_LIST.filter((g) => g.category === categoryFilter);
 
   const selectedMeta = GAME_REGISTRY[selectedGame];
 
@@ -51,7 +61,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <header className="hero-header">
         <div className="hero-badge">♠ ♥ ♦ ♣ オンライン対応</div>
         <h1 className="hero-title">TRUMP HUB</h1>
-        <p className="hero-subtitle">スマホで集まってすぐ遊べる！ローカルルール対応トランプ</p>
+        <p className="hero-subtitle">スマホで集まってすぐ遊べる！トランプ＆定番ゲーム集</p>
       </header>
 
       <section className="card-panel name-panel">
@@ -113,8 +123,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </form>
       ) : (
         <div className="create-panel">
+          <div className="game-pills" style={{ marginBottom: 8 }}>
+            {(
+              [
+                { id: 'all', label: 'すべて (10)' },
+                { id: 'card', label: '🃏 トランプ (6)' },
+                { id: 'board', label: '♟️ ボード (3)' },
+                { id: 'dice', label: '🎲 ダイス (1)' },
+              ] as const
+            ).map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                className={`game-pill ${categoryFilter === cat.id ? 'active' : ''}`}
+                onClick={() => setCategoryFilter(cat.id)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
           <div className="game-grid">
-            {GAME_LIST.map((game) => {
+            {visibleGames.map((game) => {
               const active = game.id === selectedGame;
               return (
                 <button
