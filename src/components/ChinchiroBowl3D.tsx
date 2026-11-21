@@ -422,13 +422,21 @@ function presimulateRecordedRoll(): RecordedRoll {
         maxImpact: stepImpact,
       });
 
-      if (step > shakeSteps + 24) {
+      if (step > shakeSteps + 18) {
+        for (const b of dieBodies) {
+          const v = b.velocity.length();
+          const w = b.angularVelocity.length();
+          if (getTopFaceIndex(b.quaternion).alignment > 0.94 && v < 0.45 && w < 0.85) {
+            b.velocity.scale(0.8, b.velocity);
+            b.angularVelocity.scale(0.75, b.angularVelocity);
+          }
+        }
         const allStill = dieBodies.every(
-          (b) => b.velocity.length() < 0.05 && b.angularVelocity.length() < 0.07
+          (b) => b.velocity.length() < 0.12 && b.angularVelocity.length() < 0.18
         );
         if (allStill) {
           stillFrames++;
-          if (stillFrames >= 12) break;
+          if (stillFrames >= 8) break;
         } else {
           stillFrames = 0;
         }
@@ -847,17 +855,31 @@ export const ChinchiroBowl3D = React.forwardRef<ChinchiroBowl3DHandle, Chinchiro
           if (simState === 'settlingInteractive') {
             settleFrames++;
             const bowlSettled = bowlX === 0 && bowlY === 0 && bowlZ === 0 && bowlRx === 0 && bowlRz === 0;
+
+            // 平らに着地して微振動（ガタガタ）しているダイスを滑らかに静止へ収束させる
+            if (bowlSettled) {
+              for (const b of dieBodies) {
+                const v = b.velocity.length();
+                const w = b.angularVelocity.length();
+                const align = getTopFaceIndex(b.quaternion).alignment;
+                if (align > 0.94 && v < 0.45 && w < 0.85) {
+                  b.velocity.scale(0.8, b.velocity);
+                  b.angularVelocity.scale(0.75, b.angularVelocity);
+                }
+              }
+            }
+
             const allSlow =
               bowlSettled &&
-              dieBodies.every((b) => b.velocity.length() < 0.055 && b.angularVelocity.length() < 0.075);
+              dieBodies.every((b) => b.velocity.length() < 0.12 && b.angularVelocity.length() < 0.18);
 
             if (allSlow) {
               // 立ち目（斜めに引っかかっている）チェック
-              const allFlat = dieBodies.every((b) => getTopFaceIndex(b.quaternion).alignment > 0.9);
-              if (!allFlat && settleFrames < 260) {
+              const allFlat = dieBodies.every((b) => getTopFaceIndex(b.quaternion).alignment > 0.92);
+              if (!allFlat && settleFrames < 220) {
                 // 斜めに引っかかったダイスを軽く小突いて自然に転がす
                 for (const b of dieBodies) {
-                  if (getTopFaceIndex(b.quaternion).alignment <= 0.9) {
+                  if (getTopFaceIndex(b.quaternion).alignment <= 0.92) {
                     b.velocity.x += (Math.random() - 0.5) * 1.6;
                     b.velocity.z += (Math.random() - 0.5) * 1.6;
                     b.angularVelocity.x += (Math.random() - 0.5) * 4.5;
@@ -871,8 +893,12 @@ export const ChinchiroBowl3D = React.forwardRef<ChinchiroBowl3DHandle, Chinchiro
               stillFrames = 0;
             }
 
-            if (stillFrames >= 16 || settleFrames >= 300) {
+            if (stillFrames >= 8 || settleFrames >= 240) {
               simState = 'idle';
+              for (const b of dieBodies) {
+                b.velocity.set(0, 0, 0);
+                b.angularVelocity.set(0, 0, 0);
+              }
               const results = dieBodies.map((b, i) => {
                 const topIdx = getTopFaceIndex(b.quaternion).index;
                 return dieFaceMaps[i][topIdx];

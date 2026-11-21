@@ -26,6 +26,7 @@ const R_POCKET_MID = 1.56;
 const R_POCKET_OUT = 1.86;
 const R_TRACK_IN = 2.46;
 const R_TRACK_OUT = 2.86;
+const R_WALL_LIMIT = R_TRACK_OUT - BALL_RADIUS - 0.02;
 const R_BOWL_OUT = 3.06;
 
 function normalizeAngle(rad: number): number {
@@ -159,18 +160,19 @@ function createRoulettePhysicsRig() {
 
   world.addContactMaterial(
     new CANNON.ContactMaterial(bowlMat, ballMat, {
-      friction: 0.06,
-      restitution: 0.42,
+      friction: 0.015,
+      restitution: 0.3,
     })
   );
   world.addContactMaterial(
     new CANNON.ContactMaterial(wheelMat, ballMat, {
-      friction: 0.32,
-      restitution: 0.36,
+      friction: 0.34,
+      restitution: 0.34,
     })
   );
 
-  // 1. 静的ボウル剛体（外壁＋ボールトラック棚＋スロープ＋8個のダイヤモンド・デフレクター）
+  // 1. 静的ボウル剛体（ボールトラック棚＋スロープ＋8個のダイヤモンド・デフレクター）
+  // ※外周側面壁は多角形の角での急減速を防ぐため、真円法線抗力として stepRoulettePhysics で厳密処理
   const bowlBody = new CANNON.Body({
     mass: 0,
     material: bowlMat,
@@ -182,18 +184,10 @@ function createRoulettePhysicsRig() {
     const angle = (i / ringSegs) * Math.PI * 2;
     const qYaw = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
 
-    // 外周垂直壁（玉の遠心力を受け止める真円トラック壁）
-    const rWall = R_TRACK_OUT + 0.1;
-    bowlBody.addShape(
-      new CANNON.Box(new CANNON.Vec3(0.1, 0.55, 0.33)),
-      new CANNON.Vec3(Math.cos(angle) * rWall, 0.96, Math.sin(angle) * rWall),
-      qYaw
-    );
-
-    // 上段ボールトラック棚（内側へ約11°傾いており、高速時は遠心力で周回し減速で落下）
+    // 上段ボールトラック棚（内側へ約9°傾いており、高速時は遠心力で側面を2〜3周回ってから自然落下）
     const rTrack = (R_TRACK_IN + R_TRACK_OUT) / 2;
     const qTrack = qYaw.mult(
-      new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), 0.19)
+      new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), 0.16)
     );
     bowlBody.addShape(
       new CANNON.Box(new CANNON.Vec3(0.26, 0.08, 0.32)),
@@ -283,8 +277,8 @@ function createRoulettePhysicsRig() {
     material: ballMat,
     shape: new CANNON.Sphere(BALL_RADIUS),
     position: new CANNON.Vec3(R_POCKET_MID, 0.16 + BALL_RADIUS, 0),
-    linearDamping: 0.08,
-    angularDamping: 0.12,
+    linearDamping: 0.02,
+    angularDamping: 0.08,
   });
   world.addBody(ballBody);
 
@@ -295,20 +289,19 @@ function launchBallInRig(
   ballBody: CANNON.Body
 ): { wheelOmega: number } {
   const startAngle = Math.random() * Math.PI * 2;
-  const rStart = 2.66;
-  const x = Math.cos(startAngle) * rStart;
-  const z = Math.sin(startAngle) * rStart;
+  const x = Math.cos(startAngle) * R_WALL_LIMIT;
+  const z = Math.sin(startAngle) * R_WALL_LIMIT;
   ballBody.wakeUp();
-  ballBody.position.set(x, 0.88, z);
+  ballBody.position.set(x, 0.84, z);
 
   // ホイールは反時計回り (+wheelOmega) に対し、玉は時計回り (+angle方向) に高速発射
-  const speed = 15.2 + Math.random() * 3.2;
+  const speed = 28.0 + Math.random() * 6.0;
   const tx = -Math.sin(startAngle);
   const tz = Math.cos(startAngle);
   ballBody.velocity.set(tx * speed, 0, tz * speed);
   ballBody.angularVelocity.set(0, 0, 0);
 
-  const wheelOmega = 2.6 + Math.random() * 0.6;
+  const wheelOmega = 3.0 + Math.random() * 0.7;
   return { wheelOmega };
 }
 
@@ -326,22 +319,24 @@ function stepRoulettePhysics(
   wheelBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), nextWheelAngle);
   wheelBody.angularVelocity.set(0, nextWheelOmega, 0);
 
-  // 外周トラック周回中は緩やかな転がり空気抵抗でじっくり周回→自然にスロープへ落とす
+  // 外周トラック周回中は緩やかな減衰で2〜3周以上しっかり側面を高速回転→自然にスロープへ落下
   const r = Math.hypot(ballBody.position.x, ballBody.position.z);
+  const preSpeed = Math.hypot(ballBody.velocity.x, ballBody.velocity.z);
+  const trackDamp = 0.9905;
   if (r > R_TRACK_IN - 0.05) {
-    ballBody.velocity.x *= 0.9942;
-    ballBody.velocity.z *= 0.9942;
+    ballBody.velocity.x *= trackDamp;
+    ballBody.velocity.z *= trackDamp;
   } else if (r > R_POCKET_OUT) {
-    ballBody.velocity.x *= 0.9945;
-    ballBody.velocity.z *= 0.9945;
+    ballBody.velocity.x *= 0.994;
+    ballBody.velocity.z *= 0.994;
   } else {
     // ポケット内に入った玉がホイールに馴染みやすいよう軽い相対速度減衰
     const vxWheel = wheelBody.angularVelocity.y * ballBody.position.z;
     const vzWheel = -wheelBody.angularVelocity.y * ballBody.position.x;
     const rvx = ballBody.velocity.x - vxWheel;
     const rvz = ballBody.velocity.z - vzWheel;
-    ballBody.velocity.x = vxWheel + rvx * 0.97;
-    ballBody.velocity.z = vzWheel + rvz * 0.97;
+    ballBody.velocity.x = vxWheel + rvx * 0.965;
+    ballBody.velocity.z = vzWheel + rvz * 0.965;
   }
 
   // 万が一 560 フレーム以上経過してもスロープ上などに留まっていたら中心方向へわずかに促す
@@ -351,6 +346,28 @@ function stepRoulettePhysics(
   }
 
   world.step(FIXED_DT);
+
+  // 真円外壁の滑らかな法線抗力（多角形の角での急減速を防ぎ側面を滑らかに周回させる）
+  const rrPost = Math.hypot(ballBody.position.x, ballBody.position.z);
+  if (rrPost > R_WALL_LIMIT) {
+    const nx = ballBody.position.x / rrPost;
+    const nz = ballBody.position.z / rrPost;
+    ballBody.position.x = nx * R_WALL_LIMIT;
+    ballBody.position.z = nz * R_WALL_LIMIT;
+    const vr = ballBody.velocity.x * nx + ballBody.velocity.z * nz;
+    if (vr > 0) {
+      ballBody.velocity.x -= nx * vr;
+      ballBody.velocity.z -= nz * vr;
+      const postTan = Math.hypot(ballBody.velocity.x, ballBody.velocity.z);
+      const targetTan = preSpeed * trackDamp;
+      if (postTan > 0.1 && targetTan > postTan) {
+        const k = targetTan / postTan;
+        ballBody.velocity.x *= k;
+        ballBody.velocity.z *= k;
+      }
+    }
+  }
+
   return { nextWheelAngle, nextWheelOmega };
 }
 

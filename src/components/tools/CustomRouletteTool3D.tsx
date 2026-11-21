@@ -28,6 +28,7 @@ const R_POCKET_MID = 1.56;
 const R_POCKET_OUT = 1.86;
 const R_TRACK_IN = 2.46;
 const R_TRACK_OUT = 2.86;
+const R_WALL_LIMIT = R_TRACK_OUT - BALL_RADIUS - 0.02;
 const R_BOWL_OUT = 3.06;
 
 function normalizeAngle(rad: number): number {
@@ -402,10 +403,10 @@ export const CustomRouletteTool3D = React.forwardRef<
     const wheelMat = new CANNON.Material('wheel');
     const ballMatPhys = new CANNON.Material('ball');
     world.addContactMaterial(
-      new CANNON.ContactMaterial(bowlMat, ballMatPhys, { friction: 0.06, restitution: 0.42 })
+      new CANNON.ContactMaterial(bowlMat, ballMatPhys, { friction: 0.015, restitution: 0.3 })
     );
     world.addContactMaterial(
-      new CANNON.ContactMaterial(wheelMat, ballMatPhys, { friction: 0.32, restitution: 0.36 })
+      new CANNON.ContactMaterial(wheelMat, ballMatPhys, { friction: 0.34, restitution: 0.34 })
     );
 
     const bowlBody = new CANNON.Body({ mass: 0, material: bowlMat });
@@ -413,14 +414,9 @@ export const CustomRouletteTool3D = React.forwardRef<
       const angle = (i / 32) * Math.PI * 2;
       const qYaw = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
       bowlBody.addShape(
-        new CANNON.Box(new CANNON.Vec3(0.1, 0.55, 0.33)),
-        new CANNON.Vec3(Math.cos(angle) * (R_TRACK_OUT + 0.1), 0.96, Math.sin(angle) * (R_TRACK_OUT + 0.1)),
-        qYaw
-      );
-      bowlBody.addShape(
         new CANNON.Box(new CANNON.Vec3(0.26, 0.08, 0.32)),
         new CANNON.Vec3(Math.cos(angle) * 2.66, 0.66, Math.sin(angle) * 2.66),
-        qYaw.mult(new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), 0.19))
+        qYaw.mult(new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), 0.16))
       );
       bowlBody.addShape(
         new CANNON.Box(new CANNON.Vec3(0.4, 0.08, 0.28)),
@@ -474,8 +470,8 @@ export const CustomRouletteTool3D = React.forwardRef<
       material: ballMatPhys,
       shape: new CANNON.Sphere(BALL_RADIUS),
       position: new CANNON.Vec3(R_POCKET_MID, 0.16 + BALL_RADIUS, 0),
-      linearDamping: 0.08,
-      angularDamping: 0.12,
+      linearDamping: 0.02,
+      angularDamping: 0.08,
     });
     const soundSynth = new CustomRouletteSound();
     ballBody.addEventListener('collide', (ev: { contact: CANNON.ContactEquation }) => {
@@ -501,13 +497,16 @@ export const CustomRouletteTool3D = React.forwardRef<
       startSpin: () => {
         restingLocalBall = null;
         const startAngle = Math.random() * Math.PI * 2;
-        const rStart = 2.66;
         ballBody.wakeUp();
-        ballBody.position.set(Math.cos(startAngle) * rStart, 0.88, Math.sin(startAngle) * rStart);
-        const speed = 15.2 + Math.random() * 3.2;
+        ballBody.position.set(
+          Math.cos(startAngle) * R_WALL_LIMIT,
+          0.84,
+          Math.sin(startAngle) * R_WALL_LIMIT
+        );
+        const speed = 28.0 + Math.random() * 6.0;
         ballBody.velocity.set(-Math.sin(startAngle) * speed, 0, Math.cos(startAngle) * speed);
         ballBody.angularVelocity.set(0, 0, 0);
-        wheelOmega = 2.6 + Math.random() * 0.6;
+        wheelOmega = 3.0 + Math.random() * 0.7;
         simMode = 'spinning';
         spinFrame = 0;
         settledFrames = 0;
@@ -544,17 +543,19 @@ export const CustomRouletteTool3D = React.forwardRef<
           wheelBody.angularVelocity.set(0, wheelOmega, 0);
 
           const r = Math.hypot(ballBody.position.x, ballBody.position.z);
+          const preSpeed = Math.hypot(ballBody.velocity.x, ballBody.velocity.z);
+          const trackDamp = 0.9905;
           if (r > R_TRACK_IN - 0.05) {
-            ballBody.velocity.x *= 0.9942;
-            ballBody.velocity.z *= 0.9942;
+            ballBody.velocity.x *= trackDamp;
+            ballBody.velocity.z *= trackDamp;
           } else if (r > R_POCKET_OUT) {
-            ballBody.velocity.x *= 0.9945;
-            ballBody.velocity.z *= 0.9945;
+            ballBody.velocity.x *= 0.994;
+            ballBody.velocity.z *= 0.994;
           } else {
             const vxw = wheelOmega * ballBody.position.z;
             const vzw = -wheelOmega * ballBody.position.x;
-            ballBody.velocity.x = vxw + (ballBody.velocity.x - vxw) * 0.97;
-            ballBody.velocity.z = vzw + (ballBody.velocity.z - vzw) * 0.97;
+            ballBody.velocity.x = vxw + (ballBody.velocity.x - vxw) * 0.965;
+            ballBody.velocity.z = vzw + (ballBody.velocity.z - vzw) * 0.965;
           }
 
           if (spinFrame > 560 && r > R_POCKET_OUT - 0.05) {
@@ -563,6 +564,27 @@ export const CustomRouletteTool3D = React.forwardRef<
           }
 
           world.step(FIXED_DT);
+
+          // 真円外壁の滑らかな法線抗力（2〜3周しっかり側面を高速回転させる）
+          const rrPost = Math.hypot(ballBody.position.x, ballBody.position.z);
+          if (rrPost > R_WALL_LIMIT) {
+            const nx = ballBody.position.x / rrPost;
+            const nz = ballBody.position.z / rrPost;
+            ballBody.position.x = nx * R_WALL_LIMIT;
+            ballBody.position.z = nz * R_WALL_LIMIT;
+            const vr = ballBody.velocity.x * nx + ballBody.velocity.z * nz;
+            if (vr > 0) {
+              ballBody.velocity.x -= nx * vr;
+              ballBody.velocity.z -= nz * vr;
+              const postTan = Math.hypot(ballBody.velocity.x, ballBody.velocity.z);
+              const targetTan = preSpeed * trackDamp;
+              if (postTan > 0.1 && targetTan > postTan) {
+                const k = targetTan / postTan;
+                ballBody.velocity.x *= k;
+                ballBody.velocity.z *= k;
+              }
+            }
+          }
 
           const bx = ballBody.position.x;
           const by = ballBody.position.y;

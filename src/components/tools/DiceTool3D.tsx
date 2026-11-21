@@ -520,15 +520,29 @@ export const DiceTool3D = React.forwardRef<DiceTool3DHandle, DiceTool3DProps>(
           if (simState === 'settling') {
             settleFrames++;
             const bowlSettled = bowlX === 0 && bowlY === 0 && bowlZ === 0 && bowlRx === 0 && bowlRz === 0;
+
+            // 平らに着地して微振動（ガタガタ）しているダイスを滑らかに静止へ収束させる
+            if (bowlSettled) {
+              for (const b of dieBodies) {
+                const v = b.velocity.length();
+                const w = b.angularVelocity.length();
+                const align = getTopFaceInfo(b.quaternion).alignment;
+                if (align > 0.94 && v < 0.45 && w < 0.85) {
+                  b.velocity.scale(0.8, b.velocity);
+                  b.angularVelocity.scale(0.75, b.angularVelocity);
+                }
+              }
+            }
+
             const allSlow =
               bowlSettled &&
-              dieBodies.every((b) => b.velocity.length() < 0.055 && b.angularVelocity.length() < 0.075);
+              dieBodies.every((b) => b.velocity.length() < 0.12 && b.angularVelocity.length() < 0.18);
 
             if (allSlow) {
-              const allFlat = dieBodies.every((b) => getTopFaceInfo(b.quaternion).alignment > 0.9);
-              if (!allFlat && settleFrames < 260) {
+              const allFlat = dieBodies.every((b) => getTopFaceInfo(b.quaternion).alignment > 0.92);
+              if (!allFlat && settleFrames < 220) {
                 for (const b of dieBodies) {
-                  if (getTopFaceInfo(b.quaternion).alignment <= 0.9) {
+                  if (getTopFaceInfo(b.quaternion).alignment <= 0.92) {
                     b.velocity.x += (Math.random() - 0.5) * 1.6;
                     b.velocity.z += (Math.random() - 0.5) * 1.6;
                     b.angularVelocity.x += (Math.random() - 0.5) * 4.5;
@@ -542,8 +556,12 @@ export const DiceTool3D = React.forwardRef<DiceTool3DHandle, DiceTool3DProps>(
               stillFrames = 0;
             }
 
-            if (stillFrames >= 16 || settleFrames >= 300) {
+            if (stillFrames >= 8 || settleFrames >= 240) {
               simState = 'idle';
+              for (const b of dieBodies) {
+                b.velocity.set(0, 0, 0);
+                b.angularVelocity.set(0, 0, 0);
+              }
               const results = dieBodies.map((b) => getTopFaceInfo(b.quaternion).value);
               onSettledRef.current(results);
             }
