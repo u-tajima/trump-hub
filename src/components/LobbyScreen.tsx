@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, Check, Copy, LogOut, Play, QrCode, Share2, SlidersHorizontal, Trash2, User } from 'lucide-react';
+import { Bot, Check, ClipboardList, Copy, LogOut, Play, QrCode, Share2, SlidersHorizontal, Trash2, User } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { GAME_LIST, GAME_REGISTRY } from '../games/registry';
 import type { GameId, GameRulesMap, LobbyState } from '../types/game';
@@ -16,6 +16,7 @@ interface LobbyScreenProps {
   onUpdateConfig: (gameId: GameId, rules: GameRulesMap[GameId]) => void;
   onStartGame: () => void;
   onLeave: () => void;
+  onOpenScoreBoard: () => void;
 }
 
 export const LobbyScreen: React.FC<LobbyScreenProps> = ({
@@ -27,6 +28,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   onUpdateConfig,
   onStartGame,
   onLeave,
+  onOpenScoreBoard,
 }) => {
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
@@ -51,8 +53,8 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `TABLE HUB - ${meta.name}`,
-          text: `部屋「${lobby.config.roomCode}」(${meta.name}) に参加しよう！`,
+          title: `TRUMP HUB - ${meta.name}`,
+          text: `トランプ部屋「${lobby.config.roomCode}」(${meta.name}) に参加しよう！`,
           url: inviteUrl,
         });
         return;
@@ -82,7 +84,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           退出
         </button>
         <span className="top-bar-title">待機ロビー</span>
-        <div style={{ width: 56 }} />
+        <button type="button" className="icon-text-btn" onClick={onOpenScoreBoard}>
+          <ClipboardList size={16} />
+          得点
+        </button>
       </header>
 
       <section className="card-panel room-code-panel">
@@ -166,7 +171,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
               <button
                 key={g.id}
                 type="button"
-                className={`game-pill title-with-icon ${g.id === lobby.config.gameId ? 'active' : ''}`}
+                className={`game-pill ${g.id === lobby.config.gameId ? 'active' : ''}`}
                 onClick={() => handleGameChange(g.id)}
               >
                 <GameIcon name={g.icon} size={13} /> {g.name}

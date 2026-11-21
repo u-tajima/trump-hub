@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  ClipboardList,
   Dices,
   Hand,
   Minus,
@@ -12,6 +13,14 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import {
+  applyScoreBoardOp,
+  createEmptyScoreBoard,
+  loadScoreBoardFromStorage,
+  saveScoreBoardToStorage,
+  type ScoreBoardOp,
+  type ScoreBoardState,
+} from '../utils/scoreBoard';
 import { Dice3D } from './Dice3D';
 import {
   type CustomRouletteSlot,
@@ -19,6 +28,7 @@ import {
   type CustomRouletteTool3DHandle,
 } from './tools/CustomRouletteTool3D';
 import { DiceTool3D, type DiceTool3DHandle } from './tools/DiceTool3D';
+import { ScoreBoardPanel } from './tools/ScoreBoardPanel';
 import './BetControl.css';
 import './ToolModeScreen.css';
 
@@ -108,8 +118,25 @@ function buildWheelSlots(items: RouletteOptionItem[], totalSlots: number): Custo
 }
 
 export const ToolModeScreen: React.FC<ToolModeScreenProps> = ({ onBack }) => {
-  const [tool, setTool] = useState<'dice' | 'roulette'>('dice');
+  const [tool, setTool] = useState<'dice' | 'roulette' | 'score'>('dice');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+
+  // ===== 得点管理ツール状態（LocalStorage 3日間保持） =====
+  const [scoreBoard, setScoreBoard] = useState<ScoreBoardState>(() => {
+    const saved = loadScoreBoardFromStorage('tool');
+    if (saved) return saved;
+    const fresh = createEmptyScoreBoard('tool', 'ツール得点表', ['プレイヤー1', 'プレイヤー2']);
+    saveScoreBoardToStorage(fresh);
+    return fresh;
+  });
+
+  const handleScoreOp = useCallback((op: ScoreBoardOp) => {
+    setScoreBoard((prev) => {
+      const next = applyScoreBoardOp(prev, op, 'あなた');
+      saveScoreBoardToStorage(next);
+      return next;
+    });
+  }, []);
 
   // ===== ダイスツール状態 =====
   const diceRef = useRef<DiceTool3DHandle | null>(null);
@@ -257,8 +284,8 @@ export const ToolModeScreen: React.FC<ToolModeScreenProps> = ({ onBack }) => {
               disabled={diceMode !== 'idle' || rouletteSpinning}
               onClick={() => setTool('dice')}
             >
-              <Dices size={17} />
-              3Dダイス
+              <Dices size={16} />
+              ダイス
             </button>
             <button
               type="button"
@@ -266,12 +293,23 @@ export const ToolModeScreen: React.FC<ToolModeScreenProps> = ({ onBack }) => {
               disabled={diceMode !== 'idle' || rouletteSpinning}
               onClick={() => setTool('roulette')}
             >
-              <Target size={17} />
-              3Dルーレット
+              <Target size={16} />
+              ルーレット
+            </button>
+            <button
+              type="button"
+              className={`tab-btn ${tool === 'score' ? 'active' : ''}`}
+              disabled={diceMode !== 'idle' || rouletteSpinning}
+              onClick={() => setTool('score')}
+            >
+              <ClipboardList size={16} />
+              得点管理
             </button>
           </div>
 
-          {tool === 'dice' ? (
+          {tool === 'score' ? (
+            <ScoreBoardPanel board={scoreBoard} onOp={handleScoreOp} canRestoreSaved />
+          ) : tool === 'dice' ? (
             <>
               {/* 3D物理ダイスステージ */}
               <div className="chinchiro-bowl-stage">

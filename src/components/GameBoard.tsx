@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, BookOpen, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, ClipboardList, RotateCcw, X } from 'lucide-react';
 import type { ChinchiroClientState } from '../games/chinchiro';
 import type { Connect4ClientState } from '../games/connect4';
 import type { DaifugoClientState } from '../games/daifugo';
@@ -41,6 +41,7 @@ interface GameBoardProps {
   onRestart: () => void;
   onBackToLobby: () => void;
   onLeave: () => void;
+  onOpenScoreBoard: () => void;
 }
 
 export const GameBoard: React.FC<GameBoardProps> = ({
@@ -53,6 +54,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   onRestart,
   onBackToLobby,
   onLeave,
+  onOpenScoreBoard,
 }) => {
   const [showRuleModal, setShowRuleModal] = useState(false);
   const meta = GAME_REGISTRY[gameId];
@@ -75,14 +77,26 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           </span>
           <span className="top-bar-code">{roomCode}</span>
         </div>
-        <button
-          type="button"
-          className="icon-text-btn"
-          onClick={() => setShowRuleModal(true)}
-        >
-          <BookOpen size={16} />
-          ルール
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            type="button"
+            className="icon-text-btn"
+            style={{ minWidth: 52, padding: '8px 9px' }}
+            onClick={onOpenScoreBoard}
+          >
+            <ClipboardList size={15} />
+            得点
+          </button>
+          <button
+            type="button"
+            className="icon-text-btn"
+            style={{ minWidth: 52, padding: '8px 9px' }}
+            onClick={() => setShowRuleModal(true)}
+          >
+            <BookOpen size={15} />
+            ルール
+          </button>
+        </div>
       </header>
 
       <main className="game-main">

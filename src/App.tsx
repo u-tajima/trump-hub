@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ClipboardList, X } from 'lucide-react';
 import { GameBoard } from './components/GameBoard';
 import { HomeScreen } from './components/HomeScreen';
 import { LobbyScreen } from './components/LobbyScreen';
 import { ToolModeScreen } from './components/ToolModeScreen';
+import { ScoreBoardPanel } from './components/tools/ScoreBoardPanel';
 import {
   type AnyInternalState,
   applyGameAction,
@@ -13,6 +15,14 @@ import {
 import { GuestPeerSession, HostPeerSession } from './network/peerManager';
 import type { GameId, GameRulesMap, LobbyState, PlayerInfo } from './types/game';
 import { getRoomCodeFromUrl } from './utils/roomCode';
+import {
+  applyScoreBoardOp,
+  createEmptyScoreBoard,
+  loadScoreBoardFromStorage,
+  saveScoreBoardToStorage,
+  type ScoreBoardOp,
+  type ScoreBoardState,
+} from './utils/scoreBoard';
 
 function getOrCreatePlayerId(): string {
   const key = 'trump_hub_player_id';
@@ -39,11 +49,14 @@ export function App() {
   const [lobby, setLobby] = useState<LobbyState | null>(null);
   const [clientGameState, setClientGameState] = useState<unknown>(null);
   const [toolMode, setToolMode] = useState<boolean>(false);
+  const [roomScoreBoard, setRoomScoreBoard] = useState<ScoreBoardState | null>(null);
+  const [showScoreModal, setShowScoreModal] = useState<boolean>(false);
 
   const hostSessionRef = useRef<HostPeerSession | null>(null);
   const guestSessionRef = useRef<GuestPeerSession | null>(null);
   const lobbyRef = useRef<LobbyState | null>(null);
   const internalGameRef = useRef<AnyInternalState | null>(null);
+  const roomScoreBoardRef = useRef<ScoreBoardState | null>(null);
 
   const handleNameChange = (name: string) => {
     setPlayerName(name);
@@ -81,6 +94,13 @@ export function App() {
     }
   }, [myId]);
 
+  const syncScoreBoard = useCallback((nextBoard: ScoreBoardState) => {
+    roomScoreBoardRef.current = nextBoard;
+    setRoomScoreBoard(nextBoard);
+    saveScoreBoardToStorage(nextBoard);
+    hostSessionRef.current?.broadcast({ kind: 'scoreBoard', board: nextBoard });
+  }, []);
+
   const cleanupSessions = useCallback(() => {
     hostSessionRef.current?.destroy();
     hostSessionRef.current = null;
@@ -88,8 +108,11 @@ export function App() {
     guestSessionRef.current = null;
     lobbyRef.current = null;
     internalGameRef.current = null;
+    roomScoreBoardRef.current = null;
     setLobby(null);
     setClientGameState(null);
+    setRoomScoreBoard(null);
+    setShowScoreModal(false);
     setRole('none');
     setConnecting(false);
   }, []);
@@ -140,9 +163,14 @@ export function App() {
           config: { roomCode, gameId, rules },
           players: [hostPlayer],
         };
+        const boardId = `room_${roomCode}`;
+        const initialBoard =
+          loadScoreBoardFromStorage(boardId) ??
+          createEmptyScoreBoard(boardId, `部屋 ${roomCode}`, [hostPlayer.name]);
         setRole('host');
         setConnecting(false);
         syncAllClients(initialLobby, null);
+        syncScoreBoard(initialBoard);
       },
       onClientJoin: (pid, name) => {
         const cur = lobbyRef.current;
@@ -169,8 +197,26 @@ export function App() {
         const nextLobby: LobbyState = { ...cur, players };
         hostSessionRef.current?.sendTo(pid, { kind: 'welcome', playerId: pid, lobby: nextLobby });
         syncAllClients(nextLobby, internalGameRef.current);
+
+        // 共有スコアボードに未登録なら自動追加し、全員へ同期（ホストLocalStorageに3日間保存）
+        const curBoard = roomScoreBoardRef.current;
+        if (curBoard) {
+          const hasName = curBoard.entries.some((e) => e.name === name);
+          const nextBoard = hasName
+            ? curBoard
+            : applyScoreBoardOp(curBoard, { type: 'addEntry', name }, 'システム');
+          syncScoreBoard(nextBoard);
+          hostSessionRef.current?.sendTo(pid, { kind: 'scoreBoard', board: nextBoard });
+        }
       },
       onClientAction: (pid, msg) => {
+        if (msg.kind === 'scoreOp') {
+          const curBoard = roomScoreBoardRef.current;
+          if (!curBoard) return;
+          const nextBoard = applyScoreBoardOp(curBoard, msg.op, msg.actorName || 'ゲスト');
+          syncScoreBoard(nextBoard);
+          return;
+        }
         if (msg.kind !== 'action') return;
         const curLobby = lobbyRef.current;
         const curGame = internalGameRef.current;
@@ -223,6 +269,9 @@ export function App() {
           }
         } else if (msg.kind === 'gameState') {
           setClientGameState(msg.state);
+        } else if (msg.kind === 'scoreBoard') {
+          roomScoreBoardRef.current = msg.board;
+          setRoomScoreBoard(msg.board);
         } else if (msg.kind === 'error') {
           showToast(msg.message);
         }
@@ -286,6 +335,26 @@ export function App() {
     syncAllClients({ ...cur, phase: 'lobby' }, null);
   };
 
+  const handleRoomScoreOp = useCallback(
+    (op: ScoreBoardOp) => {
+      const actorName = playerName.trim() || (role === 'host' ? 'ホスト' : 'ゲスト');
+      if (role === 'host') {
+        const cur = roomScoreBoardRef.current;
+        if (!cur) return;
+        const next = applyScoreBoardOp(cur, op, actorName);
+        syncScoreBoard(next);
+      } else if (role === 'guest') {
+        guestSessionRef.current?.send({
+          kind: 'scoreOp',
+          playerId: myId,
+          actorName,
+          op,
+        });
+      }
+    },
+    [role, playerName, myId, syncScoreBoard]
+  );
+
   const handleGameAction = (action: { type: string; payload?: unknown }) => {
     if (role === 'host') {
       const curLobby = lobbyRef.current;
@@ -329,6 +398,7 @@ export function App() {
           onUpdateConfig={handleUpdateConfig}
           onStartGame={handleStartGame}
           onLeave={cleanupSessions}
+          onOpenScoreBoard={() => setShowScoreModal(true)}
         />
       ) : (
         <GameBoard
@@ -341,7 +411,34 @@ export function App() {
           onRestart={handleStartGame}
           onBackToLobby={handleBackToLobby}
           onLeave={cleanupSessions}
+          onOpenScoreBoard={() => setShowScoreModal(true)}
         />
+      )}
+
+      {showScoreModal && lobby && roomScoreBoard && (
+        <div className="modal-backdrop" onClick={() => setShowScoreModal(false)}>
+          <div className="scoreboard-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="panel-header-row" style={{ marginBottom: 10 }}>
+              <h3 className="panel-title title-with-icon">
+                <ClipboardList size={17} /> 共有得点管理 ({lobby.config.roomCode})
+              </h3>
+              <button
+                type="button"
+                className="icon-text-btn"
+                onClick={() => setShowScoreModal(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <ScoreBoardPanel
+              board={roomScoreBoard}
+              onOp={handleRoomScoreOp}
+              isRoomMode
+              canRestoreSaved={role === 'host'}
+              roomPlayerNames={lobby.players.map((p) => p.name)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

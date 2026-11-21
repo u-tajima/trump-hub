@@ -15,6 +15,11 @@ import { applyReversiAction, initReversi } from '../reversi';
 import { applyRouletteAction, EUROPEAN_WHEEL_ORDER, getRouletteColor, initRoulette } from '../roulette';
 import { applySevensAction, canPlaceNormalCard, initSevens } from '../sevens';
 import { applySpeedAction, canPlaceOnSpeedPile, initSpeed } from '../speed';
+import {
+  applyScoreBoardOp,
+  createEmptyScoreBoard,
+  SCOREBOARD_TTL_MS,
+} from '../../utils/scoreBoard';
 
 const makePlayers = (count: number): PlayerInfo[] =>
   Array.from({ length: count }, (_, i) => ({
@@ -334,5 +339,22 @@ describe('Roulette engine', () => {
     state = applyRouletteAction(state, 'p1', { type: 'nextRound' }).state;
     expect(state.round).toBe(2);
     expect(state.subPhase).toBe('betting');
+  });
+});
+
+describe('ScoreBoard utility', () => {
+  it('applies concurrent delta operations and maintains 3-day TTL', () => {
+    let board = createEmptyScoreBoard('room_TEST1', '部屋 TEST1', ['Alice', 'Bob']);
+    expect(board.entries.length).toBe(2);
+    expect(board.expiresAt - board.updatedAt).toBe(SCOREBOARD_TTL_MS);
+
+    const aliceId = board.entries[0].id;
+    board = applyScoreBoardOp(board, { type: 'addDelta', entryId: aliceId, delta: 10 }, 'Alice');
+    board = applyScoreBoardOp(board, { type: 'addDelta', entryId: aliceId, delta: 5 }, 'Bob');
+    expect(board.entries[0].score).toBe(15);
+    expect(board.logs.length).toBe(2);
+
+    board = applyScoreBoardOp(board, { type: 'resetScores' }, 'Alice');
+    expect(board.entries.every((e) => e.score === 0)).toBe(true);
   });
 });

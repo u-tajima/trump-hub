@@ -1,3 +1,5 @@
+import type { ScoreBoardOp, ScoreBoardState } from '../utils/scoreBoard';
+
 export type GameId =
   | 'daifugo'
   | 'sevens'
@@ -146,11 +148,13 @@ export interface ClientGameAction {
 export type PeerToHostMessage =
   | { kind: 'join'; name: string; playerId: string }
   | { kind: 'action'; playerId: string; action: ClientGameAction }
+  | { kind: 'scoreOp'; playerId: string; actorName: string; op: ScoreBoardOp }
   | { kind: 'ping'; ts: number };
 
 export type HostToPeerMessage =
   | { kind: 'welcome'; playerId: string; lobby: LobbyState }
   | { kind: 'lobby'; lobby: LobbyState }
   | { kind: 'gameState'; gameId: GameId; state: unknown }
+  | { kind: 'scoreBoard'; board: ScoreBoardState }
   | { kind: 'error'; message: string }
   | { kind: 'pong'; ts: number };
