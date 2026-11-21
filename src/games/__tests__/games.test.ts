@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../../types/card';
 import type { PlayerInfo } from '../../types/game';
-import { applyChinchiroAction, evaluateChinchiroDice, initChinchiro } from '../chinchiro';
-import { applyConnect4Action, initConnect4 } from '../connect4';
-import { applyDaifugoAction, canPlayOnTable, initDaifugo, parsePlay } from '../daifugo';
-import { applyDoubtAction, initDoubt } from '../doubt';
-import { applyGomokuAction, initGomoku } from '../gomoku';
-import { applyHoldemAction, evaluateBestSeven, initHoldem } from '../holdem';
-import { applyMemoryAction, initMemory } from '../memory';
+import { applyChinchiroAction, computeChinchiroBotAction, evaluateChinchiroDice, initChinchiro } from '../chinchiro';
+import { applyConnect4Action, computeConnect4BotAction, initConnect4 } from '../connect4';
+import { applyDaifugoAction, canPlayOnTable, computeDaifugoBotAction, initDaifugo, parsePlay } from '../daifugo';
+import { applyDoubtAction, computeDoubtBotAction, initDoubt } from '../doubt';
+import { applyGomokuAction, computeGomokuBotAction, initGomoku } from '../gomoku';
+import { applyHoldemAction, computeHoldemBotAction, evaluateBestSeven, initHoldem } from '../holdem';
+import { applyMemoryAction, computeMemoryBotAction, initMemory } from '../memory';
 import { applyOldMaidAction, initOldMaid } from '../oldMaid';
-import { applyPokerAction, evaluatePokerHand, initPoker } from '../poker';
+import { applyPokerAction, computePokerBotAction, evaluatePokerHand, initPoker } from '../poker';
 import { GAME_REGISTRY } from '../registry';
-import { applyReversiAction, initReversi } from '../reversi';
+import { applyReversiAction, computeReversiBotAction, initReversi } from '../reversi';
 import { applyRouletteAction, EUROPEAN_WHEEL_ORDER, getRouletteColor, initRoulette } from '../roulette';
-import { applySevensAction, canPlaceNormalCard, initSevens } from '../sevens';
-import { applySpeedAction, canPlaceOnSpeedPile, initSpeed } from '../speed';
+import { applySevensAction, canPlaceNormalCard, computeSevensBotAction, initSevens } from '../sevens';
+import { applySpeedAction, canPlaceOnSpeedPile, computeSpeedBotAction, initSpeed } from '../speed';
 import {
   applyScoreBoardOp,
   createEmptyScoreBoard,
@@ -356,5 +356,166 @@ describe('ScoreBoard utility', () => {
 
     board = applyScoreBoardOp(board, { type: 'resetScores' }, 'Alice');
     expect(board.entries.every((e) => e.score === 0)).toBe(true);
+  });
+});
+
+describe('Enhanced CPU AI', () => {
+  it('Memory CPU remembers revealed cards and completes pairs deterministically', () => {
+    const players = makePlayers(2);
+    players[1].isBot = true;
+    let state = initMemory(players, { deckSize: 20, extraTurnOnMatch: true, jokerPair: false });
+
+    // 同じランクの2枚のインデックスを探す
+    const rank1 = state.tiles.filter((t) => t.card.rank === 1);
+    const other = state.tiles.find((t) => t.card.rank === 2)!;
+
+    // p1 が rank1[0] と other をめくってミス（rank1[0] が公開履歴に記録される）
+    state = applyMemoryAction(state, 'p1', { type: 'flip', payload: { index: rank1[0].index } }).state;
+    state = applyMemoryAction(state, 'p1', { type: 'flip', payload: { index: other.index } }).state;
+    state = applyMemoryAction(state, 'p1', { type: 'resetMismatch' }).state;
+
+    // p2 (Bot) が1枚目に rank1[1] をめくった状態にする → 2枚目は記憶から必ず rank1[0] を選ぶはず
+    state = applyMemoryAction(state, 'p2', { type: 'flip', payload: { index: rank1[1].index } }).state;
+    const botAct = computeMemoryBotAction(state);
+    expect(botAct).toEqual({ type: 'flip', payload: { index: rank1[0].index } });
+  });
+
+  it('Connect4 CPU avoids blundering into giving opponent an immediate winning spot above', () => {
+    const players = makePlayers(2);
+    players[1].isBot = true;
+    const state = initConnect4(players, { cols: 7, rows: 6 });
+    state.turnIndex = 1; // p2 (disc 2)
+
+    // col 0, 1, 2 の row 4 に相手(disc 1)が3連を作っており、col 3 の row 5 が空・row 4 が相手勝ちマスの状況
+    // もし Bot が col 3 (row 5) に置くと、直後に相手が col 3 (row 4) に置いて負けるトラップ
+    state.board[5][0] = 2;
+    state.board[5][1] = 2;
+    state.board[5][2] = 1;
+    state.board[4][0] = 1;
+    state.board[4][1] = 1;
+    state.board[4][2] = 1;
+    // col 3 はまだ空 (findDropRow = 5)。ここに置くと相手が直上の (4, 3) で横4連完成してしまう
+    const act = computeConnect4BotAction(state);
+    const chosenCol = (act?.payload as { col: number })?.col;
+    expect(chosenCol).not.toBe(3);
+  });
+
+  it('Gomoku CPU blocks open-3 and broken-4 threats', () => {
+    const players = makePlayers(2);
+    players[1].isBot = true;
+    const state = initGomoku(players, { boardSize: 9, allowOverline: true });
+    state.turnIndex = 1; // p2 (stone 2)
+
+    // 相手(stone 1)が (4, 2), (4, 3), (4, 5), (4, 6) の飛び四を作っている → (4, 4) を必ず埋めて防ぐ
+    state.board[4][2] = 1;
+    state.board[4][3] = 1;
+    state.board[4][5] = 1;
+    state.board[4][6] = 1;
+
+    const act = computeGomokuBotAction(state);
+    expect(act).toEqual({ type: 'place', payload: { row: 4, col: 4 } });
+  });
+
+  it('Daifugo CPU plays staircases and bombs opponent ranks instead of its own in Queen Bomber', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    const state = initDaifugo(players, { ...GAME_REGISTRY.daifugo.defaultRules, queenBomber: true });
+    state.turnIndex = 0;
+    state.players[0].hand = [c('spade', 4), c('spade', 5), c('spade', 6)];
+
+    // 3枚階段で一気に出せる
+    const act = computeDaifugoBotAction(state);
+    expect((act.payload as { cardIds: string[] }).cardIds.length).toBe(3);
+
+    // Qボンバー解決時、自分が複数種持っているなら自分が持っていない強カード(2)を爆破する
+    state.players[0].hand = [c('spade', 4), c('heart', 7)];
+    state.pendingEffect = { type: 'queenBomber', playerId: 'p1' };
+    const bombAct = computeDaifugoBotAction(state);
+    expect(bombAct).toEqual({ type: 'resolveQueenBomber', payload: { rank: 2 } });
+  });
+
+  it('Sevens CPU prioritizes unlocking its own extreme cards over opening opponent-only lines', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    const state = initSevens(players, GAME_REGISTRY.sevens.defaultRules);
+    state.turnIndex = 0;
+    // spade は6と1・2を自分が持っている（6を出せば自分の1・2へ繋がる）
+    // heart は6だけ持っており、5〜1はすべて相手が持っている（heart-6を出すと相手だけを助ける）
+    state.players[0].hand = [c('spade', 1), c('spade', 2), c('spade', 6), c('heart', 6)];
+
+    const act = computeSevensBotAction(state);
+    expect(act).toEqual({ type: 'play', payload: { cardId: 'spade-6' } });
+  });
+
+  it('Doubt CPU always calls doubt when an opponent plays their final card', () => {
+    const players = makePlayers(2);
+    players[1].isBot = true;
+    let state = initDoubt(players, GAME_REGISTRY.doubt.defaultRules);
+    state.players[0].hand = [c('spade', 5)]; // 残り1枚
+    state = applyDoubtAction(state, 'p1', { type: 'play', payload: { cardIds: ['spade-5'] } }).state;
+
+    const botAct = computeDoubtBotAction(state, 'p2');
+    expect(botAct).toEqual({ type: 'doubt' });
+  });
+
+  it('Speed CPU selects the play that chains into consecutive cards from hand', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    const state = initSpeed(players, GAME_REGISTRY.speed.defaultRules);
+    state.centerPiles = [c('heart', 4), c('club', 10)];
+    // 3と5どちらも heart-4 に出せるが、5を出せば 6 -> 7 と3連続で繋がる
+    state.players[0].fieldHand = [c('spade', 3), c('spade', 5), c('diamond', 6), c('club', 7)];
+
+    const act = computeSpeedBotAction(state, 'p1');
+    expect(act).toEqual({ type: 'play', payload: { cardId: 'spade-5', pileIndex: 0 } });
+  });
+
+  it('Poker CPU keeps 4-card flush draws and Holdem/Chinchiro CPUs make EV-based decisions', () => {
+    const players = makePlayers(2);
+    players[1].isBot = true;
+    const poker = initPoker(players, GAME_REGISTRY.poker.defaultRules);
+    poker.subPhase = 'draw';
+    poker.turnIndex = 1;
+    // スペード4枚＋ハート1枚のハイカード → ハート1枚だけを交換するフラッシュドロー
+    poker.players[1].hand = [
+      c('spade', 2),
+      c('spade', 5),
+      c('spade', 9),
+      c('spade', 12),
+      c('heart', 7),
+    ];
+    const drawAct = computePokerBotAction(poker);
+    expect(drawAct).toEqual({ type: 'draw', payload: { discardIds: ['heart-7'] } });
+
+    // Holdem: ポケットA (A-A) ならプリフロップでもフォールドせずコールまたはレイズ
+    const holdem = initHoldem(players, GAME_REGISTRY.holdem.defaultRules);
+    holdem.players[holdem.turnIndex].holeCards = [c('spade', 1), c('heart', 1)];
+    const holdemAct = computeHoldemBotAction(holdem);
+    expect(holdemAct?.type).not.toBe('fold');
+
+    // Chinchiro: 親がシゴロ(strength 70)の時は子のCPUは最小額(5点)に絞る
+    const chin = initChinchiro(players, GAME_REGISTRY.chinchiro.defaultRules);
+    chin.players[0].currentHand = evaluateChinchiroDice([4, 5, 6]);
+    chin.players[0].doneThisRound = true;
+    chin.turnIndex = 1;
+    const chinAct = computeChinchiroBotAction(chin);
+    expect(chinAct).toEqual({ type: 'setStake', payload: { amount: 5 } });
+  });
+
+  it('Reversi CPU prefers corner over X-square trap', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    const state = initReversi(players, { boardSize: 8, parallelSetup: false });
+    // 角 (0,0) と Xマス (1,1) の両方に置ける盤面を作る
+    state.board = Array.from({ length: 8 }, () => Array(8).fill(0) as (0 | 1 | 2)[]);
+    state.board[0][1] = 2;
+    state.board[0][2] = 1; // (0,0) に黒(1)が置ける
+    state.board[1][2] = 2;
+    state.board[1][3] = 2;
+    state.board[1][4] = 1; // (1,1) に置けば2枚返せるが危険なXマス
+    state.turnIndex = 0;
+
+    const act = computeReversiBotAction(state);
+    expect(act).toEqual({ type: 'place', payload: { row: 0, col: 0 } });
   });
 });

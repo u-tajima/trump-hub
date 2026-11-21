@@ -386,6 +386,7 @@ export function applyDaifugoAction(
     return { state, error: 'ゲームは終了しています' };
   }
 
+  // 特殊効果解決フェーズ (7渡し / 10捨て / Qボンバー)
   if (state.pendingEffect) {
     const eff = state.pendingEffect;
     if (eff.playerId !== playerId) {
@@ -533,6 +534,7 @@ export function applyDaifugoAction(
     const foulOrder = [...state.foulOrder];
     const logs: string[] = [`${currentPlayer.name}: ${selectedCards.map(formatCardShort).join(' ')}`];
 
+    // 革命 / 階段革命
     const isRevTrigger =
       (parsed.kind === 'group' && state.rules.revolution && selectedCards.length >= 4) ||
       (parsed.kind === 'staircase' && state.rules.kaidanRevolution && selectedCards.length >= 4);
@@ -632,6 +634,7 @@ export function applyDaifugoAction(
       return { state: nextState };
     }
 
+    // 7渡し / 10捨て / Qボンバー (手札が残っている場合)
     if (newHand.length > 0) {
       const sevenCount = selectedCards.filter((c) => c.rank === 7).length;
       if (state.rules.sevenPass && sevenCount > 0) {
@@ -655,6 +658,7 @@ export function applyDaifugoAction(
       }
     }
 
+    // 5飛び
     const fiveCount = state.rules.fiveSkip ? selectedCards.filter((c) => c.rank === 5).length : 0;
     const stepCount = 1 + fiveCount;
     nextState.turnIndex = findNextActivePlayerIndex(nextState, state.turnIndex, false, stepCount);
@@ -667,31 +671,42 @@ export function applyDaifugoAction(
   return { state, error: '不明なアクションです' };
 }
 
-export function computeDaifugoBotAction(state: DaifugoInternalState): { type: string; payload?: unknown } {
-  if (state.pendingEffect) {
-    const eff = state.pendingEffect;
-    const actor = state.players.find((p) => p.id === eff.playerId)!;
-    if (eff.type === 'sevenPass') {
-      const ids = actor.hand.slice(0, Math.min(eff.count, actor.hand.length)).map((c) => c.id);
-      return { type: 'resolveSevenPass', payload: { cardIds: ids } };
-    }
-    if (eff.type === 'tenDiscard') {
-      const ids = actor.hand.slice(0, Math.min(eff.count, actor.hand.length)).map((c) => c.id);
-      return { type: 'resolveTenDiscard', payload: { cardIds: ids } };
-    }
-    return { type: 'resolveQueenBomber', payload: { rank: actor.hand[0]?.rank || 3 } };
-  }
+function getCardTacticalValue(card: Card, state: DaifugoInternalState, rankCounts: Map<number, number>): number {
+  if (card.suit === 'joker') return 200;
+  const rev = isReversed(state);
+  const baseStrength = daifugoStrength(card.rank);
+  let val = rev ? (18 - baseStrength) * 8 : baseStrength * 8;
 
-  const bot = state.players[state.turnIndex];
-  const hand = bot.hand;
+  if (state.rules.eightCut && card.rank === 8) val += 75;
+  if (state.rules.elevenBack && card.rank === 11) val += 35;
+  if (state.rules.fiveSkip && card.rank === 5) val += 30;
+  if (state.rules.tenDiscard && card.rank === 10) val += 25;
+  if (state.rules.sevenPass && card.rank === 7) val += 25;
+  if (state.rules.queenBomber && card.rank === 12) val += 25;
+  if (state.rules.spade3Return && card.suit === 'spade' && card.rank === 3) val += 50;
+  if (state.rules.sandstorm && card.rank === 3 && (rankCounts.get(3) ?? 0) >= 2) val += 65;
 
+  const count = rankCounts.get(card.rank) ?? 1;
+  if (count >= 4) val += 90;
+  else if (count === 3) val += 45;
+  else if (count === 2) val += 22;
+
+  return val;
+}
+
+function generateDaifugoCandidates(hand: Card[], state: DaifugoInternalState): Card[][] {
   const candidates: Card[][] = [];
+  const jokers = hand.filter((c) => c.suit === 'joker');
+  const normals = hand.filter((c) => c.suit !== 'joker');
+
+  // 1. 単騎出し
   for (const c of hand) {
     candidates.push([c]);
   }
+
+  // 2. 同数字ペア・3枚・4枚（ジョーカー補助含む）
   const byRank = new Map<number, Card[]>();
-  for (const c of hand) {
-    if (c.suit === 'joker') continue;
+  for (const c of normals) {
     const list = byRank.get(c.rank) ?? [];
     list.push(c);
     byRank.set(c.rank, list);
@@ -700,28 +715,302 @@ export function computeDaifugoBotAction(state: DaifugoInternalState): { type: st
     if (list.length >= 2) candidates.push(list.slice(0, 2));
     if (list.length >= 3) candidates.push(list.slice(0, 3));
     if (list.length >= 4) candidates.push(list.slice(0, 4));
+    if (jokers.length >= 1) {
+      if (list.length >= 1) candidates.push([list[0], jokers[0]]);
+      if (list.length >= 2) candidates.push([list[0], list[1], jokers[0]]);
+      if (list.length >= 3) candidates.push([list[0], list[1], list[2], jokers[0]]);
+    }
+  }
+  if (jokers.length >= 2) {
+    candidates.push(jokers.slice(0, 2));
   }
 
-  const valid = candidates.filter((cards) => canPlayOnTable(cards, state).ok);
-  if (valid.length === 0) {
+  // 3. 階段（3〜5枚、ジョーカー1枚補完含む）
+  if (state.rules.staircase) {
+    const bySuit = new Map<Suit, Card[]>();
+    for (const c of normals) {
+      const list = bySuit.get(c.suit) ?? [];
+      list.push(c);
+      bySuit.set(c.suit, list);
+    }
+    for (const list of bySuit.values()) {
+      const sorted = [...list].sort((a, b) => daifugoStrength(a.rank) - daifugoStrength(b.rank));
+      for (let i = 0; i < sorted.length; i++) {
+        const seq: Card[] = [sorted[i]];
+        for (let j = i + 1; j < sorted.length; j++) {
+          const prevS = daifugoStrength(seq[seq.length - 1].rank);
+          const curS = daifugoStrength(sorted[j].rank);
+          if (curS === prevS + 1) {
+            seq.push(sorted[j]);
+            if (seq.length >= 3) {
+              candidates.push([...seq]);
+              if (jokers.length >= 1 && seq.length === 3) {
+                candidates.push([...seq, jokers[0]]);
+              }
+            }
+          } else if (curS > prevS + 1) {
+            break;
+          }
+        }
+        // ジョーカーで1枚飛びを埋める3枚・4枚階段
+        if (jokers.length >= 1 && i + 1 < sorted.length) {
+          const s0 = daifugoStrength(sorted[i].rank);
+          const s1 = daifugoStrength(sorted[i + 1].rank);
+          if (s1 === s0 + 2) {
+            candidates.push([sorted[i], sorted[i + 1], jokers[0]]);
+            if (i + 2 < sorted.length && daifugoStrength(sorted[i + 2].rank) === s1 + 1) {
+              candidates.push([sorted[i], sorted[i + 1], sorted[i + 2], jokers[0]]);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function willPlayClearTable(cards: Card[], parsed: Omit<TablePlay, 'playerId'>, state: DaifugoInternalState): boolean {
+  const prevTop = state.table.length > 0 ? state.table[state.table.length - 1] : null;
+  if (state.rules.eightCut && cards.some((c) => c.rank === 8)) return true;
+  if (
+    state.rules.spade3Return &&
+    prevTop?.isJokerSingle &&
+    cards.length === 1 &&
+    cards[0].suit === 'spade' &&
+    cards[0].rank === 3
+  ) {
+    return true;
+  }
+  if (isSandstormPlay(cards, state.rules)) return true;
+  if (parsed.isJokerSingle && !state.rules.spade3Return) return true;
+  const rev = isReversed(state);
+  if (!rev && parsed.effectiveRank >= 15 && state.rules.jokerCount === 0) return true;
+  if (rev && parsed.effectiveRank <= 3 && state.rules.jokerCount === 0) return true;
+  return false;
+}
+
+export function computeDaifugoBotAction(state: DaifugoInternalState): { type: string; payload?: unknown } {
+  // 特殊効果（7渡し・10捨て・Qボンバー）の最適選択
+  if (state.pendingEffect) {
+    const eff = state.pendingEffect;
+    const actor = state.players.find((p) => p.id === eff.playerId)!;
+    const rankCounts = new Map<number, number>();
+    for (const c of actor.hand) {
+      if (c.suit !== 'joker') rankCounts.set(c.rank, (rankCounts.get(c.rank) ?? 0) + 1);
+    }
+
+    if (eff.type === 'sevenPass' || eff.type === 'tenDiscard') {
+      const need = Math.min(eff.count, actor.hand.length);
+      // すべて渡せば・捨てれば即上がりの場合は全選択
+      if (need >= actor.hand.length) {
+        return {
+          type: eff.type === 'sevenPass' ? 'resolveSevenPass' : 'resolveTenDiscard',
+          payload: { cardIds: actor.hand.map((c) => c.id) },
+        };
+      }
+      // 戦術価値が低い（孤立した弱い）カードから優先して手放す
+      const sortedToDump = [...actor.hand].sort(
+        (a, b) => getCardTacticalValue(a, state, rankCounts) - getCardTacticalValue(b, state, rankCounts)
+      );
+      const ids = sortedToDump.slice(0, need).map((c) => c.id);
+      return {
+        type: eff.type === 'sevenPass' ? 'resolveSevenPass' : 'resolveTenDiscard',
+        payload: { cardIds: ids },
+      };
+    }
+
+    // Qボンバー：自分の手札が1種類のみ（ジョーカーなし）ならそれを爆破して即勝利
+    const myRanks = Array.from(rankCounts.keys());
+    const hasJoker = actor.hand.some((c) => c.suit === 'joker');
+    if (!hasJoker && myRanks.length === 1) {
+      return { type: 'resolveQueenBomber', payload: { rank: myRanks[0] } };
+    }
+
+    // 自分が持っておらず、かつ強力なランク（2, A, 8, K または革命時は 3, 4, 8, 5）を優先爆破
+    const rev = isReversed(state);
+    const targetPriority = rev
+      ? [3, 4, 8, 5, 6, 7, 11, 10, 9, 12, 13, 1, 2]
+      : [2, 1, 8, 13, 12, 11, 10, 7, 9, 6, 5, 4, 3];
+    for (const r of targetPriority) {
+      if (!rankCounts.has(r)) {
+        return { type: 'resolveQueenBomber', payload: { rank: r } };
+      }
+    }
+    return { type: 'resolveQueenBomber', payload: { rank: targetPriority[0] } };
+  }
+
+  const bot = state.players[state.turnIndex];
+  const hand = bot.hand;
+  const candidates = generateDaifugoCandidates(hand, state);
+
+  const validPlays: { cards: Card[]; parsed: Omit<TablePlay, 'playerId'> }[] = [];
+  for (const cards of candidates) {
+    const res = canPlayOnTable(cards, state);
+    if (res.ok && res.parsed) {
+      validPlays.push({ cards, parsed: res.parsed });
+    }
+  }
+
+  if (validPlays.length === 0) {
     return { type: 'pass' };
   }
 
-  valid.sort((a, b) => {
-    const aIsLast = a.length === hand.length;
-    const bIsLast = b.length === hand.length;
-    if (aIsLast && isFoulFinishCards(a, state)) return 1;
-    if (bIsLast && isFoulFinishCards(b, state)) return -1;
-    if (state.table.length === 0 && a.length !== b.length) {
-      return b.length - a.length;
-    }
-    const rev = isReversed(state);
-    const sa = daifugoStrength(a[0].rank);
-    const sb = daifugoStrength(b[0].rank);
-    return rev ? sb - sa : sa - sb;
-  });
+  const activeOpponents = state.players.filter(
+    (p, idx) => idx !== state.turnIndex && p.finishRank === null && !p.foulFinish
+  );
+  const minOppCards =
+    activeOpponents.length > 0 ? Math.min(...activeOpponents.map((p) => p.hand.length)) : 99;
 
-  return { type: 'play', payload: { cardIds: valid[0].map((c) => c.id) } };
+  const rankCounts = new Map<number, number>();
+  for (const c of hand) {
+    if (c.suit !== 'joker') rankCounts.set(c.rank, (rankCounts.get(c.rank) ?? 0) + 1);
+  }
+
+  const rev = isReversed(state);
+  const prevTop = state.table.length > 0 ? state.table[state.table.length - 1] : null;
+
+  let bestPlay = validPlays[0].cards;
+  let bestScore = -Infinity;
+
+  for (const { cards, parsed } of validPlays) {
+    let score = 0;
+    const isLast = cards.length === hand.length;
+    const usedIds = new Set(cards.map((c) => c.id));
+    const remaining = hand.filter((c) => !usedIds.has(c.id));
+    const usesJoker = cards.some((c) => c.suit === 'joker');
+
+    // 1. 即上がり判定（反則上がり回避）
+    if (isLast) {
+      if (isFoulFinishCards(cards, state)) {
+        score -= 200000;
+      } else {
+        score += 200000;
+      }
+    } else {
+      // 残り手札が反則上がりカードだけになるのを強く避ける
+      if (state.rules.banFinishStrong && remaining.every((c) => isFoulFinishCards([c], state))) {
+        score -= 12000;
+      }
+
+      // 2. 2手詰め（場を流せる手＋残りが1手で合法に上がれる形）は超高評価
+      const clears = willPlayClearTable(cards, parsed, state);
+      const remParsed = parsePlay(remaining, state.rules);
+      if (clears && remParsed && !isFoulFinishCards(remaining, state)) {
+        score += 75000;
+      } else if (remParsed && !isFoulFinishCards(remaining, state)) {
+        score += 4500;
+      }
+    }
+
+    // 3. 基本温存スコア：なるべく弱いカードから消化し、切り札を温存する
+    const effRank = parsed.isJokerSingle ? (rev ? 1 : 17) : parsed.effectiveRank;
+    const relativePower = rev ? 17 - effRank : effRank - 2; // 1 (最弱) .. 15 (最強)
+
+    if (minOppCards <= 2) {
+      // 相手が上がり寸前の時は強い手や場流し・複数枚出しを惜しまない
+      score += relativePower * 10;
+      if (willPlayClearTable(cards, parsed, state)) score += 350;
+      if (!prevTop && cards.length >= 2) score += cards.length * 140;
+    } else {
+      // 通常時は弱いカードから計画的に消化
+      score -= relativePower * 18;
+      if (usesJoker && !isLast) score -= 240;
+    }
+
+    // 4. 親（空場）では複数枚出しや階段で手札を一気に減らす
+    if (!prevTop) {
+      score += cards.length * 65;
+      if (parsed.kind === 'staircase') score += 90;
+    } else {
+      // 場のカードに対してギリギリ勝てる手を好む
+      score += cards.length * 20;
+    }
+
+    // 5. ペア・トリプル・4枚組を崩して単騎出しするペナルティ
+    if (cards.length === 1 && !usesJoker && !isLast) {
+      const cnt = rankCounts.get(cards[0].rank) ?? 1;
+      if (cnt >= 4 && state.rules.revolution) score -= 220;
+      else if (cnt === 3) score -= 110;
+      else if (cnt === 2) score -= 55;
+    }
+
+    // 6. 革命・11バックの損得判定
+    const triggersRev =
+      (parsed.kind === 'group' && state.rules.revolution && cards.length >= 4) ||
+      (parsed.kind === 'staircase' && state.rules.kaidanRevolution && cards.length >= 4);
+    const triggers11Back = state.rules.elevenBack && cards.some((c) => c.rank === 11);
+
+    if ((triggersRev || triggers11Back) && remaining.length > 0) {
+      const remNormals = remaining.filter((c) => c.suit !== 'joker');
+      if (remNormals.length > 0) {
+        const avgStr =
+          remNormals.reduce((s, c) => s + daifugoStrength(c.rank), 0) / remNormals.length;
+        const nextRev = triggersRev ? !state.revolution : state.revolution;
+        const nextEffectiveRev = nextRev !== (triggers11Back || state.elevenBack);
+        // 逆転状態なら平均強度が低い（3〜7が多い）ほど有利
+        if (nextEffectiveRev && avgStr <= 8.5) score += 260;
+        else if (!nextEffectiveRev && avgStr >= 9.5) score += 260;
+        else if (minOppCards > 2) score -= 180;
+      }
+    }
+
+    // 7. スペ3返し・砂嵐・8切り・しばり・特殊効果の評価
+    if (
+      state.rules.spade3Return &&
+      prevTop?.isJokerSingle &&
+      cards.length === 1 &&
+      cards[0].suit === 'spade' &&
+      cards[0].rank === 3
+    ) {
+      score += 1200; // ジョーカーをスペ3で撃墜できる絶好機
+    }
+    if (isSandstormPlay(cards, state.rules) && prevTop) {
+      score += 650;
+    }
+    if (state.rules.eightCut && cards.some((c) => c.rank === 8)) {
+      if (prevTop && (minOppCards <= 3 || relativePower >= 10 || remaining.length <= 3)) {
+        score += 180;
+      } else if (!prevTop && remaining.length > 2) {
+        // 空場でいきなり8単騎を切るのは勿体ない（他に手がある場合）
+        score -= 90;
+      }
+    }
+    if (state.rules.tenDiscard && cards.some((c) => c.rank === 10)) score += 85;
+    if (state.rules.sevenPass && cards.some((c) => c.rank === 7)) score += 80;
+    if (state.rules.queenBomber && cards.some((c) => c.rank === 12)) score += 75;
+    if (state.rules.fiveSkip && cards.some((c) => c.rank === 5)) score += 70;
+
+    // スートしばり・激しばを発動させた時、自分も追撃牌を持っていれば加点
+    if (
+      state.rules.suitLock &&
+      prevTop &&
+      !state.suitLock &&
+      !parsed.isJokerSingle &&
+      !prevTop.isJokerSingle &&
+      parsed.suits.length > 0 &&
+      parsed.suits.length === prevTop.suits.length &&
+      parsed.suits.every((s, i) => s === prevTop.suits[i])
+    ) {
+      const hasFollowUp = remaining.some((c) => c.suit === 'joker' || parsed.suits.includes(c.suit));
+      score += hasFollowUp || minOppCards <= 2 ? 95 : -20;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestPlay = cards;
+    }
+  }
+
+  // 空場でない時、反則上がりしか手がない、または序盤で切り札（ジョーカーやペア崩し2）を無理に吐くだけなら戦略的パス
+  if (prevTop && bestScore < -210 && minOppCards >= 4 && hand.length >= 5) {
+    return { type: 'pass' };
+  }
+  if (prevTop && bestScore <= -100000) {
+    return { type: 'pass' };
+  }
+
+  return { type: 'play', payload: { cardIds: bestPlay.map((c) => c.id) } };
 }
 
 export function sanitizeDaifugoState(state: DaifugoInternalState, playerId: string): DaifugoClientState {

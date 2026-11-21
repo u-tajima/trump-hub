@@ -336,23 +336,69 @@ export function computeRouletteBotAction(
   const bot = state.players.find((p) => p.id === botId);
   if (!bot || !bot.isBot || bot.confirmed) return null;
 
-  // まだ賭けていなければ1〜2箇所に自動で賭ける
-  if (bot.bets.length === 0 && bot.chips >= state.rules.minBet) {
-    const unit = state.rules.minBet;
-    const choices: { kind: RouletteBetKind; value?: number }[] = [
-      { kind: 'red' },
-      { kind: 'black' },
-      { kind: 'even' },
-      { kind: 'odd' },
-      { kind: 'dozen1' },
-      { kind: 'dozen2' },
-      { kind: 'dozen3' },
-      { kind: 'straight', value: Math.floor(Math.random() * 37) },
-    ];
-    const pick = choices[Math.floor(Math.random() * choices.length)];
-    const mult = Math.min(3, Math.max(1, Math.floor(bot.chips / unit / 4)));
-    const amount = Math.min(bot.chips, unit * mult);
-    return { type: 'placeBet', payload: { kind: pick.kind, value: pick.value, amount } };
+  const unit = state.rules.minBet;
+  if (bot.chips < unit) {
+    return { type: 'confirmBets' };
+  }
+
+  const totalCurrentBet = bot.bets.reduce((s, b) => s + b.amount, 0);
+  const effectiveStack = bot.chips + totalCurrentBet;
+  const leaderChips = Math.max(
+    ...state.players.map((p) => p.chips + p.bets.reduce((s, b) => s + b.amount, 0))
+  );
+  const deficit = Math.max(0, leaderChips - effectiveStack);
+  const isFinalRound = state.round >= state.rules.rounds;
+
+  // トップ独走中の最終ラウンドは最小ベットで手堅く逃げ切る
+  if (isFinalRound && deficit === 0 && bot.bets.length === 0) {
+    return {
+      type: 'placeBet',
+      payload: { kind: Math.random() < 0.5 ? 'red' : 'black', amount: unit },
+    };
+  }
+
+  // 1手目：メインのベースベット（2ダズン戦術の1つ目、または2倍アウトサイド）
+  if (bot.bets.length === 0) {
+    if (deficit > unit * 4) {
+      // 差をつけられている時は3倍配当のダズンを厚めに狙う
+      const dozens: RouletteBetKind[] = ['dozen1', 'dozen2', 'dozen3'];
+      const pick = dozens[Math.floor(Math.random() * dozens.length)];
+      const mult = Math.min(5, Math.max(2, Math.floor(bot.chips / unit / 3)));
+      return {
+        type: 'placeBet',
+        payload: { kind: pick, amount: Math.min(bot.chips, unit * mult) },
+      };
+    }
+    const outside: RouletteBetKind[] = ['red', 'black', 'even', 'odd', 'low', 'high'];
+    const pick = outside[Math.floor(Math.random() * outside.length)];
+    const mult = Math.min(4, Math.max(1, Math.floor(bot.chips / unit / 4)));
+    return {
+      type: 'placeBet',
+      payload: { kind: pick, amount: Math.min(bot.chips, unit * mult) },
+    };
+  }
+
+  // 2手目：異なるダズンまたはストレート1点張りを組み合わせてカバー率・爆発力を高める
+  if (bot.bets.length === 1 && bot.chips >= unit * 2) {
+    const firstKind = bot.bets[0].kind;
+    if (firstKind === 'dozen1' || firstKind === 'dozen2' || firstKind === 'dozen3') {
+      // 2ダズンカバー戦術（37枠中24枠＝約64.9%の勝率で利益を出す定番戦術）
+      const otherDozens = (['dozen1', 'dozen2', 'dozen3'] as RouletteBetKind[]).filter(
+        (k) => k !== firstKind
+      );
+      const secondDozen = otherDozens[Math.floor(Math.random() * otherDozens.length)];
+      const amount = Math.min(bot.chips, bot.bets[0].amount);
+      return {
+        type: 'placeBet',
+        payload: { kind: secondDozen, amount },
+      };
+    }
+    // アウトサイド＋36倍ストレートのお守り1点狙い
+    const luckyNumber = Math.floor(Math.random() * 37);
+    return {
+      type: 'placeBet',
+      payload: { kind: 'straight', value: luckyNumber, amount: unit },
+    };
   }
 
   return { type: 'confirmBets' };

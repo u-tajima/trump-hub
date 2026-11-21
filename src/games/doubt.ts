@@ -12,14 +12,14 @@ export interface DoubtPlayerState {
 export interface DoubtLastPlay {
   playerId: string;
   cards: Card[];
-  declaredRank: number;
+  declaredRank: number; // 1..13
 }
 
 export interface DoubtInternalState {
   rules: DoubtRules;
   players: DoubtPlayerState[];
   turnIndex: number;
-  expectedRank: number;
+  expectedRank: number; // 1..13
   pile: Card[];
   lastPlay: DoubtLastPlay | null;
   subPhase: 'play' | 'doubtWindow' | 'reveal';
@@ -161,6 +161,7 @@ export function applyDoubtAction(
       ? `💥 ダウト成功！(${cardsText}) ${target.name} が山札 ${state.pile.length}枚 を引き取りました！`
       : `😅 ダウト失敗！本当でした(${cardsText})。${caller.name} が ${state.pile.length}枚 を引き取りました！`;
 
+    // 本当で手札0ならそのまま勝利
     const winner = players.find((p) => p.hand.length === 0);
     if (winner) {
       return {
@@ -211,6 +212,7 @@ export function applyDoubtAction(
   }
 
   if (action.type === 'proceedWindow' && state.subPhase === 'doubtWindow') {
+    // 誰もダウトせず猶予終了 → 出した人が0枚なら勝利確定
     const lastPlayer = state.players.find((p) => p.id === state.lastPlay?.playerId);
     if (lastPlayer && lastPlayer.hand.length === 0) {
       return {
@@ -242,22 +244,115 @@ export function computeDoubtBotAction(state: DoubtInternalState, botId: string):
   if (state.subPhase === 'play') {
     const current = state.players[state.turnIndex];
     if (current.id !== botId) return null;
-    const matching = current.hand.filter(
-      (c) => c.rank === state.expectedRank || (state.rules.jokerEnabled && c.suit === 'joker')
-    );
-    if (matching.length > 0) {
-      return { type: 'play', payload: { cardIds: matching.slice(0, 4).map((c) => c.id) } };
+
+    const exactMatches = current.hand.filter((c) => c.rank === state.expectedRank);
+    const jokers = state.rules.jokerEnabled ? current.hand.filter((c) => c.suit === 'joker') : [];
+
+    // 正直に出して今すぐ手札をすべて使い切れるなら全出しで即勝利を狙う
+    if (
+      exactMatches.length + jokers.length >= current.hand.length &&
+      current.hand.length <= 4
+    ) {
+      return { type: 'play', payload: { cardIds: current.hand.map((c) => c.id) } };
     }
-    const count = current.hand.length >= 2 && Math.random() < 0.35 ? 2 : 1;
-    return { type: 'play', payload: { cardIds: current.hand.slice(0, count).map((c) => c.id) } };
+
+    // 該当する正規の数字を持っている場合：正規カードをすべて出す（ジョーカーは次の苦しい手番用に温存）
+    if (exactMatches.length > 0) {
+      return {
+        type: 'play',
+        payload: { cardIds: exactMatches.slice(0, 4).map((c) => c.id) },
+      };
+    }
+
+    // 正規カードがないがジョーカーがある場合：場の山札が多くてダウトされると痛い時はジョーカーで安全に切り抜ける
+    if (jokers.length > 0 && (state.pile.length >= 5 || current.hand.length <= 2)) {
+      return { type: 'play', payload: { cardIds: [jokers[0].id] } };
+    }
+
+    // ウソをつく場合：今後数巡のうちに自分の手番で回ってくる予定の数字（futureMyRanks）は温存し、
+    // 自分の手番で当面回ってこない不要な数字から優先して捨てる
+    const playerCount = state.players.length;
+    const futureMyRanks = new Set<number>();
+    for (let turnAhead = 1; turnAhead <= 4; turnAhead++) {
+      const r = ((state.expectedRank - 1 + turnAhead * playerCount) % 13) + 1;
+      futureMyRanks.add(r);
+    }
+
+    const normals = current.hand.filter((c) => c.suit !== 'joker');
+    const pool = normals.length > 0 ? normals : current.hand;
+    const rankCounts = new Map<number, number>();
+    for (const c of pool) {
+      rankCounts.set(c.rank, (rankCounts.get(c.rank) ?? 0) + 1);
+    }
+
+    // 自分の将来手番に該当しないカードを高優先度で選ぶ
+    const sortedToBluff = [...pool].sort((a, b) => {
+      const aFuture = futureMyRanks.has(a.rank) ? 1 : 0;
+      const bFuture = futureMyRanks.has(b.rank) ? 1 : 0;
+      if (aFuture !== bFuture) return aFuture - bFuture;
+      // 複数枚ダブっていて処分に困る非将来ランクを優先
+      return (rankCounts.get(b.rank) ?? 0) - (rankCounts.get(a.rank) ?? 0);
+    });
+
+    const primary = sortedToBluff[0];
+    // 山札が少なく、同じ非将来ランクが複数枚ダブっている時のみまれに2枚ブラフ、基本は怪しまれにくい1枚出し
+    if (
+      state.pile.length <= 3 &&
+      !futureMyRanks.has(primary.rank) &&
+      (rankCounts.get(primary.rank) ?? 0) >= 2 &&
+      Math.random() < 0.25
+    ) {
+      const sameRankCards = sortedToBluff.filter((c) => c.rank === primary.rank).slice(0, 2);
+      return { type: 'play', payload: { cardIds: sameRankCards.map((c) => c.id) } };
+    }
+
+    return { type: 'play', payload: { cardIds: [primary.id] } };
   }
 
   if (state.subPhase === 'doubtWindow' && state.lastPlay && state.lastPlay.playerId !== botId) {
     const bot = state.players.find((p) => p.id === botId);
-    if (!bot) return null;
-    const mySame = bot.hand.filter((c) => c.rank === state.lastPlay!.declaredRank).length;
-    const impossible = mySame + state.lastPlay.cards.length > 4 && !state.rules.jokerEnabled;
-    if (impossible || (state.lastPlay.cards.length >= 3 && Math.random() < 0.4) || Math.random() < 0.12) {
+    const target = state.players.find((p) => p.id === state.lastPlay!.playerId);
+    if (!bot || !target) return null;
+
+    const declaredRank = state.lastPlay.declaredRank;
+    const playedCount = state.lastPlay.cards.length;
+
+    // 1. 相手が手札0枚になった場合：見逃せばその場で相手の勝ちが確定するため必ずダウトで阻止！
+    if (target.hand.length === 0) {
+      return { type: 'doubt' };
+    }
+
+    // 2. 自分の手札にある同名カード＋ジョーカー枚数から論理的に不可能な枚数なら100%ダウト
+    const mySame = bot.hand.filter((c) => c.rank === declaredRank).length;
+    const myJokers = bot.hand.filter((c) => c.suit === 'joker').length;
+    const maxPossibleValid = 4 - mySame + (state.rules.jokerEnabled ? 2 - myJokers : 0);
+    if (playedCount > maxPossibleValid) {
+      return { type: 'doubt' };
+    }
+
+    // ジョーカーありでも正規4枚を超えていれば極めて怪しい
+    if (mySame + playedCount > 4) {
+      return { type: 'doubt' };
+    }
+
+    // 3. ベイズ的疑わしさスコアと山札リスクの比較
+    let suspicion =
+      playedCount === 1 ? 0.12 : playedCount === 2 ? 0.36 : playedCount === 3 ? 0.72 : 0.92;
+    suspicion += mySame * 0.24;
+
+    // 相手の手札が残り1〜2枚の時はピンポイントでその数字を持っている確率が低いため警戒度アップ
+    if (target.hand.length <= 2) {
+      suspicion += 0.28;
+    }
+
+    // 山札が大量に溜まっている時は失敗時のダメージが大きいため慎重にする
+    if (state.pile.length >= 12 && target.hand.length >= 3) {
+      suspicion -= 0.22;
+    } else if (state.pile.length <= 3) {
+      suspicion += 0.08;
+    }
+
+    if (suspicion >= 0.72 || (suspicion >= 0.45 && Math.random() < suspicion * 0.65)) {
       return { type: 'doubt' };
     }
   }

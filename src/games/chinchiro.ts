@@ -270,22 +270,38 @@ export function computeChinchiroBotAction(
   const bot = state.players[state.turnIndex];
   if (bot.doneThisRound) return null;
 
-  // 子のCPUは振る前に親の出目を見て張り額を調整する
+  // 子のCPUは振る前に親の出目と点差状況から最適期待値（ケリー基準風）で張り額を調整する
   if (state.turnIndex !== state.dealerIndex && bot.rollsLeft === 3 && !bot.stakeSet) {
     const dealerHand = state.players[state.dealerIndex]?.currentHand;
     const maxStake = getChinchiroMaxStake(bot.points);
+    const maxLeaderPoints = Math.max(...state.players.map((p) => p.points));
+    const deficit = Math.max(0, maxLeaderPoints - bot.points);
+    const isFinalRound = state.round >= state.rules.rounds;
+
     let desired = 10;
     if (dealerHand) {
-      if (dealerHand.strength <= 12) {
-        // 親が目なし・ヒフミ・1〜2の目なら強気に張る
-        desired = Math.min(maxStake, Math.max(20, Math.round((maxStake * 0.4) / 5) * 5));
-      } else if (dealerHand.strength <= 14) {
-        desired = Math.min(maxStake, 20);
+      if (dealerHand.strength <= 0) {
+        // 親がヒフミ・ションベン・目なし：圧倒的有利なので最大張り（75%〜100%）
+        desired = Math.round((maxStake * 0.85) / 5) * 5;
+      } else if (dealerHand.strength === 11) {
+        // 親が1の目：引き分け以上が濃厚なため強気（60%〜75%）
+        desired = Math.round((maxStake * 0.65) / 5) * 5;
+      } else if (dealerHand.strength === 12) {
+        // 親が2の目：期待値プラス（40%〜50%）
+        desired = Math.round((maxStake * 0.45) / 5) * 5;
+      } else if (dealerHand.strength === 13) {
+        // 親が3の目：微有利〜互角（20%〜30%）
+        desired = Math.round((maxStake * 0.25) / 5) * 5;
+      } else if (isFinalRound && deficit > 15 && dealerHand.strength <= 15) {
+        // オーラスで逆転が必要な場面では4・5の目相手でも逆転に必要な額を勝負張り
+        desired = Math.min(maxStake, Math.max(15, Math.ceil(deficit / 5) * 5));
       } else {
-        desired = 10;
+        // 親が4の目以上（不利）：最小額の5点に絞って失点を最小化
+        desired = 5;
       }
     }
-    return { type: 'setStake', payload: { amount: desired } };
+    const clamped = Math.max(5, Math.min(maxStake, desired));
+    return { type: 'setStake', payload: { amount: clamped } };
   }
 
   return { type: 'roll' };

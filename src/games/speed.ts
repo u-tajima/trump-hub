@@ -6,9 +6,9 @@ export interface SpeedPlayerState {
   id: string;
   name: string;
   isBot: boolean;
-  fieldHand: Card[];
-  drawPile: Card[];
-  readyFlip: boolean;
+  fieldHand: Card[]; // 最大4枚見えている手札
+  drawPile: Card[];  // 自分の山札
+  readyFlip: boolean; // 「せーの！」待ちフラグ
 }
 
 export interface SpeedInternalState {
@@ -49,6 +49,7 @@ export function initSpeed(playersInfo: PlayerInfo[], rules: SpeedRules): SpeedIn
   const p1Cards = deck.slice(0, 26);
   const p2Cards = deck.slice(26, 52);
 
+  // 最初の1枚ずつを中央の台札に、4枚ずつを場札に、残り21枚ずつを山札に
   const center0 = p1Cards[0];
   const center1 = p2Cards[0];
 
@@ -141,6 +142,7 @@ export function applySpeedAction(
     const centerPiles: [Card, Card] = [...state.centerPiles] as [Card, Card];
     centerPiles[pileIndex] = card;
 
+    // 勝利判定
     if (players[pIdx].fieldHand.length === 0 && players[pIdx].drawPile.length === 0) {
       return {
         state: {
@@ -167,6 +169,7 @@ export function applySpeedAction(
   if (action.type === 'readyFlip') {
     players[pIdx].readyFlip = !players[pIdx].readyFlip;
 
+    // 相手がBotなら、Botに出せるカードがない時は即座にBotも readyFlip にする
     const otherIdx = pIdx === 0 ? 1 : 0;
     if (players[otherIdx].isBot && !hasAnyPlayableCard(players[otherIdx], state.centerPiles, state.rules)) {
       players[otherIdx].readyFlip = true;
@@ -210,21 +213,65 @@ function hasAnyPlayableCard(p: SpeedPlayerState, centerPiles: [Card, Card], rule
   );
 }
 
+function computeLongestChainFromHand(topCard: Card, remainingHand: Card[], rules: SpeedRules): number {
+  if (remainingHand.length === 0) return 0;
+  let best = 0;
+  for (let i = 0; i < remainingHand.length; i++) {
+    const c = remainingHand[i];
+    if (canPlaceOnSpeedPile(c, topCard, rules)) {
+      const nextRem = remainingHand.filter((_, idx) => idx !== i);
+      const len = 1 + computeLongestChainFromHand(c, nextRem, rules);
+      if (len > best) best = len;
+    }
+  }
+  return best;
+}
+
 export function computeSpeedBotAction(state: SpeedInternalState, botId: string): { type: string; payload?: unknown } | null {
   const bot = state.players.find((p) => p.id === botId);
   if (!bot) return null;
 
-  if (!state.rules.autoRefill && bot.fieldHand.length < 4 && bot.drawPile.length > 0) {
-    return { type: 'refill' };
+  const rankCounts = new Map<number, number>();
+  for (const c of bot.fieldHand) {
+    rankCounts.set(c.rank, (rankCounts.get(c.rank) ?? 0) + 1);
   }
 
+  let bestMove: { cardId: string; pileIndex: 0 | 1; score: number } | null = null;
+
   for (const c of bot.fieldHand) {
-    if (canPlaceOnSpeedPile(c, state.centerPiles[0], state.rules)) {
-      return { type: 'play', payload: { cardId: c.id, pileIndex: 0 } };
+    const remaining = bot.fieldHand.filter((h) => h.id !== c.id);
+    for (const pileIndex of [0, 1] as const) {
+      if (!canPlaceOnSpeedPile(c, state.centerPiles[pileIndex], state.rules)) continue;
+
+      let score = 0;
+      // 1. このカードを出した直後に手札から連続コンボで繋げられる最大チェーン長
+      const chainLen = computeLongestChainFromHand(c, remaining, state.rules);
+      score += chainLen * 50;
+
+      // 2. もう片方の台札にも残りの手札で出せるカードが残るか（両方の台札を生かす）
+      const otherPile = state.centerPiles[pileIndex === 0 ? 1 : 0];
+      if (remaining.some((remCard) => canPlaceOnSpeedPile(remCard, otherPile, state.rules))) {
+        score += 25;
+      }
+
+      // 3. 手札内でダブっている数字を先に処理して受けを広げる
+      if ((rankCounts.get(c.rank) ?? 0) >= 2) {
+        score += 12;
+      }
+
+      if (!bestMove || score > bestMove.score) {
+        bestMove = { cardId: c.id, pileIndex, score };
+      }
     }
-    if (canPlaceOnSpeedPile(c, state.centerPiles[1], state.rules)) {
-      return { type: 'play', payload: { cardId: c.id, pileIndex: 1 } };
-    }
+  }
+
+  // 出せるカードがあれば補充より先に即座に場へ出して主導権を握る
+  if (bestMove) {
+    return { type: 'play', payload: { cardId: bestMove.cardId, pileIndex: bestMove.pileIndex } };
+  }
+
+  if (!state.rules.autoRefill && bot.fieldHand.length < 4 && bot.drawPile.length > 0) {
+    return { type: 'refill' };
   }
 
   if (!bot.readyFlip) {

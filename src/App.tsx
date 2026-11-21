@@ -127,7 +127,7 @@ export function App() {
   // ホスト側ゲームループ (Bot思考・タイムアウト処理)
   useEffect(() => {
     if (role !== 'host' || lobby?.phase !== 'playing') return;
-    const intervalMs = lobby.config.gameId === 'speed' ? 500 : 850;
+    const intervalMs = lobby.config.gameId === 'speed' ? 400 : 800;
 
     const timer = window.setInterval(() => {
       const curLobby = lobbyRef.current;
