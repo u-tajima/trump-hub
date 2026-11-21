@@ -29,6 +29,7 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
   };
 
   const selectedCards = state.myHand.filter((c) => selectedIds.includes(c.id));
+  const activeSelectedIds = selectedCards.map((c) => c.id);
   const playValidation =
     selectedCards.length > 0
       ? canPlayOnTable(selectedCards, {
@@ -45,7 +46,7 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
 
   const handlePlay = () => {
     if (!isMyTurn || !playValidation.ok) return;
-    onAction({ type: 'play', payload: { cardIds: selectedIds } });
+    onAction({ type: 'play', payload: { cardIds: activeSelectedIds } });
     setSelectedIds([]);
   };
 
@@ -58,10 +59,10 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
   const handleResolveEffect = () => {
     if (!isMyEffect || !state.pendingEffect) return;
     if (state.pendingEffect.type === 'sevenPass') {
-      onAction({ type: 'resolveSevenPass', payload: { cardIds: selectedIds } });
+      onAction({ type: 'resolveSevenPass', payload: { cardIds: activeSelectedIds } });
       setSelectedIds([]);
     } else if (state.pendingEffect.type === 'tenDiscard') {
-      onAction({ type: 'resolveTenDiscard', payload: { cardIds: selectedIds } });
+      onAction({ type: 'resolveTenDiscard', payload: { cardIds: activeSelectedIds } });
       setSelectedIds([]);
     }
   };
@@ -80,7 +81,7 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
             <div key={p.id} className={`opp-pill ${active ? 'active' : ''} ${p.id === state.myId ? 'me' : ''}`}>
               <div className="opp-name">{p.name}</div>
               <div className="opp-meta">
-                {p.finishRank !== null
+                {p.finishRank !== null || p.foulFinish
                   ? rankTitle(p.finishRank, state.players.length, p.foulFinish)
                   : p.passed
                   ? 'PASS'
@@ -163,9 +164,9 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
                 ? 'あなたのターン'
                 : '相手のターン待機中'}
             </span>
-            {selectedIds.length > 0 && (
+            {activeSelectedIds.length > 0 && (
               <button type="button" className="text-link-btn" onClick={() => setSelectedIds([])}>
-                選択解除 ({selectedIds.length})
+                選択解除 ({activeSelectedIds.length})
               </button>
             )}
           </div>
@@ -175,7 +176,7 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
                 key={card.id}
                 card={card}
                 size="md"
-                selected={selectedIds.includes(card.id)}
+                selected={activeSelectedIds.includes(card.id)}
                 onClick={() => toggleCard(card.id)}
               />
             ))}
@@ -185,12 +186,12 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
               <button
                 type="button"
                 className="primary-btn full-width"
-                disabled={selectedIds.length !== needCount}
+                disabled={activeSelectedIds.length !== needCount}
                 onClick={handleResolveEffect}
               >
-                {selectedIds.length === needCount
+                {activeSelectedIds.length === needCount
                   ? `${needCount}枚を確定する`
-                  : `あと ${Math.max(0, needCount - selectedIds.length)} 枚選択してください`}
+                  : `あと ${Math.max(0, needCount - activeSelectedIds.length)} 枚選択してください`}
               </button>
             </div>
           ) : (
@@ -204,10 +205,10 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
                 disabled={!isMyTurn || !playValidation.ok}
                 onClick={handlePlay}
               >
-                {selectedIds.length === 0
+                {activeSelectedIds.length === 0
                   ? 'カードを選んで出す'
                   : playValidation.ok
-                  ? `${selectedIds.length}枚を出す`
+                  ? `${activeSelectedIds.length}枚を出す`
                   : playValidation.reason}
               </button>
             </div>

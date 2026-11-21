@@ -32,7 +32,7 @@ export type ScoreBoardOp =
   | { type: 'transferScore'; fromEntryId: string; toEntryId: string; amount: number }
   | { type: 'setScore'; entryId: string; score: number }
   | { type: 'resetScores'; baseScore?: number }
-  | { type: 'replaceEntries'; entries: ScoreEntry[] };
+  | { type: 'replaceEntries'; entries: ScoreEntry[]; baseScore?: number };
 
 export function getScoreBoardZeroSumInfo(board: ScoreBoardState): {
   baseScore: number;
@@ -156,6 +156,9 @@ export function applyScoreBoardOp(
       break;
     }
     case 'replaceEntries': {
+      if (typeof op.baseScore === 'number' && Number.isFinite(op.baseScore)) {
+        baseScore = Math.trunc(op.baseScore);
+      }
       entries = op.entries.map((e) => ({
         id: e.id,
         name: e.name.trim().slice(0, 14) || 'メンバー',

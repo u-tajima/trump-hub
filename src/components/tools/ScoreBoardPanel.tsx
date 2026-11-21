@@ -54,9 +54,21 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
   const [showSavedPicker, setShowSavedPicker] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
 
-  // 入力単位（1 / 5 / 10 / 100 / 1000）をパネル内からもいつでも切り替え可能にする
-  const [stepOverride, setStepOverride] = useState<number | null>(null);
+  // 入力単位（1 / 5 / 10 / 100 / 1000）をパネル内からもいつでも切り替え・保持可能にする
+  const [stepOverride, setStepOverride] = useState<number | null>(() => {
+    const saved = Number(sessionStorage.getItem(`sb_unit_${board.id}`));
+    return [1, 5, 10, 100, 1000].includes(saved) ? saved : null;
+  });
   const activeStep = stepOverride ?? Math.max(1, unitStep);
+
+  const handleStepChange = (nextUnit: number) => {
+    setStepOverride(nextUnit);
+    try {
+      sessionStorage.setItem(`sb_unit_${board.id}`, String(nextUnit));
+    } catch {
+      // ignore
+    }
+  };
 
   // 「自分」としてマークするエントリーID
   const [manualMyId, setManualMyId] = useState<string | null>(null);
@@ -311,7 +323,7 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
           <select
             className="sb-unit-select"
             value={activeStep}
-            onChange={(e) => setStepOverride(Number(e.target.value))}
+            onChange={(e) => handleStepChange(Number(e.target.value))}
             aria-label="入力単位"
             title="くの字ボタンの増減単位"
           >
@@ -399,7 +411,11 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
                   type="button"
                   className="chip-btn accent"
                   onClick={() => {
-                    onOp({ type: 'replaceEntries', entries: sb.entries });
+                    onOp({
+                      type: 'replaceEntries',
+                      entries: sb.entries,
+                      baseScore: sb.baseScore ?? 0,
+                    });
                     setShowSavedPicker(false);
                   }}
                 >

@@ -9,6 +9,9 @@ interface SpeedBoardProps {
 
 export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const activeSelectedId = state.me.fieldHand.some((c) => c.id === selectedCardId)
+    ? selectedCardId
+    : null;
 
   const handleFieldCardClick = (cardId: string) => {
     if (state.phase !== 'playing') return;
@@ -16,8 +19,8 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
   };
 
   const handlePileClick = (pileIndex: 0 | 1) => {
-    if (!selectedCardId || state.phase !== 'playing') return;
-    onAction({ type: 'play', payload: { cardId: selectedCardId, pileIndex } });
+    if (!activeSelectedId || state.phase !== 'playing') return;
+    onAction({ type: 'play', payload: { cardId: activeSelectedId, pileIndex } });
     setSelectedCardId(null);
   };
 
@@ -45,7 +48,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
                 card={state.centerPiles[pileIdx]}
                 size="lg"
                 animateIn
-                onClick={selectedCardId ? () => handlePileClick(pileIdx) : undefined}
+                onClick={activeSelectedId ? () => handlePileClick(pileIdx) : undefined}
               />
             </div>
           );
@@ -56,7 +59,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
         <div className="hand-area">
           <div className="hand-header">
             <span>
-              {selectedCardId
+              {activeSelectedId
                 ? '出す台札をタップしてください'
                 : '手札を選択してから台札をタップ'}
             </span>
@@ -69,7 +72,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
                 card={card}
                 size="lg"
                 animateIn
-                selected={selectedCardId === card.id}
+                selected={activeSelectedId === card.id}
                 onClick={() => handleFieldCardClick(card.id)}
               />
             ))}

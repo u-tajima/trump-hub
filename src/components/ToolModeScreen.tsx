@@ -496,7 +496,7 @@ export const ToolModeScreen: React.FC<ToolModeScreenProps> = ({ tool, onBack }) 
                           <button
                             type="button"
                             className="bet-step-btn"
-                            disabled={rouletteSpinning || it.slots <= 0}
+                            disabled={rouletteSpinning || it.slots <= 0 || usedSlots <= 1}
                             onClick={() => handleAdjustItemSlots(it.id, -1)}
                             aria-label="枠数を減らす"
                           >
@@ -581,7 +581,7 @@ export const ToolModeScreen: React.FC<ToolModeScreenProps> = ({ tool, onBack }) 
                 <button
                   type="button"
                   className="primary-btn full-width"
-                  disabled={rouletteSpinning || wheelSlots.length < 2}
+                  disabled={rouletteSpinning || wheelSlots.length < 2 || usedSlots === 0}
                   onClick={() => {
                     setRouletteSpinning(true);
                     setLastRouletteSlot(null);

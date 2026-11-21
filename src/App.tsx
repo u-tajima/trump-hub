@@ -349,8 +349,13 @@ export function App() {
       }
       syncScoreBoard(nextBoard);
     }
-    const game = initGameEngine(cur.config.gameId, cur.players, cur.config.rules);
-    syncAllClients({ ...cur, phase: 'playing' }, game);
+      const game = initGameEngine(
+        cur.config.gameId,
+        cur.players,
+        cur.config.rules,
+        internalGameRef.current
+      );
+      syncAllClients({ ...cur, phase: 'playing' }, game);
   };
 
   const handleBackToLobby = () => {
