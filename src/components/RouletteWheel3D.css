@@ -1,0 +1,286 @@
+.roulette-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px 14px;
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 44%, #103b2a 0%, #071b14 78%, #040d0a 100%);
+  border: 1px solid rgba(217, 155, 38, 0.35);
+  box-shadow: inset 0 0 42px rgba(0, 0, 0, 0.7), 0 8px 22px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.roulette-canvas-host {
+  width: 100%;
+  height: 276px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roulette-canvas-host canvas {
+  display: block;
+  width: 100% !important;
+  height: 276px !important;
+  border-radius: 12px;
+}
+
+.roulette-result-banner {
+  margin-top: -6px;
+  padding: 6px 18px;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #fde68a;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(245, 198, 102, 0.45);
+  backdrop-filter: blur(6px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.25s ease;
+  z-index: 2;
+}
+
+.roulette-result-banner.pop {
+  transform: scale(1.06);
+  box-shadow: 0 0 18px rgba(245, 198, 102, 0.32);
+}
+
+.roulette-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.roulette-dot.green {
+  background: #16a34a;
+}
+
+.roulette-dot.red {
+  background: #dc2626;
+}
+
+.roulette-dot.black {
+  background: #1e293b;
+}
+
+/* Roulette Board UI */
+.roulette-history {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.roulette-history-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.roulette-history-pills {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.roulette-num-pill {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.roulette-num-pill.green {
+  background: #15803d;
+}
+
+.roulette-num-pill.red {
+  background: #b91c1c;
+}
+
+.roulette-num-pill.black {
+  background: #1e293b;
+}
+
+.roulette-num-pill.latest {
+  outline: 2px solid #f59e0b;
+  outline-offset: 1px;
+}
+
+.roulette-bet-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roulette-chip-selector {
+  display: flex;
+  gap: 6px;
+}
+
+.roulette-chip-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1.5px solid var(--border-subtle);
+  background: rgba(15, 23, 42, 0.7);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.roulette-chip-btn.active {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.25);
+  color: #fde68a;
+}
+
+.roulette-outside-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.roulette-bet-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.15s ease;
+}
+
+.roulette-bet-cell:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.roulette-bet-cell:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.roulette-bet-cell.red {
+  background: linear-gradient(145deg, #b91c1c, #7f1d1d);
+}
+
+.roulette-bet-cell.black {
+  background: linear-gradient(145deg, #1e293b, #0f172a);
+}
+
+.roulette-bet-cell.has-bet {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.45);
+}
+
+.bet-cell-label {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.bet-cell-mult {
+  font-size: 11px;
+  color: rgba(248, 250, 252, 0.75);
+}
+
+.bet-cell-chip {
+  position: absolute;
+  top: -6px;
+  right: -5px;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.roulette-straight-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.roulette-numbers-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+
+.roulette-num-btn {
+  position: relative;
+  height: 38px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roulette-num-btn.full-span {
+  width: 100%;
+  height: 36px;
+}
+
+.roulette-num-btn.green {
+  background: #15803d;
+}
+
+.roulette-num-btn.red {
+  background: #b91c1c;
+}
+
+.roulette-num-btn.black {
+  background: #111827;
+}
+
+.roulette-num-btn.has-bet {
+  border-color: #f59e0b;
+}
+
+.roulette-num-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.roulette-action-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}

@@ -12,6 +12,7 @@ import { applyOldMaidAction, initOldMaid } from '../oldMaid';
 import { applyPokerAction, evaluatePokerHand, initPoker } from '../poker';
 import { GAME_REGISTRY } from '../registry';
 import { applyReversiAction, initReversi } from '../reversi';
+import { applyRouletteAction, EUROPEAN_WHEEL_ORDER, getRouletteColor, initRoulette } from '../roulette';
 import { applySevensAction, canPlaceNormalCard, initSevens } from '../sevens';
 import { applySpeedAction, canPlaceOnSpeedPile, initSpeed } from '../speed';
 
@@ -279,5 +280,46 @@ describe('Texas Holdem engine', () => {
     state = applyHoldemAction(state, 'p2', { type: 'call' }).state;
     expect(state.subPhase).toBe('flop');
     expect(state.communityCards.length).toBe(3);
+  });
+});
+
+describe('Roulette engine', () => {
+  it('validates wheel order, places bets, resolves physical spin number, and pays out', () => {
+    expect(EUROPEAN_WHEEL_ORDER.length).toBe(37);
+    expect(new Set(EUROPEAN_WHEEL_ORDER).size).toBe(37);
+    expect(getRouletteColor(0)).toBe('green');
+    expect(getRouletteColor(32)).toBe('red');
+    expect(getRouletteColor(15)).toBe('black');
+
+    const players = makePlayers(2);
+    let state = initRoulette(players, { rounds: 3, startChips: 500, minBet: 10 });
+    state = applyRouletteAction(state, 'p1', {
+      type: 'placeBet',
+      payload: { kind: 'straight', value: 17, amount: 20 },
+    }).state;
+    state = applyRouletteAction(state, 'p2', {
+      type: 'placeBet',
+      payload: { kind: 'red', amount: 50 },
+    }).state;
+    state = applyRouletteAction(state, 'p1', { type: 'confirmBets' }).state;
+    state = applyRouletteAction(state, 'p2', { type: 'confirmBets' }).state;
+    expect(state.subPhase).toBe('readyToSpin');
+
+    // 物理シミュレーションで 17 (黒) に落ちたとする
+    state = applyRouletteAction(state, 'p1', {
+      type: 'resolveSpin',
+      payload: { number: 17 },
+    }).state;
+    expect(state.subPhase).toBe('result');
+    expect(state.lastNumber).toBe(17);
+    expect(state.spinSeq).toBe(1);
+    // p1: 500 - 20 + 20 * 36 = 1200
+    expect(state.players[0].chips).toBe(1200);
+    // p2: 500 - 50 (赤外れ) = 450
+    expect(state.players[1].chips).toBe(450);
+
+    state = applyRouletteAction(state, 'p1', { type: 'nextRound' }).state;
+    expect(state.round).toBe(2);
+    expect(state.subPhase).toBe('betting');
   });
 });

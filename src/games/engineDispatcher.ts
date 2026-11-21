@@ -48,13 +48,6 @@ import {
   sanitizeMemoryState,
 } from './memory';
 import {
-  applyOldMaidAction,
-  computeOldMaidBotAction,
-  initOldMaid,
-  type OldMaidInternalState,
-  sanitizeOldMaidState,
-} from './oldMaid';
-import {
   applyPokerAction,
   computePokerBotAction,
   initPoker,
@@ -62,12 +55,26 @@ import {
   sanitizePokerState,
 } from './poker';
 import {
+  applyOldMaidAction,
+  computeOldMaidBotAction,
+  initOldMaid,
+  type OldMaidInternalState,
+  sanitizeOldMaidState,
+} from './oldMaid';
+import {
   applyReversiAction,
   computeReversiBotAction,
   initReversi,
   type ReversiInternalState,
   sanitizeReversiState,
 } from './reversi';
+import {
+  applyRouletteAction,
+  computeRouletteBotAction,
+  initRoulette,
+  type RouletteInternalState,
+  sanitizeRouletteState,
+} from './roulette';
 import {
   applySevensAction,
   computeSevensBotAction,
@@ -96,6 +103,7 @@ import type {
   PlayerInfo,
   PokerRules,
   ReversiRules,
+  RouletteRules,
   SevensRules,
   SpeedRules,
 } from '../types/game';
@@ -112,7 +120,8 @@ export type AnyInternalState =
   | ReversiInternalState
   | GomokuInternalState
   | Connect4InternalState
-  | ChinchiroInternalState;
+  | ChinchiroInternalState
+  | RouletteInternalState;
 
 export function initGameEngine(
   gameId: GameId,
@@ -144,6 +153,8 @@ export function initGameEngine(
       return initConnect4(players, rules as Connect4Rules);
     case 'chinchiro':
       return initChinchiro(players, rules as ChinchiroRules);
+    case 'roulette':
+      return initRoulette(players, rules as RouletteRules);
   }
 }
 
@@ -178,6 +189,8 @@ export function applyGameAction(
       return applyConnect4Action(state as Connect4InternalState, playerId, action);
     case 'chinchiro':
       return applyChinchiroAction(state as ChinchiroInternalState, playerId, action);
+    case 'roulette':
+      return applyRouletteAction(state as RouletteInternalState, playerId, action);
   }
 }
 
@@ -207,9 +220,14 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizeConnect4State(state as Connect4InternalState, playerId);
     case 'chinchiro':
       return sanitizeChinchiroState(state as ChinchiroInternalState, playerId);
+    case 'roulette':
+      return sanitizeRouletteState(state as RouletteInternalState, playerId);
   }
 }
 
+/**
+ * ホスト側で定期的に呼ばれ、Botの思考やタイムアウト処理を進める
+ */
 export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInternalState | null {
   if (state.phase !== 'playing') return null;
 
@@ -246,12 +264,14 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
     case 'doubt': {
       const s = state as DoubtInternalState;
       if (s.subPhase === 'doubtWindow') {
+        // Bot のダウト判定
         for (const p of s.players) {
           if (p.isBot && p.id !== s.lastPlay?.playerId) {
             const act = computeDoubtBotAction(s, p.id);
             if (act) return applyDoubtAction(s, p.id, act).state;
           }
         }
+        // 時間切れで次へ
         if (Date.now() >= s.windowEndsAt) {
           return applyDoubtAction(s, s.players[0].id, { type: 'proceedWindow' }).state;
         }
@@ -326,6 +346,15 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
       const act = computeChinchiroBotAction(s);
       if (!act) return null;
       return applyChinchiroAction(s, current.id, act).state;
+    }
+    case 'roulette': {
+      const s = state as RouletteInternalState;
+      if (s.subPhase !== 'betting') return null;
+      const bot = s.players.find((p) => p.isBot && !p.confirmed);
+      if (!bot) return null;
+      const act = computeRouletteBotAction(s, bot.id);
+      if (!act) return null;
+      return applyRouletteAction(s, bot.id, act).state;
     }
   }
 }

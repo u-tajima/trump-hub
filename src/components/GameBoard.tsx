@@ -10,6 +10,7 @@ import type { MemoryClientState } from '../games/memory';
 import type { OldMaidClientState } from '../games/oldMaid';
 import type { PokerClientState } from '../games/poker';
 import type { ReversiClientState } from '../games/reversi';
+import type { RouletteClientState } from '../games/roulette';
 import { GAME_REGISTRY } from '../games/registry';
 import type { SevensClientState } from '../games/sevens';
 import type { SpeedClientState } from '../games/speed';
@@ -26,6 +27,7 @@ import { MemoryBoard } from './boards/MemoryBoard';
 import { OldMaidBoard } from './boards/OldMaidBoard';
 import { PokerBoard } from './boards/PokerBoard';
 import { ReversiBoard } from './boards/ReversiBoard';
+import { RouletteBoard } from './boards/RouletteBoard';
 import { SevensBoard } from './boards/SevensBoard';
 import { SpeedBoard } from './boards/SpeedBoard';
 
@@ -119,6 +121,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         )}
         {gameId === 'chinchiro' && (
           <ChinchiroBoard state={gameState as ChinchiroClientState} onAction={onAction} />
+        )}
+        {gameId === 'roulette' && (
+          <RouletteBoard state={gameState as RouletteClientState} onAction={onAction} />
         )}
       </main>
 

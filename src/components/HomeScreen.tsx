@@ -42,6 +42,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     gomoku: { ...GAME_REGISTRY.gomoku.defaultRules },
     connect4: { ...GAME_REGISTRY.connect4.defaultRules },
     chinchiro: { ...GAME_REGISTRY.chinchiro.defaultRules },
+    roulette: { ...GAME_REGISTRY.roulette.defaultRules },
   }));
   const [showRules, setShowRules] = useState(false);
 
@@ -64,7 +65,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <header className="hero-header">
         <div className="hero-badge">P2P ONLINE TABLE</div>
         <h1 className="hero-title">TABLE HUB</h1>
-        <p className="hero-subtitle">スマホで集まってすぐ遊べる！トランプ・ボード・ダイス</p>
+        <p className="hero-subtitle">スマホで集まってすぐ遊べる！トランプ・ボード・カジノ</p>
       </header>
 
       <section className="card-panel name-panel">
@@ -129,10 +130,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="game-pills" style={{ marginBottom: 8 }}>
             {(
               [
-                { id: 'all', label: 'すべて (12)' },
+                { id: 'all', label: 'すべて (13)' },
                 { id: 'card', label: 'カード (8)' },
                 { id: 'board', label: 'ボード (3)' },
-                { id: 'dice', label: 'ダイス (1)' },
+                { id: 'dice', label: 'ダイス・ルーレット (2)' },
               ] as const
             ).map((cat) => (
               <button

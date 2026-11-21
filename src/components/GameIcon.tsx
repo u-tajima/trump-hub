@@ -10,6 +10,7 @@ import {
   Grid3X3,
   Hash,
   Spade,
+  Target,
   Zap,
 } from 'lucide-react';
 
@@ -24,7 +25,8 @@ export type GameIconKey =
   | 'disc'
   | 'grid'
   | 'columns'
-  | 'dice';
+  | 'dice'
+  | 'target';
 
 interface GameIconProps {
   name: GameIconKey;
@@ -56,5 +58,7 @@ export const GameIcon: React.FC<GameIconProps> = ({ name, size = 18, className }
       return <Columns3 size={size} className={className} />;
     case 'dice':
       return <Dices size={size} className={className} />;
+    case 'target':
+      return <Target size={size} className={className} />;
   }
 };

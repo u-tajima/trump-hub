@@ -445,6 +445,54 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
       { key: 'shonbenEnabled', label: 'ションベンあり', description: 'まれに器からこぼれて即負け（約3%）が発生する', type: 'boolean' },
     ],
   },
+  roulette: {
+    id: 'roulette',
+    category: 'dice',
+    name: 'ルーレット',
+    subtitle: '3D物理ホイールで玉の行方を占う',
+    icon: 'target',
+    minPlayers: 1,
+    maxPlayers: 6,
+    description: '本格的な3D物理エンジンで回るヨーロピアンルーレット！赤黒・ダズン・一点賭けでチップを増やそう。',
+    defaultRules: {
+      rounds: 5,
+      startChips: 500,
+      minBet: 10,
+    },
+    ruleFields: [
+      {
+        key: 'rounds',
+        label: 'ラウンド数',
+        description: '何スピン遊んだら終了するか',
+        type: 'select',
+        options: [
+          { value: 3, label: '3ラウンド' },
+          { value: 5, label: '5ラウンド' },
+          { value: 10, label: '10ラウンド' },
+        ],
+      },
+      {
+        key: 'startChips',
+        label: '初期チップ',
+        description: 'ゲーム開始時の持ちチップ',
+        type: 'select',
+        options: [
+          { value: 500, label: '500' },
+          { value: 1000, label: '1000' },
+        ],
+      },
+      {
+        key: 'minBet',
+        label: '最小ベット単位',
+        description: '1タップあたりの基準ベット額',
+        type: 'select',
+        options: [
+          { value: 10, label: '10' },
+          { value: 50, label: '50' },
+        ],
+      },
+    ],
+  },
 };
 
 export const GAME_LIST: GameMeta[] = Object.values(GAME_REGISTRY);
