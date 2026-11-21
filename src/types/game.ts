@@ -6,6 +6,7 @@ export type GameId =
   | 'doubt'
   | 'memory'
   | 'poker'
+  | 'holdem'
   | 'reversi'
   | 'gomoku'
   | 'connect4'
@@ -65,6 +66,12 @@ export interface PokerRules {
   jokerEnabled: boolean;
 }
 
+export interface HoldemRules {
+  rounds: 3 | 5 | 10;
+  startChips: 500 | 1000;
+  bigBlind: 10 | 20;
+}
+
 export interface ReversiRules {
   boardSize: 6 | 8;
   parallelSetup: boolean;
@@ -94,6 +101,7 @@ export type GameRulesMap = {
   doubt: DoubtRules;
   memory: MemoryRules;
   poker: PokerRules;
+  holdem: HoldemRules;
   reversi: ReversiRules;
   gomoku: GomokuRules;
   connect4: Connect4Rules;
