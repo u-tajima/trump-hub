@@ -119,8 +119,26 @@ function settleRound(state: ChinchiroInternalState): ChinchiroInternalState {
   for (let i = 0; i < players.length; i++) {
     if (i === state.dealerIndex) continue;
     const child = players[i];
-    const cHand = child.currentHand!;
+    const cHand = child.currentHand;
     const stake = Math.max(5, child.stake);
+
+    if (!cHand) {
+      // 親の即決役（ピンゾロ・アラシ・シゴロ＝親の総取り / ヒフミ・ションベン・目なし＝親の総払い）
+      if (dHand.strength > 0) {
+        const amt = stake * dHand.multiplier;
+        child.points -= amt;
+        child.lastDelta -= amt;
+        dealer.points += amt;
+        dealer.lastDelta += amt;
+      } else {
+        const amt = stake * dHand.multiplier;
+        child.points += amt;
+        child.lastDelta += amt;
+        dealer.points -= amt;
+        dealer.lastDelta -= amt;
+      }
+      continue;
+    }
 
     if (cHand.strength > dHand.strength) {
       const amt = stake * cHand.multiplier;
@@ -210,11 +228,10 @@ export function applyChinchiroAction(
     payload.dice.length === 3 &&
     payload.dice.every((n) => Number.isInteger(n) && n >= 1 && n <= 6);
 
-  const isShonben = validPayloadDice
-    ? Boolean(state.rules.shonbenEnabled && payload?.isShonben)
-    : typeof payload?.isShonben === 'boolean'
-    ? state.rules.shonbenEnabled && payload.isShonben
-    : state.rules.shonbenEnabled && Math.random() < 0.03;
+  const isShonben =
+    typeof payload?.isShonben === 'boolean'
+      ? state.rules.shonbenEnabled && payload.isShonben
+      : state.rules.shonbenEnabled && Math.random() < 0.03;
 
   const dice: [number, number, number] = validPayloadDice
     ? [payload!.dice![0], payload!.dice![1], payload!.dice![2]]
@@ -244,6 +261,11 @@ export function applyChinchiroAction(
 
   if (!isConfirmed) {
     return { state: nextState };
+  }
+
+  // 親が即決役（ピンゾロ・アラシ・シゴロ・ヒフミ・ションベン・3回目目なし）を出した場合は即精算
+  if (state.turnIndex === state.dealerIndex && hand.rank !== 'normal') {
+    return { state: settleRound(nextState) };
   }
 
   // まだ振っていないプレイヤーがいるか

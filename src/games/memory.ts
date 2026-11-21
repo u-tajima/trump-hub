@@ -23,6 +23,7 @@ export interface MemoryInternalState {
   seenIndices?: number[];   // これまでに公開されたタイルインデックスの履歴（古い順→新しい順）
   turnIndex: number;
   awaitingReset: boolean; // 2枚めくって不一致だった時の一時表示中
+  resetAt?: number;
   phase: 'playing' | 'finished';
   lastLog: string;
 }
@@ -105,7 +106,7 @@ export function applyMemoryAction(
 ): { state: MemoryInternalState; error?: string } {
   if (state.phase !== 'playing') return { state, error: 'ゲームは終了しています' };
 
-  if (action.type === 'resetMismatch') {
+    if (action.type === 'resetMismatch') {
     if (!state.awaitingReset) return { state };
     const nextTurn = (state.turnIndex + 1) % state.players.length;
     return {
@@ -113,6 +114,7 @@ export function applyMemoryAction(
         ...state,
         flippedIndices: [],
         awaitingReset: false,
+        resetAt: 0,
         turnIndex: nextTurn,
         lastLog: `${state.players[nextTurn].name} のターン！`,
       },
@@ -198,6 +200,7 @@ export function applyMemoryAction(
           flippedIndices,
           seenIndices,
           awaitingReset: true,
+          resetAt: Date.now() + 900,
           lastLog: `ざんねん！ (${formatCardShort(first.card)} / ${formatCardShort(second.card)})`,
         },
       };

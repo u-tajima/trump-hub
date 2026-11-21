@@ -116,7 +116,7 @@ export function applySpeedAction(
   ];
 
   if (action.type === 'refill') {
-    players[pIdx] = refillHand(players[pIdx]);
+    players[pIdx] = { ...refillHand(players[pIdx]), readyFlip: false };
     return { state: { ...state, players } };
   }
 
@@ -169,19 +169,39 @@ export function applySpeedAction(
   if (action.type === 'readyFlip') {
     players[pIdx].readyFlip = !players[pIdx].readyFlip;
 
-    // 相手がBotなら、Botに出せるカードがない時は即座にBotも readyFlip にする
+    // 相手がBotなら、Botに出せるカードがなく補充もできない時は即座にBotも readyFlip にする
     const otherIdx = pIdx === 0 ? 1 : 0;
-    if (players[otherIdx].isBot && !hasAnyPlayableCard(players[otherIdx], state.centerPiles, state.rules)) {
+    const botCanRefill =
+      !state.rules.autoRefill &&
+      players[otherIdx].fieldHand.length < 4 &&
+      players[otherIdx].drawPile.length > 0;
+    if (
+      players[otherIdx].isBot &&
+      !botCanRefill &&
+      !hasAnyPlayableCard(players[otherIdx], state.centerPiles, state.rules)
+    ) {
       players[otherIdx].readyFlip = true;
     }
 
     if (players[0].readyFlip && players[1].readyFlip) {
       const centerPiles: [Card, Card] = [...state.centerPiles] as [Card, Card];
+      const activeIds = new Set<string>([
+        ...players[0].fieldHand.map((c) => c.id),
+        ...players[0].drawPile.map((c) => c.id),
+        ...players[1].fieldHand.map((c) => c.id),
+        ...players[1].drawPile.map((c) => c.id),
+        centerPiles[0].id,
+        centerPiles[1].id,
+      ]);
+      const buriedPool = shuffle(createDeck(0).filter((c) => !activeIds.has(c.id)));
+
       for (let i = 0; i < 2; i++) {
         if (players[i].drawPile.length > 0) {
           centerPiles[i] = players[i].drawPile.shift()!;
         } else if (players[i].fieldHand.length > 1) {
           centerPiles[i] = players[i].fieldHand.shift()!;
+        } else if (buriedPool.length > 0) {
+          centerPiles[i] = buriedPool.shift()!;
         }
         players[i].readyFlip = false;
       }

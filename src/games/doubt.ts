@@ -24,6 +24,7 @@ export interface DoubtInternalState {
   lastPlay: DoubtLastPlay | null;
   subPhase: 'play' | 'doubtWindow' | 'reveal';
   windowEndsAt: number;
+  botDecidedIds?: string[];
   lastReveal: {
     callerId: string;
     callerName: string;
@@ -135,8 +136,20 @@ export function applyDoubtAction(
         lastPlay: { playerId: current.id, cards: played, declaredRank },
         subPhase: 'doubtWindow',
         windowEndsAt: Date.now() + state.rules.doubtWindowSec * 1000,
+        botDecidedIds: [],
         lastReveal: null,
         lastLog: `${current.name} が「${rankStr}」を ${played.length}枚 出しました！ダウトする？`,
+      },
+    };
+  }
+
+  if (action.type === 'passDoubt' && state.subPhase === 'doubtWindow') {
+    const decided = state.botDecidedIds ?? [];
+    if (decided.includes(playerId)) return { state };
+    return {
+      state: {
+        ...state,
+        botDecidedIds: [...decided, playerId],
       },
     };
   }
@@ -161,8 +174,9 @@ export function applyDoubtAction(
       ? `💥 ダウト成功！(${cardsText}) ${target.name} が山札 ${state.pile.length}枚 を引き取りました！`
       : `😅 ダウト失敗！本当でした(${cardsText})。${caller.name} が ${state.pile.length}枚 を引き取りました！`;
 
-    // 本当で手札0ならそのまま勝利
-    const winner = players.find((p) => p.hand.length === 0);
+    // 本当で出した本人の手札が0ならそのまま勝利
+    const targetAfter = players.find((p) => p.id === target.id);
+    const winner = !wasLie && targetAfter && targetAfter.hand.length === 0 ? targetAfter : null;
     if (winner) {
       return {
         state: {
@@ -310,6 +324,7 @@ export function computeDoubtBotAction(state: DoubtInternalState, botId: string):
   }
 
   if (state.subPhase === 'doubtWindow' && state.lastPlay && state.lastPlay.playerId !== botId) {
+    if ((state.botDecidedIds ?? []).includes(botId)) return null;
     const bot = state.players.find((p) => p.id === botId);
     const target = state.players.find((p) => p.id === state.lastPlay!.playerId);
     if (!bot || !target) return null;

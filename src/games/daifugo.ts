@@ -247,10 +247,13 @@ export function canPlayOnTable(
   }
 
   const rev = isReversed(state);
-  if (parsed.isJokerSingle) {
+  if (parsed.isJokerSingle || parsed.effectiveRank === 99) {
+    if (top.effectiveRank === 99) {
+      return { ok: false, reason: 'ジョーカーにはより強いカードを出せません' };
+    }
     return { ok: true, parsed };
   }
-  if (top.isJokerSingle) {
+  if (top.isJokerSingle || top.effectiveRank === 99) {
     return { ok: false, reason: 'ジョーカーには♠3返しのみ出せます' };
   }
 
@@ -366,15 +369,70 @@ function checkPlayerFinish(
 
   const players = state.players.map((pl) => ({ ...pl }));
   const finishedOrder = [...state.finishedOrder];
+  const foulOrder = [...state.foulOrder];
   const rank = finishedOrder.length + 1;
   players[playerIdx].finishRank = rank;
   finishedOrder.push(p.id);
+  let logText = `${state.lastLog} / ${p.name} ${rank}位上がり`;
+
+  if (
+    state.rules.miyakoochi &&
+    rank === 1 &&
+    state.winnerIdsLastGame.length > 0 &&
+    state.winnerIdsLastGame[0] !== p.id
+  ) {
+    const prevKing = players.find((pl) => pl.id === state.winnerIdsLastGame[0]);
+    if (prevKing && prevKing.finishRank === null && !prevKing.foulFinish) {
+      prevKing.foulFinish = true;
+      prevKing.hand = [];
+      foulOrder.unshift(prevKing.id);
+      logText += ` [${prevKing.name} 都落ち]`;
+    }
+  }
+
   return finalizeIfGameOver({
     ...state,
     players,
     finishedOrder,
-    lastLog: `${state.lastLog} / ${p.name} ${rank}位上がり`,
+    foulOrder,
+    lastLog: logText,
   });
+}
+
+function advanceTurnAfterPlay(
+  state: DaifugoInternalState,
+  actorIdx: number,
+  stepCount = 1
+): DaifugoInternalState {
+  const activeUnpassed = state.players.filter(
+    (p) => p.finishRank === null && !p.foulFinish && !p.passed
+  );
+  const actor = state.players[actorIdx];
+
+  if (
+    activeUnpassed.length === 0 ||
+    (activeUnpassed.length === 1 && activeUnpassed[0].id === actor.id)
+  ) {
+    let resumeIdx = actorIdx;
+    if (actor.finishRank !== null || actor.foulFinish) {
+      resumeIdx = findNextActivePlayerIndex(state, actorIdx, true, 1);
+    }
+    return clearTable(
+      state,
+      resumeIdx,
+      `${state.lastLog} → 場が流れました（${state.players[resumeIdx].name} の親番）`
+    );
+  }
+
+  const nextIdx = findNextActivePlayerIndex(state, actorIdx, false, stepCount);
+  if (nextIdx === actorIdx) {
+    return clearTable(
+      state,
+      actorIdx,
+      `${state.lastLog} → 全員スキップで場が流れました（${actor.name} の親番）`
+    );
+  }
+  return { ...state, turnIndex: nextIdx };
 }
 
 export function applyDaifugoAction(
@@ -396,13 +454,13 @@ export function applyDaifugoAction(
     const actor = state.players[actorIdx];
 
     if (eff.type === 'sevenPass' && action.type === 'resolveSevenPass') {
-      const cardIds = (action.payload as { cardIds?: string[] })?.cardIds ?? [];
+      const cardIds = Array.from(new Set((action.payload as { cardIds?: string[] })?.cardIds ?? []));
       const need = Math.min(eff.count, actor.hand.length);
-      if (cardIds.length !== need) {
+      const passedCards = actor.hand.filter((c) => cardIds.includes(c.id));
+      if (passedCards.length !== need) {
         return { state, error: `渡すカードを ${need}枚 選んでください` };
       }
       const nextReceiverIdx = findNextActivePlayerIndex(state, actorIdx, true, 1);
-      const passedCards = actor.hand.filter((c) => cardIds.includes(c.id));
       const players = state.players.map((p, idx) => {
         if (idx === actorIdx) return { ...p, hand: p.hand.filter((c) => !cardIds.includes(c.id)) };
         if (idx === nextReceiverIdx) return { ...p, hand: sortCardsByRank([...p.hand, ...passedCards], true) };
@@ -416,14 +474,17 @@ export function applyDaifugoAction(
       };
       nextState = checkPlayerFinish(nextState, actorIdx);
       if (nextState.phase === 'finished') return { state: nextState };
-      nextState.turnIndex = findNextActivePlayerIndex(nextState, actorIdx, false, 1);
+      const topCards = nextState.table[nextState.table.length - 1]?.cards ?? [];
+      const fiveCount = nextState.rules.fiveSkip ? topCards.filter((c) => c.rank === 5).length : 0;
+      nextState = advanceTurnAfterPlay(nextState, actorIdx, 1 + fiveCount);
       return { state: nextState };
     }
 
     if (eff.type === 'tenDiscard' && action.type === 'resolveTenDiscard') {
-      const cardIds = (action.payload as { cardIds?: string[] })?.cardIds ?? [];
+      const cardIds = Array.from(new Set((action.payload as { cardIds?: string[] })?.cardIds ?? []));
       const need = Math.min(eff.count, actor.hand.length);
-      if (cardIds.length !== need) {
+      const discardedCards = actor.hand.filter((c) => cardIds.includes(c.id));
+      if (discardedCards.length !== need) {
         return { state, error: `捨てるカードを ${need}枚 選んでください` };
       }
       const players = state.players.map((p, idx) =>
@@ -437,7 +498,9 @@ export function applyDaifugoAction(
       };
       nextState = checkPlayerFinish(nextState, actorIdx);
       if (nextState.phase === 'finished') return { state: nextState };
-      nextState.turnIndex = findNextActivePlayerIndex(nextState, actorIdx, false, 1);
+      const topCards = nextState.table[nextState.table.length - 1]?.cards ?? [];
+      const fiveCount = nextState.rules.fiveSkip ? topCards.filter((c) => c.rank === 5).length : 0;
+      nextState = advanceTurnAfterPlay(nextState, actorIdx, 1 + fiveCount);
       return { state: nextState };
     }
 
@@ -448,6 +511,7 @@ export function applyDaifugoAction(
       }
       let removedTotal = 0;
       const players = state.players.map((p) => {
+        if (p.finishRank !== null || p.foulFinish) return p;
         const nextHand = p.hand.filter((c) => c.rank !== targetRank);
         removedTotal += p.hand.length - nextHand.length;
         return { ...p, hand: nextHand };
@@ -462,7 +526,9 @@ export function applyDaifugoAction(
         nextState = checkPlayerFinish(nextState, i);
         if (nextState.phase === 'finished') return { state: nextState };
       }
-      nextState.turnIndex = findNextActivePlayerIndex(nextState, actorIdx, false, 1);
+      const topCards = nextState.table[nextState.table.length - 1]?.cards ?? [];
+      const fiveCount = nextState.rules.fiveSkip ? topCards.filter((c) => c.rank === 5).length : 0;
+      nextState = advanceTurnAfterPlay(nextState, actorIdx, 1 + fiveCount);
       return { state: nextState };
     }
 
@@ -587,6 +653,7 @@ export function applyDaifugoAction(
           const prevKing = players.find((p) => p.id === state.winnerIdsLastGame[0]);
           if (prevKing && prevKing.finishRank === null && !prevKing.foulFinish) {
             prevKing.foulFinish = true;
+            prevKing.hand = [];
             foulOrder.unshift(prevKing.id);
             miyakoochiTriggered = true;
             logs.push(`[${prevKing.name} 都落ち]`);
@@ -658,10 +725,10 @@ export function applyDaifugoAction(
       }
     }
 
-    // 5飛び
+    // 5飛び & 次のターン決定（他の未上がり者が全員パス済みなら場を流す）
     const fiveCount = state.rules.fiveSkip ? selectedCards.filter((c) => c.rank === 5).length : 0;
     const stepCount = 1 + fiveCount;
-    nextState.turnIndex = findNextActivePlayerIndex(nextState, state.turnIndex, false, stepCount);
+    nextState = advanceTurnAfterPlay(nextState, state.turnIndex, stepCount);
     if (miyakoochiTriggered) {
       nextState = finalizeIfGameOver(nextState);
     }

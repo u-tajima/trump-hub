@@ -133,13 +133,19 @@ export type AnyInternalState =
 export function initGameEngine(
   gameId: GameId,
   players: PlayerInfo[],
-  rules: GameRulesMap[GameId]
+  rules: GameRulesMap[GameId],
+  prevState?: AnyInternalState | null
 ): AnyInternalState {
   switch (gameId) {
     case 'scoreboard':
       return { rules: rules as ScoreBoardRoomRules, phase: 'playing' };
-    case 'daifugo':
-      return initDaifugo(players, rules as DaifugoRules);
+    case 'daifugo': {
+      const prevDaifugo =
+        prevState && 'finishedOrder' in prevState && 'revolution' in prevState
+          ? (prevState as DaifugoInternalState)
+          : null;
+      return initDaifugo(players, rules as DaifugoRules, prevDaifugo?.finishedOrder ?? []);
+    }
     case 'sevens':
       return initSevens(players, rules as SevensRules);
     case 'speed':
@@ -249,10 +255,11 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
       return null;
     case 'daifugo': {
       const s = state as DaifugoInternalState;
-      const current = s.players[s.turnIndex];
-      if (!current?.isBot) return null;
+      const actorId = s.pendingEffect ? s.pendingEffect.playerId : s.players[s.turnIndex]?.id;
+      const actor = s.players.find((p) => p.id === actorId);
+      if (!actor?.isBot) return null;
       const act = computeDaifugoBotAction(s);
-      return applyDaifugoAction(s, current.id, act).state;
+      return applyDaifugoAction(s, actor.id, act).state;
     }
     case 'sevens': {
       const s = state as SevensInternalState;
@@ -279,11 +286,13 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
     case 'doubt': {
       const s = state as DoubtInternalState;
       if (s.subPhase === 'doubtWindow') {
-        // Bot のダウト判定
+        const decided = s.botDecidedIds ?? [];
+        // Bot のダウト判定（1回のウィンドウにつき各Botは1度だけ判定する）
         for (const p of s.players) {
-          if (p.isBot && p.id !== s.lastPlay?.playerId) {
+          if (p.isBot && p.id !== s.lastPlay?.playerId && !decided.includes(p.id)) {
             const act = computeDoubtBotAction(s, p.id);
             if (act) return applyDoubtAction(s, p.id, act).state;
+            return applyDoubtAction(s, p.id, { type: 'passDoubt' }).state;
           }
         }
         // 時間切れで次へ
@@ -304,6 +313,7 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
     case 'memory': {
       const s = state as MemoryInternalState;
       if (s.awaitingReset) {
+        if (s.resetAt && Date.now() < s.resetAt) return null;
         return applyMemoryAction(s, s.players[0].id, { type: 'resetMismatch' }).state;
       }
       const current = s.players[s.turnIndex];
@@ -364,6 +374,13 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
     }
     case 'roulette': {
       const s = state as RouletteInternalState;
+      if (s.subPhase === 'readyToSpin') {
+        const spinner = s.players.find((p) => p.id === s.spinnerPlayerId);
+        if (spinner?.isBot) {
+          return applyRouletteAction(s, spinner.id, { type: 'resolveSpin' }).state;
+        }
+        return null;
+      }
       if (s.subPhase !== 'betting') return null;
       const bot = s.players.find((p) => p.isBot && !p.confirmed);
       if (!bot) return null;

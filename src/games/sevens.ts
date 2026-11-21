@@ -122,6 +122,8 @@ export function canPlaceNormalCard(suit: NormalSuit, rank: number, state: Sevens
   if (rank < 7 && row[rank + 1]) return true;
 
   if (state.rules.tunnel) {
+    if (rank > 1 && row[rank - 1]) return true;
+    if (rank < 13 && row[rank + 1]) return true;
     if (rank === 1 && row[13]) return true;
     if (rank === 13 && row[1]) return true;
   }
@@ -193,14 +195,16 @@ export function applySevensAction(
       club: [...state.board.club],
     };
     const eliminatedOrder = [...state.eliminatedOrder];
+    const jokerSlots = { ...state.jokerSlots };
 
     const players = state.players.map((p, idx) => {
       if (idx !== state.turnIndex) return p;
       if (isEliminated) {
-        // 残りの手札をすべてオープン
+        // 残りの手札をすべてオープン（ジョーカー仮置き枠があれば実カードで上書き）
         p.hand.forEach((c) => {
           if (c.suit !== 'joker') {
             board[c.suit as NormalSuit][c.rank] = true;
+            delete jokerSlots[`${c.suit}-${c.rank}`];
           }
         });
         eliminatedOrder.unshift(p.id);
@@ -218,6 +222,7 @@ export function applySevensAction(
         ...state,
         players,
         board,
+        jokerSlots,
         eliminatedOrder,
         lastLog: log,
       }),
