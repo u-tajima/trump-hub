@@ -37,6 +37,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     doubt: { ...GAME_REGISTRY.doubt.defaultRules },
     memory: { ...GAME_REGISTRY.memory.defaultRules },
     poker: { ...GAME_REGISTRY.poker.defaultRules },
+    holdem: { ...GAME_REGISTRY.holdem.defaultRules },
     reversi: { ...GAME_REGISTRY.reversi.defaultRules },
     gomoku: { ...GAME_REGISTRY.gomoku.defaultRules },
     connect4: { ...GAME_REGISTRY.connect4.defaultRules },
@@ -128,8 +129,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="game-pills" style={{ marginBottom: 8 }}>
             {(
               [
-                { id: 'all', label: 'すべて (11)' },
-                { id: 'card', label: 'カード (7)' },
+                { id: 'all', label: 'すべて (12)' },
+                { id: 'card', label: 'カード (8)' },
                 { id: 'board', label: 'ボード (3)' },
                 { id: 'dice', label: 'ダイス (1)' },
               ] as const

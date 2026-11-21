@@ -34,6 +34,13 @@ import {
   sanitizeGomokuState,
 } from './gomoku';
 import {
+  applyHoldemAction,
+  computeHoldemBotAction,
+  type HoldemInternalState,
+  initHoldem,
+  sanitizeHoldemState,
+} from './holdem';
+import {
   applyMemoryAction,
   computeMemoryBotAction,
   initMemory,
@@ -83,6 +90,7 @@ import type {
   GameId,
   GameRulesMap,
   GomokuRules,
+  HoldemRules,
   MemoryRules,
   OldMaidRules,
   PlayerInfo,
@@ -100,6 +108,7 @@ export type AnyInternalState =
   | DoubtInternalState
   | MemoryInternalState
   | PokerInternalState
+  | HoldemInternalState
   | ReversiInternalState
   | GomokuInternalState
   | Connect4InternalState
@@ -125,6 +134,8 @@ export function initGameEngine(
       return initMemory(players, rules as MemoryRules);
     case 'poker':
       return initPoker(players, rules as PokerRules);
+    case 'holdem':
+      return initHoldem(players, rules as HoldemRules);
     case 'reversi':
       return initReversi(players, rules as ReversiRules);
     case 'gomoku':
@@ -157,6 +168,8 @@ export function applyGameAction(
       return applyMemoryAction(state as MemoryInternalState, playerId, action);
     case 'poker':
       return applyPokerAction(state as PokerInternalState, playerId, action);
+    case 'holdem':
+      return applyHoldemAction(state as HoldemInternalState, playerId, action);
     case 'reversi':
       return applyReversiAction(state as ReversiInternalState, playerId, action);
     case 'gomoku':
@@ -184,6 +197,8 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizeMemoryState(state as MemoryInternalState, playerId);
     case 'poker':
       return sanitizePokerState(state as PokerInternalState, playerId);
+    case 'holdem':
+      return sanitizeHoldemState(state as HoldemInternalState, playerId);
     case 'reversi':
       return sanitizeReversiState(state as ReversiInternalState, playerId);
     case 'gomoku':
@@ -270,6 +285,15 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
       const act = computePokerBotAction(s);
       if (!act) return null;
       return applyPokerAction(s, current.id, act).state;
+    }
+    case 'holdem': {
+      const s = state as HoldemInternalState;
+      if (s.subPhase === 'showdown') return null;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeHoldemBotAction(s);
+      if (!act) return null;
+      return applyHoldemAction(s, current.id, act).state;
     }
     case 'reversi': {
       const s = state as ReversiInternalState;

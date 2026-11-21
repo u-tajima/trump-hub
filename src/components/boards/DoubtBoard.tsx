@@ -104,7 +104,7 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
             </div>
             <div className="table-cards-row">
               {state.lastReveal.cards.map((c) => (
-                <PlayingCard key={c.id} card={c} size="xs" animateIn />
+                <PlayingCard key={c.id} card={c} size="xs" flipIn />
               ))}
             </div>
           </div>

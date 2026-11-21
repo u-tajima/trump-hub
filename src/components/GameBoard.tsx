@@ -5,6 +5,7 @@ import type { Connect4ClientState } from '../games/connect4';
 import type { DaifugoClientState } from '../games/daifugo';
 import type { DoubtClientState } from '../games/doubt';
 import type { GomokuClientState } from '../games/gomoku';
+import type { HoldemClientState } from '../games/holdem';
 import type { MemoryClientState } from '../games/memory';
 import type { OldMaidClientState } from '../games/oldMaid';
 import type { PokerClientState } from '../games/poker';
@@ -20,6 +21,7 @@ import { Connect4Board } from './boards/Connect4Board';
 import { DaifugoBoard } from './boards/DaifugoBoard';
 import { DoubtBoard } from './boards/DoubtBoard';
 import { GomokuBoard } from './boards/GomokuBoard';
+import { HoldemBoard } from './boards/HoldemBoard';
 import { MemoryBoard } from './boards/MemoryBoard';
 import { OldMaidBoard } from './boards/OldMaidBoard';
 import { PokerBoard } from './boards/PokerBoard';
@@ -102,6 +104,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         )}
         {gameId === 'poker' && (
           <PokerBoard state={gameState as PokerClientState} onAction={onAction} />
+        )}
+        {gameId === 'holdem' && (
+          <HoldemBoard state={gameState as HoldemClientState} onAction={onAction} />
         )}
         {gameId === 'reversi' && (
           <ReversiBoard state={gameState as ReversiClientState} onAction={onAction} />

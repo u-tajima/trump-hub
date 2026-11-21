@@ -44,7 +44,7 @@ export const MemoryBoard: React.FC<MemoryBoardProps> = ({ state, onAction }) => 
                 <PlayingCard
                   card={tile.card ?? undefined}
                   faceDown={!isFlipped}
-                  animateIn={isFlipped}
+                  flipIn={isFlipped}
                   size="sm"
                   disabled={!isMyTurn || isFlipped || isMatched}
                   onClick={
