@@ -14,7 +14,8 @@ import type { RouletteClientState } from '../games/roulette';
 import { GAME_REGISTRY } from '../games/registry';
 import type { SevensClientState } from '../games/sevens';
 import type { SpeedClientState } from '../games/speed';
-import type { GameId, GameRulesMap } from '../types/game';
+import type { GameId, GameRulesMap, ScoreBoardRoomRules } from '../types/game';
+import type { ScoreBoardOp, ScoreBoardState } from '../utils/scoreBoard';
 import { GameIcon } from './GameIcon';
 import { RuleConfigurator } from './RuleConfigurator';
 import { ChinchiroBoard } from './boards/ChinchiroBoard';
@@ -28,6 +29,7 @@ import { OldMaidBoard } from './boards/OldMaidBoard';
 import { PokerBoard } from './boards/PokerBoard';
 import { ReversiBoard } from './boards/ReversiBoard';
 import { RouletteBoard } from './boards/RouletteBoard';
+import { ScoreRoomBoard } from './boards/ScoreRoomBoard';
 import { SevensBoard } from './boards/SevensBoard';
 import { SpeedBoard } from './boards/SpeedBoard';
 
@@ -42,6 +44,10 @@ interface GameBoardProps {
   onBackToLobby: () => void;
   onLeave: () => void;
   onOpenScoreBoard: () => void;
+  roomScoreBoard?: ScoreBoardState | null;
+  onScoreOp?: (op: ScoreBoardOp) => void;
+  myPlayerName?: string;
+  roomPlayerNames?: string[];
 }
 
 export const GameBoard: React.FC<GameBoardProps> = ({
@@ -55,6 +61,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   onBackToLobby,
   onLeave,
   onOpenScoreBoard,
+  roomScoreBoard,
+  onScoreOp,
+  myPlayerName = '',
+  roomPlayerNames = [],
 }) => {
   const [showRuleModal, setShowRuleModal] = useState(false);
   const meta = GAME_REGISTRY[gameId];
@@ -78,15 +88,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           <span className="top-bar-code">{roomCode}</span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button
-            type="button"
-            className="icon-text-btn"
-            style={{ minWidth: 52, padding: '8px 9px' }}
-            onClick={onOpenScoreBoard}
-          >
-            <ClipboardList size={15} />
-            得点
-          </button>
+          {gameId !== 'scoreboard' && (
+            <button
+              type="button"
+              className="icon-text-btn"
+              style={{ minWidth: 52, padding: '8px 9px' }}
+              onClick={onOpenScoreBoard}
+            >
+              <ClipboardList size={15} />
+              得点
+            </button>
+          )}
           <button
             type="button"
             className="icon-text-btn"
@@ -100,6 +112,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       </header>
 
       <main className="game-main">
+        {gameId === 'scoreboard' && roomScoreBoard && onScoreOp && (
+          <ScoreRoomBoard
+            roomCode={roomCode}
+            rules={rules as ScoreBoardRoomRules}
+            board={roomScoreBoard}
+            onScoreOp={onScoreOp}
+            isHost={isHost}
+            myPlayerName={myPlayerName}
+            roomPlayerNames={roomPlayerNames}
+          />
+        )}
         {gameId === 'daifugo' && (
           <DaifugoBoard state={gameState as DaifugoClientState} onAction={onAction} />
         )}

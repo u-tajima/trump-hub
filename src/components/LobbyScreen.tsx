@@ -120,7 +120,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           <h2 className="panel-title">
             参加者 ({lobby.players.length}/{meta.maxPlayers})
           </h2>
-          {isHost && lobby.players.length < meta.maxPlayers && (
+          {isHost && lobby.config.gameId !== 'scoreboard' && lobby.players.length < meta.maxPlayers && (
             <button type="button" className="chip-btn accent" onClick={onAddBot}>
               <Bot size={15} />
               CPU追加
@@ -210,7 +210,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
             onClick={onStartGame}
           >
             <Play size={18} />
-            ゲームスタート！
+            {lobby.config.gameId === 'scoreboard' ? '得点管理専用ルームを開く' : 'ゲームスタート！'}
           </button>
         </div>
       ) : (

@@ -13,7 +13,7 @@ import {
   tickGameEngine,
 } from './games/engineDispatcher';
 import { GuestPeerSession, HostPeerSession } from './network/peerManager';
-import type { GameId, GameRulesMap, LobbyState, PlayerInfo } from './types/game';
+import type { GameId, GameRulesMap, LobbyState, PlayerInfo, ScoreBoardRoomRules } from './types/game';
 import { getRoomCodeFromUrl } from './utils/roomCode';
 import {
   applyScoreBoardOp,
@@ -158,18 +158,21 @@ export function App() {
 
     const host = new HostPeerSession({
       onRoomReady: (roomCode) => {
+        const isScoreRoom = gameId === 'scoreboard';
+        const baseScore = isScoreRoom ? (rules as ScoreBoardRoomRules).startScore : 0;
+        const initialGame = isScoreRoom ? initGameEngine(gameId, [hostPlayer], rules) : null;
         const initialLobby: LobbyState = {
-          phase: 'lobby',
+          phase: isScoreRoom ? 'playing' : 'lobby',
           config: { roomCode, gameId, rules },
           players: [hostPlayer],
         };
         const boardId = `room_${roomCode}`;
         const initialBoard =
           loadScoreBoardFromStorage(boardId) ??
-          createEmptyScoreBoard(boardId, `部屋 ${roomCode}`, [hostPlayer.name]);
+          createEmptyScoreBoard(boardId, `部屋 ${roomCode}`, [hostPlayer.name], baseScore);
         setRole('host');
         setConnecting(false);
-        syncAllClients(initialLobby, null);
+        syncAllClients(initialLobby, initialGame);
         syncScoreBoard(initialBoard);
       },
       onClientJoin: (pid, name) => {
@@ -182,7 +185,7 @@ export function App() {
             p.id === pid ? { ...p, name, connected: true } : p
           );
         } else {
-          if (cur.phase !== 'lobby') {
+          if (cur.phase !== 'lobby' && cur.config.gameId !== 'scoreboard') {
             hostSessionRef.current?.sendTo(pid, {
               kind: 'error',
               message: 'すでにゲームが進行中です',
@@ -325,6 +328,27 @@ export function App() {
   const handleStartGame = () => {
     const cur = lobbyRef.current;
     if (!cur || role !== 'host') return;
+    if (cur.config.gameId === 'scoreboard' && roomScoreBoardRef.current) {
+      const sbRules = cur.config.rules as ScoreBoardRoomRules;
+      let nextBoard = roomScoreBoardRef.current;
+      const oldBase = nextBoard.baseScore ?? 0;
+      if (
+        oldBase !== sbRules.startScore &&
+        nextBoard.entries.every((e) => e.score === oldBase)
+      ) {
+        nextBoard = applyScoreBoardOp(
+          nextBoard,
+          { type: 'resetScores', baseScore: sbRules.startScore },
+          'システム'
+        );
+      }
+      for (const p of cur.players) {
+        if (!nextBoard.entries.some((e) => e.name === p.name)) {
+          nextBoard = applyScoreBoardOp(nextBoard, { type: 'addEntry', name: p.name }, 'システム');
+        }
+      }
+      syncScoreBoard(nextBoard);
+    }
     const game = initGameEngine(cur.config.gameId, cur.players, cur.config.rules);
     syncAllClients({ ...cur, phase: 'playing' }, game);
   };
@@ -412,6 +436,10 @@ export function App() {
           onBackToLobby={handleBackToLobby}
           onLeave={cleanupSessions}
           onOpenScoreBoard={() => setShowScoreModal(true)}
+          roomScoreBoard={roomScoreBoard}
+          onScoreOp={handleRoomScoreOp}
+          myPlayerName={playerName}
+          roomPlayerNames={lobby.players.map((p) => p.name)}
         />
       )}
 
@@ -436,6 +464,7 @@ export function App() {
               isRoomMode
               canRestoreSaved={role === 'host'}
               roomPlayerNames={lobby.players.map((p) => p.name)}
+              myPlayerName={playerName}
             />
           </div>
         </div>

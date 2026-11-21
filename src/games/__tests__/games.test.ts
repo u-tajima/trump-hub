@@ -18,6 +18,7 @@ import { applySpeedAction, canPlaceOnSpeedPile, computeSpeedBotAction, initSpeed
 import {
   applyScoreBoardOp,
   createEmptyScoreBoard,
+  getScoreBoardZeroSumInfo,
   SCOREBOARD_TTL_MS,
 } from '../../utils/scoreBoard';
 
@@ -356,6 +357,33 @@ describe('ScoreBoard utility', () => {
 
     board = applyScoreBoardOp(board, { type: 'resetScores' }, 'Alice');
     expect(board.entries.every((e) => e.score === 0)).toBe(true);
+  });
+
+  it('detects non-zero-sum imbalances and supports zero-sum transfers and custom baseScore', () => {
+    let board = createEmptyScoreBoard('room_ZS', '部屋 ZS', ['Alice', 'Bob', 'Carol'], 100);
+    expect(getScoreBoardZeroSumInfo(board).isZeroSum).toBe(true);
+    expect(getScoreBoardZeroSumInfo(board).expectedTotal).toBe(300);
+
+    const [alice, bob, carol] = board.entries;
+    // Alice が +30 を入力しただけでは totalDelta = +30 となりゼロサム不一致と判定される
+    board = applyScoreBoardOp(board, { type: 'addDelta', entryId: alice.id, delta: 30 }, 'Alice');
+    const warnInfo = getScoreBoardZeroSumInfo(board);
+    expect(warnInfo.isZeroSum).toBe(false);
+    expect(warnInfo.totalDelta).toBe(30);
+
+    // Bob が -30 を入力すると収支合計が ±0 に戻りゼロサム一致になる
+    board = applyScoreBoardOp(board, { type: 'addDelta', entryId: bob.id, delta: -30 }, 'Bob');
+    expect(getScoreBoardZeroSumInfo(board).isZeroSum).toBe(true);
+
+    // transferScore なら常にゼロサムを維持したまま移動できる
+    board = applyScoreBoardOp(
+      board,
+      { type: 'transferScore', fromEntryId: carol.id, toEntryId: alice.id, amount: 25 },
+      'Alice'
+    );
+    expect(getScoreBoardZeroSumInfo(board).isZeroSum).toBe(true);
+    expect(board.entries.find((e) => e.id === alice.id)?.score).toBe(155);
+    expect(board.entries.find((e) => e.id === carol.id)?.score).toBe(75);
   });
 });
 

@@ -32,6 +32,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [roomInput, setRoomInput] = useState<string>(initialRoomCode ?? '');
   const [selectedGame, setSelectedGame] = useState<GameId>('daifugo');
   const [rulesByGame, setRulesByGame] = useState<GameRulesMap>(() => ({
+    scoreboard: { ...GAME_REGISTRY.scoreboard.defaultRules },
     daifugo: { ...GAME_REGISTRY.daifugo.defaultRules },
     sevens: { ...GAME_REGISTRY.sevens.defaultRules },
     speed: { ...GAME_REGISTRY.speed.defaultRules },
@@ -140,7 +141,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="game-pills" style={{ marginBottom: 8 }}>
             {(
               [
-                { id: 'all', label: 'すべて (13)' },
+                { id: 'all', label: 'すべて (14)' },
+                { id: 'tool', label: '得点管理 (1)' },
                 { id: 'card', label: 'カード (8)' },
                 { id: 'board', label: 'ボード (3)' },
                 { id: 'dice', label: 'ダイス・ルーレット (2)' },
