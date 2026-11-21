@@ -1,43 +1,74 @@
-export type GameId = 'daifugo' | 'sevens' | 'speed' | 'oldmaid' | 'doubt' | 'memory';
+export type GameId =
+  | 'daifugo'
+  | 'sevens'
+  | 'speed'
+  | 'oldmaid'
+  | 'doubt'
+  | 'memory'
+  | 'reversi'
+  | 'gomoku'
+  | 'connect4'
+  | 'chinchiro';
 
 export interface DaifugoRules {
   jokerCount: 0 | 1 | 2;
-  revolution: boolean;       // 革命 (4枚以上同数/階段)
-  eightCut: boolean;         // 8切り
-  staircase: boolean;        // 階段 (同スート3枚以上)
-  suitLock: boolean;         // しばり (スート縛り)
-  elevenBack: boolean;       // イレブンバック (Jで一時逆転)
-  spade3Return: boolean;     // スペ3返し (ジョーカー単体に♠3)
-  miyakoochi: boolean;       // 都落ち (2戦目以降・前大富豪が1位以外なら大貧民)
-  banFinishStrong: boolean;  // 反則上がり禁止 (2 / ジョーカー / 8 / スペ3返しでの上がり禁止)
+  revolution: boolean;
+  eightCut: boolean;
+  staircase: boolean;
+  suitLock: boolean;
+  elevenBack: boolean;
+  spade3Return: boolean;
+  miyakoochi: boolean;
+  banFinishStrong: boolean;
 }
 
 export interface SevensRules {
-  passLimit: 0 | 3 | 5 | 99; // 99 = 無制限
-  tunnel: boolean;           // A-Kトンネル
-  jokerEnabled: boolean;     // ジョーカーあり
+  passLimit: 0 | 3 | 5 | 99;
+  tunnel: boolean;
+  jokerEnabled: boolean;
 }
 
 export interface SpeedRules {
-  akConnect: boolean;        // AとKをつなげる
-  sameRankAllowed: boolean;  // 同じ数字も出せる
-  autoRefill: boolean;       // 場に出したら自動補充
+  akConnect: boolean;
+  sameRankAllowed: boolean;
+  autoRefill: boolean;
 }
 
 export interface OldMaidRules {
-  mode: 'baba' | 'jiji';     // ばば抜き / ジジ抜き
-  allowShuffle: boolean;     // 相手が引く前にシャッフルボタンを使える
+  mode: 'baba' | 'jiji';
+  allowShuffle: boolean;
 }
 
 export interface DoubtRules {
-  jokerEnabled: boolean;     // ジョーカー（ワイルドカード）あり
-  doubtWindowSec: 3 | 5 | 8; // ダウト宣言の猶予時間（秒）
+  jokerEnabled: boolean;
+  doubtWindowSec: 3 | 5 | 8;
 }
 
 export interface MemoryRules {
-  deckSize: 20 | 26 | 52;    // クイック20枚 / ハーフ26枚 / フル52枚
-  extraTurnOnMatch: boolean; // 当てたら連続ターン
-  jokerPair: boolean;        // ジョーカー2枚を入れる
+  deckSize: 20 | 26 | 52;
+  extraTurnOnMatch: boolean;
+  jokerPair: boolean;
+}
+
+export interface ReversiRules {
+  boardSize: 6 | 8;
+  parallelSetup: boolean;
+}
+
+export interface GomokuRules {
+  boardSize: 9 | 13 | 15;
+  allowOverline: boolean;
+}
+
+export interface Connect4Rules {
+  cols: 7 | 8;
+  rows: 6 | 7;
+}
+
+export interface ChinchiroRules {
+  rounds: 3 | 5 | 10;
+  startPoints: 100 | 300;
+  shonbenEnabled: boolean;
 }
 
 export type GameRulesMap = {
@@ -47,6 +78,10 @@ export type GameRulesMap = {
   oldmaid: OldMaidRules;
   doubt: DoubtRules;
   memory: MemoryRules;
+  reversi: ReversiRules;
+  gomoku: GomokuRules;
+  connect4: Connect4Rules;
+  chinchiro: ChinchiroRules;
 };
 
 export interface PlayerInfo {

@@ -8,8 +8,11 @@ export interface RuleFieldDef<K extends string = string> {
   options?: { value: string | number; label: string }[];
 }
 
+export type GameCategory = 'card' | 'board' | 'dice';
+
 export interface GameMeta<T extends GameId = GameId> {
   id: T;
+  category: GameCategory;
   name: string;
   subtitle: string;
   icon: string;
@@ -23,6 +26,7 @@ export interface GameMeta<T extends GameId = GameId> {
 export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
   daifugo: {
     id: 'daifugo',
+    category: 'card',
     name: '大富豪',
     subtitle: '階級を競う王道カードバトル',
     icon: '👑',
@@ -64,6 +68,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
   },
   sevens: {
     id: 'sevens',
+    category: 'card',
     name: '7ならべ',
     subtitle: '7から上下につなぐ定番ゲーム',
     icon: '7️⃣',
@@ -94,6 +99,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
   },
   speed: {
     id: 'speed',
+    category: 'card',
     name: 'スピード',
     subtitle: '瞬発力勝負のリアルタイム対戦',
     icon: '⚡',
@@ -113,6 +119,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
   },
   oldmaid: {
     id: 'oldmaid',
+    category: 'card',
     name: 'ばば抜き / ジジ抜き',
     subtitle: '心理戦！ババを引かずにペアを捨てろ',
     icon: '🃏',
@@ -139,6 +146,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
   },
   doubt: {
     id: 'doubt',
+    category: 'card',
     name: 'ダウト',
     subtitle: 'ウソを見抜け！度胸のブラフ勝負',
     icon: '🎭',
@@ -166,6 +174,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
   },
   memory: {
     id: 'memory',
+    category: 'card',
     name: '神経衰弱',
     subtitle: '記憶力が試されるペア探し',
     icon: '🧠',
@@ -191,6 +200,136 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
       },
       { key: 'extraTurnOnMatch', label: '連続ターン', description: 'ペアを揃えたらもう一度めくれる', type: 'boolean' },
       { key: 'jokerPair', label: 'ジョーカーペア', description: 'ジョーカー2枚を追加する', type: 'boolean' },
+    ],
+  },
+  reversi: {
+    id: 'reversi',
+    category: 'board',
+    name: 'リバーシ',
+    subtitle: '挟んでひっくり返す王道陣取り',
+    icon: '⚫',
+    minPlayers: 2,
+    maxPlayers: 2,
+    description: '相手の石を挟んで自分の色に変えよう！パス自動スキップや6×6クイック対戦に対応。',
+    defaultRules: {
+      boardSize: 8,
+      parallelSetup: false,
+    },
+    ruleFields: [
+      {
+        key: 'boardSize',
+        label: '盤面サイズ',
+        description: '6×6は短時間決着に向いています',
+        type: 'select',
+        options: [
+          { value: 8, label: '8×8（標準）' },
+          { value: 6, label: '6×6（クイック）' },
+        ],
+      },
+      { key: 'parallelSetup', label: '並行初期配置', description: '初期配置をクロスではなく並行（黒黒/白白）にする', type: 'boolean' },
+    ],
+  },
+  gomoku: {
+    id: 'gomoku',
+    category: 'board',
+    name: '五目並べ',
+    subtitle: '先に5つ並べた方が勝ち！',
+    icon: '⭕',
+    minPlayers: 2,
+    maxPlayers: 2,
+    description: '縦・横・斜めのいずれかに自分の石を5つ並べよう。盤面サイズや長連ルールを選択可能。',
+    defaultRules: {
+      boardSize: 13,
+      allowOverline: true,
+    },
+    ruleFields: [
+      {
+        key: 'boardSize',
+        label: '盤面サイズ',
+        description: 'スマホで見やすいサイズを選べます',
+        type: 'select',
+        options: [
+          { value: 9, label: '9×9（ミニ）' },
+          { value: 13, label: '13×13（スマホ推奨）' },
+          { value: 15, label: '15×15（本格）' },
+        ],
+      },
+      { key: 'allowOverline', label: '長連（6目以上）勝ち', description: 'OFFにするとちょうど5目のみ勝ちになります', type: 'boolean' },
+    ],
+  },
+  connect4: {
+    id: 'connect4',
+    category: 'board',
+    name: '四目並べ',
+    subtitle: '落として揃える重力パズル対戦',
+    icon: '🟡',
+    minPlayers: 2,
+    maxPlayers: 2,
+    description: '上からコインを落として縦・横・斜めに4つ連続で並べよう！スマホ片手でサクッと遊べます。',
+    defaultRules: {
+      cols: 7,
+      rows: 6,
+    },
+    ruleFields: [
+      {
+        key: 'cols',
+        label: '横列数',
+        description: 'ボードの横幅',
+        type: 'select',
+        options: [
+          { value: 7, label: '7列（標準）' },
+          { value: 8, label: '8列（ワイド）' },
+        ],
+      },
+      {
+        key: 'rows',
+        label: '縦行数',
+        description: 'ボードの高さ',
+        type: 'select',
+        options: [
+          { value: 6, label: '6行（標準）' },
+          { value: 7, label: '7行（ロング）' },
+        ],
+      },
+    ],
+  },
+  chinchiro: {
+    id: 'chinchiro',
+    category: 'dice',
+    name: 'チンチロリン',
+    subtitle: 'サイコロ3つで役を狙う運試し',
+    icon: '🎲',
+    minPlayers: 2,
+    maxPlayers: 6,
+    description: '親と子がサイコロ3つを最大3回振って役を競う日本の伝統ダイスゲーム！',
+    defaultRules: {
+      rounds: 5,
+      startPoints: 100,
+      shonbenEnabled: true,
+    },
+    ruleFields: [
+      {
+        key: 'rounds',
+        label: 'ラウンド数',
+        description: '親が何周（何局）回ったら終了するか',
+        type: 'select',
+        options: [
+          { value: 3, label: '3局（サクッと）' },
+          { value: 5, label: '5局（標準）' },
+          { value: 10, label: '10局（ロング）' },
+        ],
+      },
+      {
+        key: 'startPoints',
+        label: '初期持ち点',
+        description: 'ゲーム開始時のスコア',
+        type: 'select',
+        options: [
+          { value: 100, label: '100点' },
+          { value: 300, label: '300点' },
+        ],
+      },
+      { key: 'shonbenEnabled', label: 'ションベンあり', description: 'まれに器からこぼれて即負け（約3%）が発生する', type: 'boolean' },
     ],
   },
 };
