@@ -7,11 +7,13 @@ import type { DoubtClientState } from '../games/doubt';
 import type { GomokuClientState } from '../games/gomoku';
 import type { MemoryClientState } from '../games/memory';
 import type { OldMaidClientState } from '../games/oldMaid';
+import type { PokerClientState } from '../games/poker';
 import type { ReversiClientState } from '../games/reversi';
 import { GAME_REGISTRY } from '../games/registry';
 import type { SevensClientState } from '../games/sevens';
 import type { SpeedClientState } from '../games/speed';
 import type { GameId, GameRulesMap } from '../types/game';
+import { GameIcon } from './GameIcon';
 import { RuleConfigurator } from './RuleConfigurator';
 import { ChinchiroBoard } from './boards/ChinchiroBoard';
 import { Connect4Board } from './boards/Connect4Board';
@@ -20,6 +22,7 @@ import { DoubtBoard } from './boards/DoubtBoard';
 import { GomokuBoard } from './boards/GomokuBoard';
 import { MemoryBoard } from './boards/MemoryBoard';
 import { OldMaidBoard } from './boards/OldMaidBoard';
+import { PokerBoard } from './boards/PokerBoard';
 import { ReversiBoard } from './boards/ReversiBoard';
 import { SevensBoard } from './boards/SevensBoard';
 import { SpeedBoard } from './boards/SpeedBoard';
@@ -63,8 +66,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           {isHost ? 'ロビー' : '退出'}
         </button>
         <div className="top-bar-center">
-          <span className="top-bar-title">
-            {meta.icon} {meta.name}
+          <span className="top-bar-title title-with-icon">
+            <GameIcon name={meta.icon} size={16} /> {meta.name}
           </span>
           <span className="top-bar-code">{roomCode}</span>
         </div>
@@ -97,6 +100,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         {gameId === 'memory' && (
           <MemoryBoard state={gameState as MemoryClientState} onAction={onAction} />
         )}
+        {gameId === 'poker' && (
+          <PokerBoard state={gameState as PokerClientState} onAction={onAction} />
+        )}
         {gameId === 'reversi' && (
           <ReversiBoard state={gameState as ReversiClientState} onAction={onAction} />
         )}
@@ -127,8 +133,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         <div className="modal-backdrop" onClick={() => setShowRuleModal(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="panel-header-row">
-              <h3 className="panel-title">
-                {meta.icon} {meta.name} ローカルルール
+              <h3 className="panel-title title-with-icon">
+                <GameIcon name={meta.icon} size={16} /> {meta.name} ローカルルール
               </h3>
               <button
                 type="button"

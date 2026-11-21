@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { GAME_LIST, GAME_REGISTRY } from '../games/registry';
 import type { GameId, GameRulesMap, LobbyState } from '../types/game';
 import { buildInviteUrl } from '../utils/roomCode';
+import { GameIcon } from './GameIcon';
 import { RuleConfigurator } from './RuleConfigurator';
 
 interface LobbyScreenProps {
@@ -50,8 +51,8 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `TRUMP HUB - ${meta.name}`,
-          text: `トランプ部屋「${lobby.config.roomCode}」(${meta.name}) に参加しよう！`,
+          title: `TABLE HUB - ${meta.name}`,
+          text: `部屋「${lobby.config.roomCode}」(${meta.name}) に参加しよう！`,
           url: inviteUrl,
         });
         return;
@@ -149,8 +150,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
       <section className="card-panel">
         <div className="panel-header-row">
-          <h2 className="panel-title">
-            {meta.icon} {meta.name}
+          <h2 className="panel-title title-with-icon">
+            <GameIcon name={meta.icon} size={18} />
+            {meta.name}
           </h2>
           <button type="button" className="chip-btn" onClick={() => setShowRules((v) => !v)}>
             <SlidersHorizontal size={15} />
@@ -164,10 +166,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
               <button
                 key={g.id}
                 type="button"
-                className={`game-pill ${g.id === lobby.config.gameId ? 'active' : ''}`}
+                className={`game-pill title-with-icon ${g.id === lobby.config.gameId ? 'active' : ''}`}
                 onClick={() => handleGameChange(g.id)}
               >
-                {g.icon} {g.name}
+                <GameIcon name={g.icon} size={13} /> {g.name}
               </button>
             ))}
           </div>

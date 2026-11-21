@@ -3,6 +3,7 @@ import { DoorOpen, PlusCircle, Sparkles, Users } from 'lucide-react';
 import { GAME_LIST, GAME_REGISTRY, type GameCategory } from '../games/registry';
 import type { GameId, GameRulesMap } from '../types/game';
 import { normalizeRoomCode } from '../utils/roomCode';
+import { GameIcon } from './GameIcon';
 import { RuleConfigurator } from './RuleConfigurator';
 
 interface HomeScreenProps {
@@ -35,6 +36,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     oldmaid: { ...GAME_REGISTRY.oldmaid.defaultRules },
     doubt: { ...GAME_REGISTRY.doubt.defaultRules },
     memory: { ...GAME_REGISTRY.memory.defaultRules },
+    poker: { ...GAME_REGISTRY.poker.defaultRules },
     reversi: { ...GAME_REGISTRY.reversi.defaultRules },
     gomoku: { ...GAME_REGISTRY.gomoku.defaultRules },
     connect4: { ...GAME_REGISTRY.connect4.defaultRules },
@@ -59,9 +61,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   return (
     <div className="screen home-screen">
       <header className="hero-header">
-        <div className="hero-badge">♠ ♥ ♦ ♣ オンライン対応</div>
-        <h1 className="hero-title">TRUMP HUB</h1>
-        <p className="hero-subtitle">スマホで集まってすぐ遊べる！トランプ＆定番ゲーム集</p>
+        <div className="hero-badge">P2P ONLINE TABLE</div>
+        <h1 className="hero-title">TABLE HUB</h1>
+        <p className="hero-subtitle">スマホで集まってすぐ遊べる！トランプ・ボード・ダイス</p>
       </header>
 
       <section className="card-panel name-panel">
@@ -126,10 +128,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="game-pills" style={{ marginBottom: 8 }}>
             {(
               [
-                { id: 'all', label: 'すべて (10)' },
-                { id: 'card', label: '🃏 トランプ (6)' },
-                { id: 'board', label: '♟️ ボード (3)' },
-                { id: 'dice', label: '🎲 ダイス (1)' },
+                { id: 'all', label: 'すべて (11)' },
+                { id: 'card', label: 'カード (7)' },
+                { id: 'board', label: 'ボード (3)' },
+                { id: 'dice', label: 'ダイス (1)' },
               ] as const
             ).map((cat) => (
               <button
@@ -154,7 +156,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   onClick={() => setSelectedGame(game.id)}
                 >
                   <div className="game-card-top">
-                    <span className="game-icon">{game.icon}</span>
+                    <span className="game-icon">
+                      <GameIcon name={game.icon} size={20} />
+                    </span>
                     <span className="game-players">
                       <Users size={13} />
                       {game.minPlayers === game.maxPlayers
@@ -172,8 +176,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <section className="card-panel selected-game-detail">
             <div className="detail-header">
               <div>
-                <h2 className="panel-title">
-                  {selectedMeta.icon} {selectedMeta.name}
+                <h2 className="panel-title title-with-icon">
+                  <GameIcon name={selectedMeta.icon} size={18} />
+                  {selectedMeta.name}
                 </h2>
                 <p className="panel-desc">{selectedMeta.description}</p>
               </div>

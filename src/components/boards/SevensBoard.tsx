@@ -66,10 +66,10 @@ export const SevensBoard: React.FC<SevensBoardProps> = ({ state, onAction }) => 
               <div className="opp-name">{p.name}</div>
               <div className="opp-meta">
                 {p.finishRank !== null
-                  ? `🏆${p.finishRank}位`
+                  ? `${p.finishRank}位`
                   : p.eliminated
-                  ? '💀ドボン'
-                  : `🃏${p.handCount} | パス${p.passesUsed}/${limitLabel}`}
+                  ? 'ドボン'
+                  : `手札${p.handCount} | パス${p.passesUsed}/${limitLabel}`}
               </div>
             </div>
           );
@@ -113,7 +113,7 @@ export const SevensBoard: React.FC<SevensBoardProps> = ({ state, onAction }) => 
                       .filter(Boolean)
                       .join(' ')}
                   >
-                    {isJoker ? '🃏' : placed ? formatRank(rank as 1) : rank === 7 ? '7' : ''}
+                    {isJoker ? 'JK' : placed ? formatRank(rank as 1) : rank === 7 ? '7' : ''}
                   </button>
                 );
               })}
@@ -127,9 +127,9 @@ export const SevensBoard: React.FC<SevensBoardProps> = ({ state, onAction }) => 
           <div className="hand-header">
             <span>
               {jokerSelectedId
-                ? '🃏 ボードの光っている場所をタップして配置'
+                ? 'ボードの光っている場所をタップして配置'
                 : isMyTurn
-                ? '🟢 出せるカードが光っています'
+                ? '出せるカードがハイライトされています'
                 : '相手のターン待機中…'}
             </span>
           </div>
@@ -165,13 +165,13 @@ export const SevensBoard: React.FC<SevensBoardProps> = ({ state, onAction }) => 
         </div>
       ) : (
         <div className="result-card">
-          <h3>🏆 結果発表</h3>
+          <h3>結果発表</h3>
           <ul className="result-list">
             {[...state.players]
               .sort((a, b) => (a.finishRank ?? 99) - (b.finishRank ?? 99))
               .map((p) => (
                 <li key={p.id}>
-                  <span>{p.eliminated ? '💀 ドボン' : `${p.finishRank}位`}</span>
+                  <span>{p.eliminated ? 'ドボン' : `${p.finishRank}位`}</span>
                   <strong>{p.name}</strong>
                 </li>
               ))}

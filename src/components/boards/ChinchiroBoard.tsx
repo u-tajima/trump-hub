@@ -1,17 +1,35 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Dices, Trophy } from 'lucide-react';
 import type { ChinchiroClientState } from '../../games/chinchiro';
+import { Dice3D } from '../Dice3D';
 
 interface ChinchiroBoardProps {
   state: ChinchiroClientState;
   onAction: (action: { type: string; payload?: unknown }) => void;
 }
 
-const DIE_FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-
 export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction }) => {
+  const [rolling, setRolling] = useState(false);
+  const prevLogRef = useRef(state.lastLog);
+
   const current = state.players[state.turnIndex];
   const isMyTurn = state.phase === 'playing' && current.id === state.myId;
   const dealer = state.players[state.dealerIndex];
+
+  useEffect(() => {
+    if (prevLogRef.current !== state.lastLog) {
+      prevLogRef.current = state.lastLog;
+      setRolling(true);
+      const t = window.setTimeout(() => setRolling(false), 620);
+      return () => window.clearTimeout(t);
+    }
+  }, [state.lastLog]);
+
+  const handleRoll = () => {
+    if (!isMyTurn || rolling) return;
+    setRolling(true);
+    onAction({ type: 'roll' });
+  };
 
   return (
     <div className="board-container">
@@ -19,7 +37,7 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
         <span className="flag-badge info">
           第 {state.round} / {state.rules.rounds} 局
         </span>
-        <span className="flag-badge warn">👑 親: {dealer.name}</span>
+        <span className="flag-badge warn">親: {dealer.name}</span>
       </div>
 
       <div className="log-banner">{state.lastLog}</div>
@@ -49,7 +67,7 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
                   <>
                     <span className="dice-trio">
                       {p.currentHand.dice.map((d, i) => (
-                        <span key={i} className="die-char">{DIE_FACES[d]}</span>
+                        <Dice3D key={i} value={d} rolling={rolling && active} size="sm" />
                       ))}
                     </span>
                     <span className="hand-label">{p.currentHand.label}</span>
@@ -71,16 +89,19 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
             type="button"
             className="primary-btn full-width"
             disabled={!isMyTurn}
-            onClick={() => onAction({ type: 'roll' })}
+            onClick={handleRoll}
           >
+            <Dices size={18} />
             {isMyTurn
-              ? `🎲 サイコロを振る！（残り ${current.rollsLeft} 回）`
+              ? `サイコロを振る（残り ${current.rollsLeft} 回）`
               : `${current.name} が振っています…`}
           </button>
         </div>
       ) : (
         <div className="result-card">
-          <h3>🏆 最終ランキング</h3>
+          <h3>
+            <Trophy size={18} /> 最終ランキング
+          </h3>
           <ul className="result-list">
             {[...state.players]
               .sort((a, b) => b.points - a.points)

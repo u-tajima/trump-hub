@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { Flame, Lock, RefreshCw, Trophy } from 'lucide-react';
 import { type DaifugoClientState, canPlayOnTable } from '../../games/daifugo';
-import { SUIT_SYMBOLS } from '../../types/card';
+import { SUIT_SYMBOLS, formatRank } from '../../types/card';
 import { PlayingCard } from '../PlayingCard';
 
 interface DaifugoBoardProps {
@@ -9,18 +10,19 @@ interface DaifugoBoardProps {
 }
 
 function rankTitle(rank: number | null, total: number, foul: boolean): string {
-  if (foul) return '💀大貧民(反則)';
+  if (foul) return '大貧民(反則)';
   if (rank === null) return '';
-  if (rank === 1) return '👑大富豪';
-  if (rank === total) return '🥺大貧民';
-  if (total >= 4 && rank === 2) return '✨富豪';
-  if (total >= 4 && rank === total - 1) return '💦貧民';
+  if (rank === 1) return '大富豪';
+  if (rank === total) return '大貧民';
+  if (total >= 4 && rank === 2) return '富豪';
+  if (total >= 4 && rank === total - 1) return '貧民';
   return `${rank}位(平民)`;
 }
 
 export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const isMyTurn = state.phase === 'playing' && state.turnPlayerId === state.myId;
+  const isMyTurn = state.phase === 'playing' && !state.pendingEffect && state.turnPlayerId === state.myId;
+  const isMyEffect = state.phase === 'playing' && state.pendingEffect?.playerId === state.myId;
 
   const toggleCard = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -53,6 +55,22 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
     onAction({ type: 'pass' });
   };
 
+  const handleResolveEffect = () => {
+    if (!isMyEffect || !state.pendingEffect) return;
+    if (state.pendingEffect.type === 'sevenPass') {
+      onAction({ type: 'resolveSevenPass', payload: { cardIds: selectedIds } });
+      setSelectedIds([]);
+    } else if (state.pendingEffect.type === 'tenDiscard') {
+      onAction({ type: 'resolveTenDiscard', payload: { cardIds: selectedIds } });
+      setSelectedIds([]);
+    }
+  };
+
+  const needCount =
+    state.pendingEffect && state.pendingEffect.type !== 'queenBomber'
+      ? Math.min(state.pendingEffect.count, state.myHand.length)
+      : 0;
+
   return (
     <div className="board-container">
       <div className="opponents-bar">
@@ -66,7 +84,7 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
                   ? rankTitle(p.finishRank, state.players.length, p.foulFinish)
                   : p.passed
                   ? 'PASS'
-                  : `🃏 ${p.handCount}`}
+                  : `手札 ${p.handCount}枚`}
               </div>
             </div>
           );
@@ -74,11 +92,24 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
       </div>
 
       <div className="status-flags">
-        {state.revolution && <span className="flag-badge danger">🔥 革命中</span>}
-        {state.elevenBack && <span className="flag-badge warn">🔄 11バック</span>}
+        {state.revolution && (
+          <span className="flag-badge danger">
+            <Flame size={12} /> 革命中
+          </span>
+        )}
+        {state.elevenBack && (
+          <span className="flag-badge warn">
+            <RefreshCw size={12} /> 11バック
+          </span>
+        )}
         {state.suitLock && (
           <span className="flag-badge info">
-            🔒 しばり: {state.suitLock.map((s) => SUIT_SYMBOLS[s]).join('')}
+            <Lock size={12} /> しばり: {state.suitLock.map((s) => SUIT_SYMBOLS[s]).join('')}
+          </span>
+        )}
+        {state.numberLock && (
+          <span className="flag-badge info">
+            <Lock size={12} /> 激しば中
           </span>
         )}
       </div>
@@ -89,7 +120,7 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
         {state.tableTop ? (
           <div className="table-cards-row">
             {state.tableTop.cards.map((card) => (
-              <PlayingCard key={card.id} card={card} size="md" />
+              <PlayingCard key={card.id} card={card} size="md" animateIn />
             ))}
           </div>
         ) : (
@@ -97,10 +128,41 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
         )}
       </div>
 
+      {isMyEffect && state.pendingEffect?.type === 'queenBomber' && (
+        <div className="card-panel">
+          <div className="field-label">Qボンバー：全員から捨てる数字を選択</div>
+          <div className="bomber-grid">
+            {Array.from({ length: 13 }, (_, idx) => {
+              const r = idx + 1;
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  className="chip-btn accent"
+                  onClick={() => onAction({ type: 'resolveQueenBomber', payload: { rank: r } })}
+                >
+                  {formatRank(r as 1)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {state.phase === 'playing' ? (
         <div className="hand-area">
           <div className="hand-header">
-            <span>{isMyTurn ? '🟢 あなたのターン！' : '相手のターン待機中…'}</span>
+            <span>
+              {isMyEffect
+                ? state.pendingEffect?.type === 'sevenPass'
+                  ? `7渡し：渡すカードを ${needCount}枚 選択`
+                  : state.pendingEffect?.type === 'tenDiscard'
+                  ? `10捨て：捨てるカードを ${needCount}枚 選択`
+                  : 'Qボンバー発動中'
+                : isMyTurn
+                ? 'あなたのターン'
+                : '相手のターン待機中'}
+            </span>
             {selectedIds.length > 0 && (
               <button type="button" className="text-link-btn" onClick={() => setSelectedIds([])}>
                 選択解除 ({selectedIds.length})
@@ -118,27 +180,44 @@ export const DaifugoBoard: React.FC<DaifugoBoardProps> = ({ state, onAction }) =
               />
             ))}
           </div>
-          <div className="action-bar">
-            <button type="button" className="secondary-btn" disabled={!isMyTurn} onClick={handlePass}>
-              パス
-            </button>
-            <button
-              type="button"
-              className="primary-btn flex-1"
-              disabled={!isMyTurn || !playValidation.ok}
-              onClick={handlePlay}
-            >
-              {selectedIds.length === 0
-                ? 'カードを選んで出す'
-                : playValidation.ok
-                ? `${selectedIds.length}枚を出す`
-                : playValidation.reason}
-            </button>
-          </div>
+          {isMyEffect && state.pendingEffect?.type !== 'queenBomber' ? (
+            <div className="action-bar">
+              <button
+                type="button"
+                className="primary-btn full-width"
+                disabled={selectedIds.length !== needCount}
+                onClick={handleResolveEffect}
+              >
+                {selectedIds.length === needCount
+                  ? `${needCount}枚を確定する`
+                  : `あと ${Math.max(0, needCount - selectedIds.length)} 枚選択してください`}
+              </button>
+            </div>
+          ) : (
+            <div className="action-bar">
+              <button type="button" className="secondary-btn" disabled={!isMyTurn} onClick={handlePass}>
+                パス
+              </button>
+              <button
+                type="button"
+                className="primary-btn flex-1"
+                disabled={!isMyTurn || !playValidation.ok}
+                onClick={handlePlay}
+              >
+                {selectedIds.length === 0
+                  ? 'カードを選んで出す'
+                  : playValidation.ok
+                  ? `${selectedIds.length}枚を出す`
+                  : playValidation.reason}
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="result-card">
-          <h3>🏆 結果発表</h3>
+          <h3>
+            <Trophy size={18} /> 結果発表
+          </h3>
           <ul className="result-list">
             {[...state.players]
               .sort((a, b) => (a.finishRank ?? 99) - (b.finishRank ?? 99))
