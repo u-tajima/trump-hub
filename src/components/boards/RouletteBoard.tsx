@@ -148,7 +148,7 @@ export const RouletteBoard: React.FC<RouletteBoardProps> = ({ state, onAction })
     <div className="board-container">
       <div className="status-flags">
         <span className="flag-badge info">
-          第 {state.round} / {state.rules.rounds} ラウンド
+          第 {state.round} / {state.rules.rounds > 0 ? state.rules.rounds : '∞'} ラウンド
         </span>
         <span className="flag-badge warn">
           <Coins size={13} /> {me.chips}
@@ -390,7 +390,7 @@ export const RouletteBoard: React.FC<RouletteBoardProps> = ({ state, onAction })
               <Play size={18} />
               {uiSpinMode !== 'idle'
                 ? '結果判定中…'
-                : state.round >= state.rules.rounds
+                : state.rules.rounds > 0 && state.round >= state.rules.rounds
                 ? '最終ランキングを見る'
                 : `第 ${state.round + 1} ラウンドへ`}
             </button>

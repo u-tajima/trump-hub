@@ -53,7 +53,7 @@ export const PokerBoard: React.FC<PokerBoardProps> = ({ state, onAction }) => {
     <div className="board-container">
       <div className="status-flags">
         <span className="flag-badge info">
-          ハンド {state.round} / {state.rules.rounds}
+          ハンド {state.round} / {state.rules.rounds > 0 ? state.rules.rounds : '∞'}
         </span>
         <span className="flag-badge warn">
           <Coins size={12} /> ポット: {state.pot}

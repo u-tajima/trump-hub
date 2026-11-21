@@ -291,7 +291,7 @@ export function applyRouletteAction(
   if (action.type === 'nextRound') {
     if (state.subPhase !== 'result') return { state, error: '結果表示中ではありません' };
 
-    if (state.round >= state.rules.rounds) {
+    if (state.rules.rounds > 0 && state.round >= state.rules.rounds) {
       const sorted = [...state.players].sort((a, b) => b.chips - a.chips);
       return {
         state: {
@@ -347,7 +347,7 @@ export function computeRouletteBotAction(
     ...state.players.map((p) => p.chips + p.bets.reduce((s, b) => s + b.amount, 0))
   );
   const deficit = Math.max(0, leaderChips - effectiveStack);
-  const isFinalRound = state.round >= state.rules.rounds;
+  const isFinalRound = state.rules.rounds > 0 && state.round >= state.rules.rounds;
 
   // トップ独走中の最終ラウンドは最小ベットで手堅く逃げ切る
   if (isFinalRound && deficit === 0 && bot.bets.length === 0) {

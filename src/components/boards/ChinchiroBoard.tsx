@@ -109,7 +109,7 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
     <div className="board-container">
       <div className="status-flags">
         <span className="flag-badge info">
-          第 {state.round} / {state.rules.rounds} 局
+          第 {state.round} / {state.rules.rounds > 0 ? state.rules.rounds : '∞'} 局
         </span>
         <span className="flag-badge warn">親: {dealer.name}</span>
         <button
