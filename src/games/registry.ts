@@ -131,6 +131,54 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
       { key: 'jokerEnabled', label: 'ジョーカー（ワイルド）', description: 'ジョーカー1枚を万能カードとして追加', type: 'boolean' },
     ],
   },
+  holdem: {
+    id: 'holdem',
+    category: 'card',
+    name: 'テキサスホールデム',
+    subtitle: '世界標準のコミュニティポーカー',
+    icon: 'gem',
+    minPlayers: 2,
+    maxPlayers: 6,
+    description: '手札2枚と場の共通カード5枚から最強の5枚を作る本格ポーカー！プリフロップ〜リバーの心理戦を楽しもう。',
+    defaultRules: {
+      rounds: 5,
+      startChips: 500,
+      bigBlind: 10,
+    },
+    ruleFields: [
+      {
+        key: 'rounds',
+        label: 'ラウンド数',
+        description: '何ハンド遊んだら終了するか',
+        type: 'select',
+        options: [
+          { value: 3, label: '3ハンド' },
+          { value: 5, label: '5ハンド' },
+          { value: 10, label: '10ハンド' },
+        ],
+      },
+      {
+        key: 'startChips',
+        label: '初期チップ',
+        description: 'ゲーム開始時の持ち点',
+        type: 'select',
+        options: [
+          { value: 500, label: '500' },
+          { value: 1000, label: '1000' },
+        ],
+      },
+      {
+        key: 'bigBlind',
+        label: 'ビッグブラインド',
+        description: '強制ベット額（SBは半分）',
+        type: 'select',
+        options: [
+          { value: 10, label: 'SB 5 / BB 10' },
+          { value: 20, label: 'SB 10 / BB 20' },
+        ],
+      },
+    ],
+  },
   sevens: {
     id: 'sevens',
     category: 'card',

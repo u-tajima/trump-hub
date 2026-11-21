@@ -9,6 +9,7 @@ interface PlayingCardProps {
   disabled?: boolean;
   highlight?: boolean;
   animateIn?: boolean;
+  flipIn?: boolean;
   size?: 'xs' | 'sm' | 'md' | 'lg';
   onClick?: () => void;
   badge?: string;
@@ -21,6 +22,7 @@ export const PlayingCard: React.FC<PlayingCardProps> = ({
   disabled = false,
   highlight = false,
   animateIn = false,
+  flipIn = false,
   size = 'md',
   onClick,
   badge,
@@ -33,6 +35,7 @@ export const PlayingCard: React.FC<PlayingCardProps> = ({
     disabled ? 'trump-card--disabled' : '',
     highlight ? 'trump-card--highlight' : '',
     animateIn ? 'trump-card--enter' : '',
+    flipIn ? 'trump-card--flip' : '',
     onClick && !disabled ? 'trump-card--clickable' : '',
   ]
     .filter(Boolean)

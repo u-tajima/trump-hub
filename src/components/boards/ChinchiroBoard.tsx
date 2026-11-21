@@ -9,25 +9,71 @@ interface ChinchiroBoardProps {
 }
 
 export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction }) => {
-  const [rolling, setRolling] = useState(false);
+  const [rollingFlags, setRollingFlags] = useState<[boolean, boolean, boolean]>([false, false, false]);
+  const [displayDice, setDisplayDice] = useState<[number, number, number]>([1, 2, 3]);
+  const [bowlLabel, setBowlLabel] = useState<string>('サイコロを振ってください');
   const prevLogRef = useRef(state.lastLog);
 
   const current = state.players[state.turnIndex];
   const isMyTurn = state.phase === 'playing' && current.id === state.myId;
   const dealer = state.players[state.dealerIndex];
 
+  const activeHand =
+    current.currentHand ??
+    state.players.find((p) => p.currentHand !== null)?.currentHand ??
+    null;
+
   useEffect(() => {
-    if (prevLogRef.current !== state.lastLog) {
-      prevLogRef.current = state.lastLog;
-      setRolling(true);
-      const t = window.setTimeout(() => setRolling(false), 620);
-      return () => window.clearTimeout(t);
-    }
+    if (prevLogRef.current === state.lastLog) return;
+    prevLogRef.current = state.lastLog;
+
+    const targetDice: [number, number, number] = activeHand?.dice ?? [
+      Math.floor(Math.random() * 6) + 1,
+      Math.floor(Math.random() * 6) + 1,
+      Math.floor(Math.random() * 6) + 1,
+    ];
+    const targetLabel = activeHand?.label ?? state.lastLog;
+
+    setRollingFlags([true, true, true]);
+    setBowlLabel('転がっています…');
+
+    const spinTimer = window.setInterval(() => {
+      setDisplayDice([
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+      ]);
+    }, 75);
+
+    const t1 = window.setTimeout(() => {
+      setRollingFlags([false, true, true]);
+      setDisplayDice((prev) => [targetDice[0], prev[1], prev[2]]);
+    }, 450);
+
+    const t2 = window.setTimeout(() => {
+      setRollingFlags([false, false, true]);
+      setDisplayDice((prev) => [targetDice[0], targetDice[1], prev[2]]);
+    }, 750);
+
+    const t3 = window.setTimeout(() => {
+      window.clearInterval(spinTimer);
+      setRollingFlags([false, false, false]);
+      setDisplayDice(targetDice);
+      setBowlLabel(targetLabel);
+    }, 1050);
+
+    return () => {
+      window.clearInterval(spinTimer);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
   }, [state.lastLog]);
 
+  const isAnyRolling = rollingFlags[0] || rollingFlags[1] || rollingFlags[2];
+
   const handleRoll = () => {
-    if (!isMyTurn || rolling) return;
-    setRolling(true);
+    if (!isMyTurn || isAnyRolling) return;
     onAction({ type: 'roll' });
   };
 
@@ -40,7 +86,24 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
         <span className="flag-badge warn">親: {dealer.name}</span>
       </div>
 
-      <div className="log-banner">{state.lastLog}</div>
+      <div className="chinchiro-bowl-stage">
+        <div className={`chinchiro-bowl ${isAnyRolling ? 'shaking' : ''}`}>
+          <div className="bowl-dice-cluster">
+            <div className={`bowl-die-slot slot-0 ${rollingFlags[0] ? 'tumbling' : 'landed'}`}>
+              <Dice3D value={displayDice[0]} size="lg" />
+            </div>
+            <div className={`bowl-die-slot slot-1 ${rollingFlags[1] ? 'tumbling' : 'landed'}`}>
+              <Dice3D value={displayDice[1]} size="lg" />
+            </div>
+            <div className={`bowl-die-slot slot-2 ${rollingFlags[2] ? 'tumbling' : 'landed'}`}>
+              <Dice3D value={displayDice[2]} size="lg" />
+            </div>
+          </div>
+        </div>
+        <div className={`bowl-result-banner ${!isAnyRolling && activeHand ? 'pop' : ''}`}>
+          {bowlLabel}
+        </div>
+      </div>
 
       <div className="chinchiro-players">
         {state.players.map((p, idx) => {
@@ -67,7 +130,7 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
                   <>
                     <span className="dice-trio">
                       {p.currentHand.dice.map((d, i) => (
-                        <Dice3D key={i} value={d} rolling={rolling && active} size="sm" />
+                        <Dice3D key={i} value={d} size="sm" />
                       ))}
                     </span>
                     <span className="hand-label">{p.currentHand.label}</span>
@@ -88,11 +151,13 @@ export const ChinchiroBoard: React.FC<ChinchiroBoardProps> = ({ state, onAction 
           <button
             type="button"
             className="primary-btn full-width"
-            disabled={!isMyTurn}
+            disabled={!isMyTurn || isAnyRolling}
             onClick={handleRoll}
           >
             <Dices size={18} />
-            {isMyTurn
+            {isAnyRolling
+              ? 'サイコロを振っています…'
+              : isMyTurn
               ? `サイコロを振る（残り ${current.rollsLeft} 回）`
               : `${current.name} が振っています…`}
           </button>

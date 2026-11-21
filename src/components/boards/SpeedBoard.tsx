@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { type SpeedClientState, canPlaceOnSpeedPile } from '../../games/speed';
+import type { SpeedClientState } from '../../games/speed';
 import { PlayingCard } from '../PlayingCard';
 
 interface SpeedBoardProps {
@@ -12,25 +12,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
 
   const handleFieldCardClick = (cardId: string) => {
     if (state.phase !== 'playing') return;
-    const card = state.me.fieldHand.find((c) => c.id === cardId);
-    if (!card) return;
-
-    const can0 = canPlaceOnSpeedPile(card, state.centerPiles[0], state.rules);
-    const can1 = canPlaceOnSpeedPile(card, state.centerPiles[1], state.rules);
-
-    if (can0 && !can1) {
-      setSelectedCardId(null);
-      onAction({ type: 'play', payload: { cardId, pileIndex: 0 } });
-      return;
-    }
-    if (can1 && !can0) {
-      setSelectedCardId(null);
-      onAction({ type: 'play', payload: { cardId, pileIndex: 1 } });
-      return;
-    }
-    if (can0 && can1) {
-      setSelectedCardId((prev) => (prev === cardId ? null : cardId));
-    }
+    setSelectedCardId((prev) => (prev === cardId ? null : cardId));
   };
 
   const handlePileClick = (pileIndex: 0 | 1) => {
@@ -56,10 +38,6 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
       <div className="speed-center-piles">
         {[0, 1].map((idx) => {
           const pileIdx = idx as 0 | 1;
-          const selectedCard = state.me.fieldHand.find((c) => c.id === selectedCardId);
-          const canDrop =
-            Boolean(selectedCard) &&
-            canPlaceOnSpeedPile(selectedCard!, state.centerPiles[pileIdx], state.rules);
           return (
             <div key={pileIdx} className="speed-pile-slot">
               <div className="speed-pile-label">台札 {pileIdx + 1}</div>
@@ -67,8 +45,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
                 card={state.centerPiles[pileIdx]}
                 size="lg"
                 animateIn
-                highlight={canDrop}
-                onClick={canDrop ? () => handlePileClick(pileIdx) : undefined}
+                onClick={selectedCardId ? () => handlePileClick(pileIdx) : undefined}
               />
             </div>
           );
@@ -78,27 +55,24 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
       {state.phase === 'playing' ? (
         <div className="hand-area">
           <div className="hand-header">
-            <span>出せるカードは光ります（1タップで出せます）</span>
+            <span>
+              {selectedCardId
+                ? '出す台札をタップしてください'
+                : '手札を選択してから台札をタップ'}
+            </span>
             <span>山札: {state.me.drawPileCount}枚</span>
           </div>
           <div className="speed-field-hand">
-            {state.me.fieldHand.map((card) => {
-              const playable =
-                canPlaceOnSpeedPile(card, state.centerPiles[0], state.rules) ||
-                canPlaceOnSpeedPile(card, state.centerPiles[1], state.rules);
-              return (
-                <PlayingCard
-                  key={card.id}
-                  card={card}
-                  size="lg"
-                  animateIn
-                  highlight={playable}
-                  selected={selectedCardId === card.id}
-                  disabled={!playable}
-                  onClick={() => handleFieldCardClick(card.id)}
-                />
-              );
-            })}
+            {state.me.fieldHand.map((card) => (
+              <PlayingCard
+                key={card.id}
+                card={card}
+                size="lg"
+                animateIn
+                selected={selectedCardId === card.id}
+                onClick={() => handleFieldCardClick(card.id)}
+              />
+            ))}
           </div>
           <div className="action-bar">
             {!state.rules.autoRefill && state.me.fieldHand.length < 4 && state.me.drawPileCount > 0 && (
