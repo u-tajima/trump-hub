@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Brain,
   CircleDot,
+  ClipboardList,
   Columns3,
   Crown,
   Dices,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 
 export type GameIconKey =
+  | 'clipboard'
   | 'crown'
   | 'hash'
   | 'zap'
@@ -36,6 +38,8 @@ interface GameIconProps {
 
 export const GameIcon: React.FC<GameIconProps> = ({ name, size = 18, className }) => {
   switch (name) {
+    case 'clipboard':
+      return <ClipboardList size={size} className={className} />;
     case 'crown':
       return <Crown size={size} className={className} />;
     case 'hash':

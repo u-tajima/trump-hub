@@ -9,7 +9,7 @@ export interface RuleFieldDef<K extends string = string> {
   options?: { value: string | number; label: string }[];
 }
 
-export type GameCategory = 'card' | 'board' | 'dice';
+export type GameCategory = 'tool' | 'card' | 'board' | 'dice';
 
 export interface GameMeta<T extends GameId = GameId> {
   id: T;
@@ -25,6 +25,54 @@ export interface GameMeta<T extends GameId = GameId> {
 }
 
 export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
+  scoreboard: {
+    id: 'scoreboard',
+    category: 'tool',
+    name: '得点管理専用部屋',
+    subtitle: '各自の収支を同時入力＆ゼロサム検証',
+    icon: 'clipboard',
+    minPlayers: 1,
+    maxPlayers: 12,
+    description:
+      'リアル対局や別ゲームの得点をみんなで同時記録できる専用ルーム！自分の得点変動を素早く入力でき、全体の収支がゼロサム（合計±0）になっていない時は警告を表示します。データはホスト端末に3日間保存されます。',
+    defaultRules: {
+      startScore: 0,
+      unitStep: 1,
+      zeroSumCheck: true,
+    },
+    ruleFields: [
+      {
+        key: 'startScore',
+        label: '初期持ち点（基準点）',
+        description: '各メンバーの開始時の点数（0点・100点・1000点・25000点）',
+        type: 'select',
+        options: [
+          { value: 0, label: '0点（収支±記録）' },
+          { value: 100, label: '100点' },
+          { value: 1000, label: '1,000点' },
+          { value: 25000, label: '25,000点（麻雀など）' },
+        ],
+      },
+      {
+        key: 'unitStep',
+        label: 'クイック入力単位',
+        description: 'ワンタップ加減点ボタンの基準単位',
+        type: 'select',
+        options: [
+          { value: 1, label: '1点単位 (±1, ±5, ±10, ±50)' },
+          { value: 5, label: '5点単位 (±5, ±25, ±50, ±100)' },
+          { value: 10, label: '10点単位 (±10, ±50, ±100, ±500)' },
+          { value: 100, label: '100点単位 (±100, ±500, ±1000, ±5000)' },
+        ],
+      },
+      {
+        key: 'zeroSumCheck',
+        label: 'ゼロサム警告チェック',
+        description: '全員の得点変動の合計が0でない時に警告バナーを表示する',
+        type: 'boolean',
+      },
+    ],
+  },
   daifugo: {
     id: 'daifugo',
     category: 'card',

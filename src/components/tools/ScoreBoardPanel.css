@@ -20,6 +20,296 @@
   gap: 6px;
 }
 
+/* ゼロサム警告 / 一致バナー */
+.scoreboard-zerosum-alert {
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.scoreboard-zerosum-alert.ok {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1.5px solid rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+}
+
+.zerosum-ok-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.scoreboard-zerosum-alert.warning {
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.22), rgba(239, 68, 68, 0.18));
+  border: 1.5px solid rgba(245, 158, 11, 0.78);
+  color: #fef3c7;
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.18);
+}
+
+.zerosum-warn-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.zerosum-warn-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fde68a;
+}
+
+.zerosum-warn-desc {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #fef3c7;
+  opacity: 0.92;
+}
+
+.zerosum-fix-btn {
+  margin-top: 2px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.65);
+  background: rgba(15, 23, 42, 0.78);
+  color: #fde68a;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  text-align: center;
+}
+
+.zerosum-fix-btn:active {
+  transform: scale(0.98);
+}
+
+/* 自分の得点変動クイック入力カード */
+.my-score-hero-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(155deg, rgba(30, 58, 138, 0.48), rgba(15, 23, 42, 0.92));
+  border: 1.5px solid rgba(96, 165, 250, 0.52);
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.45);
+}
+
+.my-score-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.my-score-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.my-score-label-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.28);
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  color: #bfdbfe;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.my-score-member-select {
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 7px;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.my-score-current-box {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.my-score-rank-chip {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.my-score-big-num {
+  font-size: 24px;
+  font-weight: 900;
+  color: #f8fafc;
+}
+
+.my-score-big-num small {
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 2px;
+  color: #94a3b8;
+}
+
+.my-score-big-num.plus {
+  color: #34d399;
+}
+
+.my-score-big-num.minus {
+  color: #f87171;
+}
+
+.my-score-net-sub {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.my-score-transfer-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.my-score-transfer-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #93c5fd;
+  white-space: nowrap;
+}
+
+.my-score-counterparty-select {
+  flex: 1;
+  min-width: 0;
+  background: rgba(2, 6, 23, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 7px;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 7px;
+}
+
+.my-score-instant-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.my-score-instant-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.my-instant-btn {
+  height: 36px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.my-instant-btn.plus {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1.5px solid rgba(16, 185, 129, 0.5);
+  color: #6ee7b7;
+}
+
+.my-instant-btn.minus {
+  background: rgba(239, 68, 68, 0.16);
+  border: 1.5px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.my-instant-btn:active {
+  transform: scale(0.95);
+}
+
+.my-score-calc-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.my-score-calc-input-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.my-score-delta-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(2, 6, 23, 0.78);
+  border: 1.5px solid rgba(96, 165, 250, 0.4);
+  border-radius: 8px;
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.my-score-delta-input:focus {
+  outline: none;
+  border-color: #60a5fa;
+}
+
+.my-score-commit-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.my-commit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 36px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.my-commit-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.my-commit-btn.plus {
+  background: linear-gradient(135deg, #059669, #10b981);
+  border: none;
+  color: #ffffff;
+}
+
+.my-commit-btn.minus {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  border: none;
+  color: #ffffff;
+}
+
 .scoreboard-entry-list {
   display: flex;
   flex-direction: column;
@@ -39,6 +329,22 @@
 .scoreboard-entry.top-rank {
   border-color: rgba(245, 158, 11, 0.55);
   background: linear-gradient(145deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.8));
+}
+
+.scoreboard-entry.is-my-entry {
+  border-color: rgba(96, 165, 250, 0.55);
+}
+
+.set-me-mini-btn {
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(30, 41, 59, 0.7);
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .scoreboard-entry-head {
@@ -198,4 +504,38 @@
   border-radius: 18px;
   padding: 14px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.7);
+}
+
+/* 得点管理専用部屋の招待ヘッダーバー */
+.scoreroom-invite-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(245, 198, 102, 0.3);
+}
+
+.scoreroom-invite-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.scoreroom-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.scoreroom-code-badge strong {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #fde68a;
 }

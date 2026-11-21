@@ -17,6 +17,7 @@ export interface ScoreLogItem {
 export interface ScoreBoardState {
   id: string;        // 'tool' または `room_${roomCode}`
   title: string;     // 例: 'ツール得点表' / '部屋 A7K2P'
+  baseScore?: number; // 初期持ち点（基準点、デフォルト0）
   entries: ScoreEntry[];
   logs: ScoreLogItem[];
   updatedAt: number;
@@ -28,24 +29,47 @@ export type ScoreBoardOp =
   | { type: 'removeEntry'; entryId: string }
   | { type: 'renameEntry'; entryId: string; name: string }
   | { type: 'addDelta'; entryId: string; delta: number }
+  | { type: 'transferScore'; fromEntryId: string; toEntryId: string; amount: number }
   | { type: 'setScore'; entryId: string; score: number }
-  | { type: 'resetScores' }
+  | { type: 'resetScores'; baseScore?: number }
   | { type: 'replaceEntries'; entries: ScoreEntry[] };
+
+export function getScoreBoardZeroSumInfo(board: ScoreBoardState): {
+  baseScore: number;
+  totalScore: number;
+  expectedTotal: number;
+  totalDelta: number;
+  isZeroSum: boolean;
+} {
+  const baseScore = board.baseScore ?? 0;
+  const totalScore = board.entries.reduce((sum, e) => sum + e.score, 0);
+  const expectedTotal = board.entries.length * baseScore;
+  const totalDelta = totalScore - expectedTotal;
+  return {
+    baseScore,
+    totalScore,
+    expectedTotal,
+    totalDelta,
+    isZeroSum: totalDelta === 0,
+  };
+}
 
 export function createEmptyScoreBoard(
   id: string,
   title: string,
-  initialNames: string[] = []
+  initialNames: string[] = [],
+  baseScore = 0
 ): ScoreBoardState {
   const now = Date.now();
   const entries: ScoreEntry[] = initialNames.map((name, i) => ({
     id: `se-${now}-${i}-${Math.random().toString(36).slice(2, 6)}`,
     name: name.trim() || `プレイヤー${i + 1}`,
-    score: 0,
+    score: baseScore,
   }));
   return {
     id,
     title,
+    baseScore,
     entries,
     logs: [],
     updatedAt: now,
@@ -60,6 +84,7 @@ export function applyScoreBoardOp(
 ): ScoreBoardState {
   const now = Date.now();
   let entries = board.entries;
+  let baseScore = board.baseScore ?? 0;
   let logText = '';
 
   switch (op.type) {
@@ -68,7 +93,7 @@ export function applyScoreBoardOp(
       const newEntry: ScoreEntry = {
         id: `se-${now}-${Math.random().toString(36).slice(2, 7)}`,
         name: clean,
-        score: 0,
+        score: baseScore,
       };
       entries = [...board.entries, newEntry];
       logText = `${clean} を追加`;
@@ -99,6 +124,20 @@ export function applyScoreBoardOp(
       logText = `${target.name} ${delta > 0 ? `+${delta}` : delta} (${target.score + delta})`;
       break;
     }
+    case 'transferScore': {
+      const amt = Math.trunc(op.amount);
+      if (!Number.isFinite(amt) || amt === 0 || op.fromEntryId === op.toEntryId) return board;
+      const fromEntry = board.entries.find((e) => e.id === op.fromEntryId);
+      const toEntry = board.entries.find((e) => e.id === op.toEntryId);
+      if (!fromEntry || !toEntry) return board;
+      entries = board.entries.map((e) => {
+        if (e.id === op.fromEntryId) return { ...e, score: e.score - amt };
+        if (e.id === op.toEntryId) return { ...e, score: e.score + amt };
+        return e;
+      });
+      logText = `${fromEntry.name} → ${toEntry.name} へ ${amt}点 移動`;
+      break;
+    }
     case 'setScore': {
       const score = Math.trunc(op.score);
       if (!Number.isFinite(score)) return board;
@@ -109,8 +148,11 @@ export function applyScoreBoardOp(
       break;
     }
     case 'resetScores': {
-      entries = board.entries.map((e) => ({ ...e, score: 0 }));
-      logText = '全員の得点を0にリセット';
+      if (typeof op.baseScore === 'number' && Number.isFinite(op.baseScore)) {
+        baseScore = Math.trunc(op.baseScore);
+      }
+      entries = board.entries.map((e) => ({ ...e, score: baseScore }));
+      logText = `全員の得点を${baseScore}にリセット`;
       break;
     }
     case 'replaceEntries': {
@@ -138,6 +180,7 @@ export function applyScoreBoardOp(
 
   return {
     ...board,
+    baseScore,
     entries,
     logs: nextLogs,
     updatedAt: now,

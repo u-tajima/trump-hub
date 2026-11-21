@@ -104,11 +104,18 @@ import type {
   PokerRules,
   ReversiRules,
   RouletteRules,
+  ScoreBoardRoomRules,
   SevensRules,
   SpeedRules,
 } from '../types/game';
 
+export interface ScoreBoardGameInternalState {
+  rules: ScoreBoardRoomRules;
+  phase: 'playing';
+}
+
 export type AnyInternalState =
+  | ScoreBoardGameInternalState
   | DaifugoInternalState
   | SevensInternalState
   | SpeedInternalState
@@ -129,6 +136,8 @@ export function initGameEngine(
   rules: GameRulesMap[GameId]
 ): AnyInternalState {
   switch (gameId) {
+    case 'scoreboard':
+      return { rules: rules as ScoreBoardRoomRules, phase: 'playing' };
     case 'daifugo':
       return initDaifugo(players, rules as DaifugoRules);
     case 'sevens':
@@ -165,6 +174,8 @@ export function applyGameAction(
   action: { type: string; payload?: unknown }
 ): { state: AnyInternalState; error?: string } {
   switch (gameId) {
+    case 'scoreboard':
+      return { state };
     case 'daifugo':
       return applyDaifugoAction(state as DaifugoInternalState, playerId, action);
     case 'sevens':
@@ -196,6 +207,8 @@ export function applyGameAction(
 
 export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playerId: string): unknown {
   switch (gameId) {
+    case 'scoreboard':
+      return { ...(state as ScoreBoardGameInternalState), myId: playerId };
     case 'daifugo':
       return sanitizeDaifugoState(state as DaifugoInternalState, playerId);
     case 'sevens':
@@ -232,6 +245,8 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
   if (state.phase !== 'playing') return null;
 
   switch (gameId) {
+    case 'scoreboard':
+      return null;
     case 'daifugo': {
       const s = state as DaifugoInternalState;
       const current = s.players[s.turnIndex];
