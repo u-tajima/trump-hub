@@ -35,6 +35,7 @@ body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -42,7 +43,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 12px 14px 24px;
+  padding: 16px 14px 24px;
   gap: 12px;
 }
 
@@ -88,7 +89,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 4px;
+  padding: 10px 4px 6px;
+  min-height: 48px;
 }
 
 .top-bar-center {
@@ -289,13 +291,16 @@ body {
 .icon-text-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  justify-content: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid var(--border-subtle);
   color: var(--text-main);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
+  border-radius: 10px;
+  padding: 8px 12px;
+  min-height: 40px;
+  min-width: 64px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -614,7 +619,7 @@ body {
   padding: 4px;
   flex-shrink: 0;
   user-select: none;
-  transition: transform 0.14s ease, box-shadow 0.14s ease;
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease;
 }
 
 .trump-card--xs {
@@ -678,10 +683,15 @@ body {
   cursor: pointer;
 }
 
+.trump-card--clickable:active {
+  transform: scale(0.94);
+}
+
 .trump-card--selected {
-  transform: translateY(-12px);
+  transform: translateY(-14px) scale(1.06) rotate(-1.5deg) !important;
   border: 2px solid var(--accent-gold);
-  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.45);
+  box-shadow: 0 12px 22px rgba(245, 158, 11, 0.5);
+  z-index: 2;
 }
 
 .trump-card--highlight {
@@ -692,6 +702,23 @@ body {
 .trump-card--disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.trump-card--flip {
+  animation: cardFlip3D 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-style: preserve-3d;
+}
+
+@keyframes cardFlip3D {
+  0% {
+    transform: perspective(700px) rotateY(180deg) scale(0.9);
+  }
+  60% {
+    transform: perspective(700px) rotateY(-12deg) scale(1.06);
+  }
+  100% {
+    transform: perspective(700px) rotateY(0deg) scale(1);
+  }
 }
 
 .trump-card-corner {
@@ -863,7 +890,7 @@ body {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding: 14px 4px 6px;
+  padding: 16px 4px 6px;
 }
 
 .action-bar {
@@ -978,7 +1005,7 @@ body {
   display: flex;
   justify-content: center;
   gap: 10px;
-  padding: 6px 0;
+  padding: 10px 0 4px;
 }
 
 .draw-target-box {
@@ -1570,4 +1597,124 @@ body {
   50% {
     transform: translateX(-14px) translateY(6px) rotate(-6deg);
   }
+}
+
+.holdem-table {
+  gap: 8px;
+}
+
+.holdem-community-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.empty-community-slot {
+  width: 50px;
+  height: 72px;
+  border-radius: 9px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.chinchiro-bowl-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.chinchiro-bowl {
+  width: 210px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #14532d 0%, #052e16 70%, #022c22 100%);
+  border: 8px solid #78350f;
+  box-shadow:
+    inset 0 12px 26px rgba(0, 0, 0, 0.7),
+    0 8px 20px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.chinchiro-bowl.shaking {
+  animation: bowlShake 0.22s infinite alternate ease-in-out;
+}
+
+@keyframes bowlShake {
+  0% {
+    transform: translate(-2px, 1px) rotate(-1deg);
+  }
+  100% {
+    transform: translate(2px, -1px) rotate(1deg);
+  }
+}
+
+.bowl-dice-cluster {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
+.bowl-die-slot {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.bowl-die-slot.tumbling.slot-0 {
+  animation: tumbleOrbit0 0.28s infinite linear;
+}
+
+.bowl-die-slot.tumbling.slot-1 {
+  animation: tumbleOrbit1 0.24s infinite linear;
+}
+
+.bowl-die-slot.tumbling.slot-2 {
+  animation: tumbleOrbit2 0.31s infinite linear;
+}
+
+.bowl-die-slot.landed {
+  animation: dieLand 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tumbleOrbit0 {
+  0% { transform: translate(-8px, -10px) rotate(0deg) scale(1.05); }
+  50% { transform: translate(10px, 8px) rotate(180deg) scale(0.92); }
+  100% { transform: translate(-8px, -10px) rotate(360deg) scale(1.05); }
+}
+
+@keyframes tumbleOrbit1 {
+  0% { transform: translate(8px, 10px) rotate(0deg) scale(0.95); }
+  50% { transform: translate(-10px, -10px) rotate(-180deg) scale(1.1); }
+  100% { transform: translate(8px, 10px) rotate(-360deg) scale(0.95); }
+}
+
+@keyframes tumbleOrbit2 {
+  0% { transform: translate(-6px, 8px) rotate(45deg) scale(1.08); }
+  50% { transform: translate(8px, -8px) rotate(225deg) scale(0.9); }
+  100% { transform: translate(-6px, 8px) rotate(405deg) scale(1.08); }
+}
+
+@keyframes dieLand {
+  0% { transform: scale(1.25) translateY(-10px); }
+  100% { transform: scale(1) translateY(0); }
+}
+
+.bowl-result-banner {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--accent-gold);
+  background: rgba(0, 0, 0, 0.42);
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.bowl-result-banner.pop {
+  animation: cardDealPop 0.26s ease;
 }
