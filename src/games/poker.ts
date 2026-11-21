@@ -421,33 +421,176 @@ export function applyPokerAction(
   };
 }
 
+function choosePokerDrawDiscards(hand: Card[]): string[] {
+  const ev = evaluatePokerHand(hand);
+  // ストレート以上が完成していれば交換なし（スタンドパット）
+  if (ev.category >= 5) return [];
+
+  const normals = hand.filter((c) => c.suit !== 'joker');
+  const counts = new Map<number, number>();
+  for (const c of normals) {
+    counts.set(c.rank, (counts.get(c.rank) ?? 0) + 1);
+  }
+
+  // ペア・ツーペア・スリーカード・フォーカードがある場合：役を構成するカード（＋ジョーカー）を残す
+  const hasNaturalMeld = Array.from(counts.values()).some((cnt) => cnt >= 2);
+  if (hasNaturalMeld) {
+    const singletons = normals
+      .filter((c) => (counts.get(c.rank) ?? 0) === 1)
+      .sort((a, b) => rankVal(a.rank) - rankVal(b.rank)); // 弱い順
+
+    // ワンペアでエース(A)のキッカーがある場合はAも残して2枚交換（ツーペア・トリプス狙い）
+    if (ev.category === 2 && singletons.length === 3 && rankVal(singletons[2].rank) === 14) {
+      return [singletons[0].id, singletons[1].id];
+    }
+    return singletons.map((c) => c.id);
+  }
+
+  // ジョーカー1枚＋バラ4枚（ワンペア判定）の場合
+  const hasJoker = hand.some((c) => c.suit === 'joker');
+  if (hasJoker) {
+    // 同じスートが3枚あればフラッシュドロー（1枚だけ交換）
+    const suitCounts = new Map<Card['suit'], Card[]>();
+    for (const c of normals) {
+      const list = suitCounts.get(c.suit) ?? [];
+      list.push(c);
+      suitCounts.set(c.suit, list);
+    }
+    for (const [suit, list] of suitCounts.entries()) {
+      if (list.length >= 3) {
+        return normals.filter((c) => c.suit !== suit).map((c) => c.id);
+      }
+    }
+    // それ以外はジョーカー＋最強カード1枚を残して3枚交換
+    const sorted = [...normals].sort((a, b) => rankVal(b.rank) - rankVal(a.rank));
+    return sorted.slice(1).map((c) => c.id);
+  }
+
+  // ハイカード（バラ5枚）：4枚フラッシュドローの確認
+  const suitCounts = new Map<Card['suit'], Card[]>();
+  for (const c of normals) {
+    const list = suitCounts.get(c.suit) ?? [];
+    list.push(c);
+    suitCounts.set(c.suit, list);
+  }
+  for (const [suit, list] of suitCounts.entries()) {
+    if (list.length === 4) {
+      const outlier = normals.find((c) => c.suit !== suit);
+      if (outlier) return [outlier.id];
+    }
+  }
+
+  // 4枚ストレートドロー（4枚のランク幅が4以内）の確認
+  const sortedByVal = [...normals].sort((a, b) => rankVal(a.rank) - rankVal(b.rank));
+  if (rankVal(sortedByVal[3].rank) - rankVal(sortedByVal[0].rank) <= 4) {
+    return [sortedByVal[4].id];
+  }
+  if (rankVal(sortedByVal[4].rank) - rankVal(sortedByVal[1].rank) <= 4) {
+    return [sortedByVal[0].id];
+  }
+
+  // ドロー目がなければ上位1〜2枚（AやKなど）を残して3〜4枚交換
+  const desc = [...normals].sort((a, b) => rankVal(b.rank) - rankVal(a.rank));
+  if (rankVal(desc[0].rank) >= 13 && rankVal(desc[1].rank) >= 12) {
+    return desc.slice(2).map((c) => c.id);
+  }
+  return desc.slice(1).map((c) => c.id);
+}
+
+function evaluatePokerHandStrength(hand: Card[], subPhase: PokerSubPhase): number {
+  const ev = evaluatePokerHand(hand);
+  const topRank = ev.tiebreakers[0] ?? 2;
+
+  if (ev.category >= 7) return 0.99; // フルハウス以上
+  if (ev.category === 6) return 0.95; // フラッシュ
+  if (ev.category === 5) return 0.90; // ストレート
+  if (ev.category === 4) return 0.83 + (topRank / 14) * 0.05; // スリーカード
+  if (ev.category === 3) return 0.68 + (topRank / 14) * 0.10; // ツーペア
+  if (ev.category === 2) {
+    // ワンペア：J〜Aのハイペアとローペアを明確に区別
+    if (topRank >= 11) {
+      return 0.48 + ((topRank - 10) / 4) * 0.16; // 0.52 .. 0.64
+    }
+    return 0.28 + (topRank / 10) * 0.16; // 0.31 .. 0.44
+  }
+
+  // ハイカード：ドロー前の4枚フラッシュ/ストレートドローは期待値を加算
+  if (subPhase === 'bet1') {
+    const discards = choosePokerDrawDiscards(hand);
+    if (discards.length === 1) return 0.42;
+  }
+  return 0.12 + (topRank / 14) * 0.12;
+}
+
 export function computePokerBotAction(state: PokerInternalState): { type: string; payload?: unknown } | null {
   if (state.subPhase === 'showdown') return null;
   const bot = state.players[state.turnIndex];
+
   if (state.subPhase === 'draw') {
-    const ev = evaluatePokerHand(bot.hand);
-    if (ev.category >= 4) {
-      return { type: 'draw', payload: { discardIds: [] } };
-    }
-    // ペア以外のカードを交換
-    const counts = new Map<number, number>();
-    bot.hand.forEach((c) => counts.set(c.rank, (counts.get(c.rank) ?? 0) + 1));
-    const discardIds = bot.hand
-      .filter((c) => c.suit !== 'joker' && (counts.get(c.rank) ?? 0) === 1)
-      .slice(0, 3)
-      .map((c) => c.id);
+    const discardIds = choosePokerDrawDiscards(bot.hand);
     return { type: 'draw', payload: { discardIds } };
   }
 
+  const ante = Math.max(5, state.rules.ante);
   const toCall = Math.max(0, state.highestBet - bot.currentBet);
-  const ev = evaluatePokerHand(bot.hand);
-  if (toCall > 40 && ev.category === 1 && Math.random() < 0.6) {
-    return { type: 'fold' };
+  const activeOpponents = state.players.filter(
+    (p, idx) => idx !== state.turnIndex && !p.folded
+  ).length;
+
+  if (activeOpponents === 0 || bot.chips === 0) {
+    return { type: 'call' };
   }
-  if (ev.category >= 3 && Math.random() < 0.35 && bot.chips >= toCall + 20) {
-    return { type: 'raise', payload: { amount: 20 } };
+
+  const strength = evaluatePokerHandStrength(bot.hand, state.subPhase);
+  const potOdds = toCall > 0 ? toCall / (state.pot + toCall) : 0;
+
+  const snapBet = (raw: number) => {
+    const step = Math.max(5, Math.floor(ante / 2));
+    const snapped = Math.round(raw / step) * step;
+    return Math.max(ante, Math.min(bot.chips - toCall, snapped));
+  };
+
+  // チェック可能な場面 (toCall === 0)
+  if (toCall === 0) {
+    if (bot.chips < ante) return { type: 'call' };
+
+    if (strength >= 0.68) {
+      const mult = state.subPhase === 'bet2' ? 0.75 : 0.55;
+      return { type: 'raise', payload: { amount: snapBet(state.pot * mult) } };
+    }
+    if (strength >= 0.50 && Math.random() < 0.75) {
+      return { type: 'raise', payload: { amount: snapBet(state.pot * 0.45) } };
+    }
+    // ドロー後のチェック回りに対する計算されたブラフ
+    if (state.subPhase === 'bet2' && strength < 0.30 && Math.random() < 0.16) {
+      return { type: 'raise', payload: { amount: snapBet(state.pot * 0.4) } };
+    }
+    return { type: 'call' };
   }
-  return { type: 'call' };
+
+  // ベット・レイズに直面している場面 (toCall > 0)
+  if (
+    strength >= 0.78 &&
+    bot.chips > toCall + ante &&
+    state.highestBet < state.rules.startChips * 0.55
+  ) {
+    const raiseAmt = snapBet(Math.max(ante * 2, (state.pot + toCall) * 0.55));
+    return { type: 'raise', payload: { amount: raiseAmt } };
+  }
+
+  const drawBonus = state.subPhase === 'bet1' ? 0.10 : 0;
+  const heavyBet = toCall >= ante * 3 || toCall > bot.chips * 0.4;
+  const minRequired = state.subPhase === 'bet2' && heavyBet ? 0.44 : 0.28;
+
+  if (strength + drawBonus >= potOdds + 0.08 && strength >= minRequired) {
+    return { type: 'call' };
+  }
+
+  if (toCall <= ante && strength >= 0.32) {
+    return { type: 'call' };
+  }
+
+  return { type: 'fold' };
 }
 
 export function sanitizePokerState(state: PokerInternalState, playerId: string): PokerClientState {

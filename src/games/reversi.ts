@@ -1,6 +1,6 @@
 import type { PlayerInfo, ReversiRules } from '../types/game';
 
-export type ReversiCell = 0 | 1 | 2;
+export type ReversiCell = 0 | 1 | 2; // 0: empty, 1: black (player 0), 2: white (player 1)
 
 export interface ReversiPlayerState {
   id: string;
@@ -156,6 +156,7 @@ export function applyReversiAction(
     };
   }
 
+  // 相手が置けない場合、自分がまだ置けるか確認
   const myMoves = getValidMoves(board, current.color);
   if (myMoves.length > 0) {
     return {
@@ -169,6 +170,7 @@ export function applyReversiAction(
     };
   }
 
+  // 両者置けない → ゲーム終了
   const { black, white } = countStones(board);
   let winnerId: string | 'draw' = 'draw';
   if (black > white) winnerId = state.players[0].id;
@@ -191,26 +193,211 @@ export function applyReversiAction(
   };
 }
 
+function applyMoveToBoard(
+  board: ReversiCell[][],
+  row: number,
+  col: number,
+  color: 1 | 2,
+  flipped: { row: number; col: number }[]
+): ReversiCell[][] {
+  const next = board.map((r) => [...r]);
+  next[row][col] = color;
+  for (const f of flipped) {
+    next[f.row][f.col] = color;
+  }
+  return next;
+}
+
+function getPositionalWeight(board: ReversiCell[][], r: number, c: number, color: 1 | 2): number {
+  const n = board.length;
+  const last = n - 1;
+  const isRCorner = r === 0 || r === last;
+  const isCCorner = c === 0 || c === last;
+  if (isRCorner && isCCorner) return 120;
+
+  // 最も近い角の座標
+  const cr = r <= 1 ? 0 : r >= last - 1 ? last : -1;
+  const cc = c <= 1 ? 0 : c >= last - 1 ? last : -1;
+  if (cr !== -1 && cc !== -1) {
+    const cornerCell = board[cr][cc];
+    const isXSquare = (r === 1 || r === last - 1) && (c === 1 || c === last - 1);
+    const isCSquare = !isXSquare && (r <= 1 || r >= last - 1) && (c <= 1 || c >= last - 1);
+    if (cornerCell === 0) {
+      if (isXSquare) return -55;
+      if (isCSquare) return -25;
+    } else if (cornerCell === color) {
+      if (isCSquare) return 22;
+      if (isXSquare) return 10;
+    } else {
+      if (isXSquare) return -15;
+    }
+  }
+
+  // 外周エッジ
+  if (isRCorner || isCCorner) return 18;
+  // 内側1つ目（エッジ隣接）
+  if (r === 1 || r === last - 1 || c === 1 || c === last - 1) return -4;
+  return 4;
+}
+
+function evaluateReversiBoard(board: ReversiCell[][], botColor: 1 | 2): number {
+  const oppColor: 1 | 2 = botColor === 1 ? 2 : 1;
+  const n = board.length;
+  let emptyCount = 0;
+  let myStones = 0;
+  let oppStones = 0;
+  let posScore = 0;
+  let myFrontier = 0;
+  let oppFrontier = 0;
+
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const cell = board[r][c];
+      if (cell === 0) {
+        emptyCount++;
+        continue;
+      }
+      const w = getPositionalWeight(board, r, c, cell);
+      let isFrontier = false;
+      for (const [dr, dc] of DIRS) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n && board[nr][nc] === 0) {
+          isFrontier = true;
+          break;
+        }
+      }
+      if (cell === botColor) {
+        myStones++;
+        posScore += w;
+        if (isFrontier) myFrontier++;
+      } else {
+        oppStones++;
+        posScore -= w;
+        if (isFrontier) oppFrontier++;
+      }
+    }
+  }
+
+  const myMoves = getValidMoves(board, botColor).length;
+  const oppMoves = getValidMoves(board, oppColor).length;
+
+  // 終盤（完了状態）は確定石差を最優先
+  if (emptyCount === 0 || (myMoves === 0 && oppMoves === 0)) {
+    if (myStones > oppStones) return 50000 + (myStones - oppStones) * 100;
+    if (myStones < oppStones) return -50000 + (myStones - oppStones) * 100;
+    return 0;
+  }
+
+  if (myStones === 0) return -90000;
+  if (oppStones === 0) return 90000;
+
+  const totalCells = n * n;
+  const progress = (totalCells - emptyCount) / totalCells;
+
+  // 序盤・中盤は着手可能数（モビリティ）と開放度（フロンティア少なさ）重視、終盤は石数重視
+  const mobilityScore = (myMoves - oppMoves) * (progress < 0.75 ? 16 : 8);
+  const frontierScore = (oppFrontier - myFrontier) * (progress < 0.7 ? 7 : 2);
+  const discDiffScore = (myStones - oppStones) * (progress > 0.75 ? 14 : -2);
+
+  return posScore + mobilityScore + frontierScore + discDiffScore;
+}
+
+function reversiMinimax(
+  board: ReversiCell[][],
+  depth: number,
+  alpha: number,
+  beta: number,
+  currentColor: 1 | 2,
+  botColor: 1 | 2,
+  passedPrev: boolean
+): number {
+  if (depth <= 0) {
+    return evaluateReversiBoard(board, botColor);
+  }
+
+  const oppColor: 1 | 2 = currentColor === 1 ? 2 : 1;
+  const moves = getValidMoves(board, currentColor);
+
+  if (moves.length === 0) {
+    if (passedPrev) {
+      return evaluateReversiBoard(board, botColor);
+    }
+    return reversiMinimax(board, depth - 1, alpha, beta, oppColor, botColor, true);
+  }
+
+  // Move ordering: 角や好位置を先に探索して枝刈り効率を高める
+  moves.sort(
+    (a, b) =>
+      getPositionalWeight(board, b.row, b.col, currentColor) -
+      getPositionalWeight(board, a.row, a.col, currentColor)
+  );
+
+  const isMaximizing = currentColor === botColor;
+  if (isMaximizing) {
+    let best = -Infinity;
+    for (const m of moves) {
+      const flipped = getFlippedStones(board, m.row, m.col, currentColor);
+      const nextBoard = applyMoveToBoard(board, m.row, m.col, currentColor, flipped);
+      const val = reversiMinimax(nextBoard, depth - 1, alpha, beta, oppColor, botColor, false);
+      if (val > best) best = val;
+      if (best > alpha) alpha = best;
+      if (beta <= alpha) break;
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (const m of moves) {
+      const flipped = getFlippedStones(board, m.row, m.col, currentColor);
+      const nextBoard = applyMoveToBoard(board, m.row, m.col, currentColor, flipped);
+      const val = reversiMinimax(nextBoard, depth - 1, alpha, beta, oppColor, botColor, false);
+      if (val < best) best = val;
+      if (best < beta) beta = best;
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+}
+
 export function computeReversiBotAction(state: ReversiInternalState): { type: string; payload?: unknown } | null {
   const bot = state.players[state.turnIndex];
   const moves = getValidMoves(state.board, bot.color);
   if (moves.length === 0) return null;
+  if (moves.length === 1) return { type: 'place', payload: moves[0] };
 
-  const n = state.board.length;
-  const isCorner = (r: number, c: number) =>
-    (r === 0 || r === n - 1) && (c === 0 || c === n - 1);
+  let emptyCount = 0;
+  for (const row of state.board) {
+    for (const cell of row) {
+      if (cell === 0) emptyCount++;
+    }
+  }
 
-  moves.sort((a, b) => {
-    const ac = isCorner(a.row, a.col) ? 1 : 0;
-    const bc = isCorner(b.row, b.col) ? 1 : 0;
-    if (ac !== bc) return bc - ac;
-    return (
-      getFlippedStones(state.board, b.row, b.col, bot.color).length -
-      getFlippedStones(state.board, a.row, a.col, bot.color).length
-    );
-  });
+  // 残り10手以下は完全読みに近い深さ、通常時は5手先までAlpha-Beta探索
+  const searchDepth = emptyCount <= 10 ? emptyCount : 5;
+  const oppColor: 1 | 2 = bot.color === 1 ? 2 : 1;
 
-  return { type: 'place', payload: moves[0] };
+  moves.sort(
+    (a, b) =>
+      getPositionalWeight(state.board, b.row, b.col, bot.color) -
+      getPositionalWeight(state.board, a.row, a.col, bot.color)
+  );
+
+  let bestMove = moves[0];
+  let bestScore = -Infinity;
+  let alpha = -Infinity;
+
+  for (const m of moves) {
+    const flipped = getFlippedStones(state.board, m.row, m.col, bot.color);
+    const nextBoard = applyMoveToBoard(state.board, m.row, m.col, bot.color, flipped);
+    const score = reversiMinimax(nextBoard, searchDepth - 1, alpha, Infinity, oppColor, bot.color, false);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = m;
+    }
+    if (score > alpha) alpha = score;
+  }
+
+  return { type: 'place', payload: bestMove };
 }
 
 export function sanitizeReversiState(state: ReversiInternalState, playerId: string): ReversiClientState {

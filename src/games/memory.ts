@@ -5,7 +5,7 @@ import { shuffle } from '../utils/deck';
 export interface MemoryTile {
   index: number;
   card: Card;
-  matchedBy: string | null;
+  matchedBy: string | null; // playerId if claimed
 }
 
 export interface MemoryPlayerState {
@@ -19,9 +19,10 @@ export interface MemoryInternalState {
   rules: MemoryRules;
   players: MemoryPlayerState[];
   tiles: MemoryTile[];
-  flippedIndices: number[];
+  flippedIndices: number[]; // currently revealed 0, 1, or 2 indices
+  seenIndices?: number[];   // これまでに公開されたタイルインデックスの履歴（古い順→新しい順）
   turnIndex: number;
-  awaitingReset: boolean;
+  awaitingReset: boolean; // 2枚めくって不一致だった時の一時表示中
   phase: 'playing' | 'finished';
   lastLog: string;
 }
@@ -29,7 +30,7 @@ export interface MemoryInternalState {
 export interface MemoryClientTile {
   index: number;
   matchedBy: string | null;
-  card: Card | null;
+  card: Card | null; // 裏向きなら null
 }
 
 export interface MemoryClientState {
@@ -45,10 +46,11 @@ export interface MemoryClientState {
 }
 
 export function initMemory(playersInfo: PlayerInfo[], rules: MemoryRules): MemoryInternalState {
-  const pairCount = Math.floor(rules.deckSize / 2);
+  const pairCount = Math.floor(rules.deckSize / 2); // 10, 13, 26
   const cards: Card[] = [];
 
   if (pairCount <= 13) {
+    // 20枚(1..10) or 26枚(1..13) のハートとスペードを使用
     const suits: Suit[] = ['spade', 'heart'];
     for (let r = 1; r <= pairCount; r++) {
       for (const s of suits) {
@@ -88,6 +90,7 @@ export function initMemory(playersInfo: PlayerInfo[], rules: MemoryRules): Memor
     players,
     tiles,
     flippedIndices: [],
+    seenIndices: [],
     turnIndex: 0,
     awaitingReset: false,
     phase: 'playing',
@@ -127,17 +130,22 @@ export function applyMemoryAction(
       return { state, error: 'そのカードはめくれません' };
     }
 
+    const prevSeen = state.seenIndices ?? [];
+    const seenIndices = [...prevSeen.filter((idx) => idx !== index), index];
+
     const flippedIndices = [...state.flippedIndices, index];
     if (flippedIndices.length === 1) {
       return {
         state: {
           ...state,
           flippedIndices,
+          seenIndices,
           lastLog: `${current.name} が1枚目をめくりました (${formatCardShort(tile.card)})`,
         },
       };
     }
 
+    // 2枚目
     const first = state.tiles[flippedIndices[0]];
     const second = tile;
     const isMatch = first.card.rank === second.card.rank;
@@ -159,6 +167,7 @@ export function applyMemoryAction(
             tiles,
             players,
             flippedIndices: [],
+            seenIndices,
             phase: 'finished',
             lastLog: `🏆 ゲーム終了！ 1位: ${sorted[0].name} (${sorted[0].pairs}ペア)`,
           },
@@ -175,6 +184,7 @@ export function applyMemoryAction(
           tiles,
           players,
           flippedIndices: [],
+          seenIndices,
           turnIndex: nextTurn,
           lastLog: `✨ ペア成立！(${formatCardShort(first.card)}) ${
             state.rules.extraTurnOnMatch ? `${current.name} もう1回！` : `次は ${players[nextTurn].name}`
@@ -186,6 +196,7 @@ export function applyMemoryAction(
         state: {
           ...state,
           flippedIndices,
+          seenIndices,
           awaitingReset: true,
           lastLog: `ざんねん！ (${formatCardShort(first.card)} / ${formatCardShort(second.card)})`,
         },
@@ -200,8 +211,57 @@ export function computeMemoryBotAction(state: MemoryInternalState): { type: stri
   if (state.awaitingReset) return null;
   const available = state.tiles.filter((t) => t.matchedBy === null && !state.flippedIndices.includes(t.index));
   if (available.length === 0) return null;
-  const pick = available[Math.floor(Math.random() * available.length)];
-  return { type: 'flip', payload: { index: pick.index } };
+
+  const seenList = state.seenIndices ?? [];
+  const seenSet = new Set(seenList);
+
+  // 公開されたことのある未成立タイルを記憶（直近16枚は100%記憶、それ以前も85%の高確率で記憶）
+  const recentCutoff = Math.max(0, seenList.length - 16);
+  const rememberedIndices = new Set<number>();
+  seenList.forEach((idx, pos) => {
+    if (pos >= recentCutoff || Math.random() < 0.85) {
+      rememberedIndices.add(idx);
+    }
+  });
+
+  const rememberedAvailable = available.filter((t) => rememberedIndices.has(t.index));
+  const unseenAvailable = available.filter((t) => !seenSet.has(t.index));
+
+  // 1枚目を開く時：すでに場所が判明しているペアがあれば即回収
+  if (state.flippedIndices.length === 0) {
+    const byRank = new Map<number, MemoryTile[]>();
+    for (const t of rememberedAvailable) {
+      const list = byRank.get(t.card.rank) ?? [];
+      list.push(t);
+      byRank.set(t.card.rank, list);
+    }
+    for (const list of byRank.values()) {
+      if (list.length >= 2) {
+        return { type: 'flip', payload: { index: list[0].index } };
+      }
+    }
+    // 既知ペアがなければ、まだ誰も開けていない未知のタイルを開拓（既知の単体タイルを1枚目に開けると情報が増えないため）
+    const pool = unseenAvailable.length > 0 ? unseenAvailable : available;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    return { type: 'flip', payload: { index: pick.index } };
+  }
+
+  // 2枚目を開く時：1枚目と同じ数字を記憶していれば確実にペアを揃える
+  if (state.flippedIndices.length === 1) {
+    const firstTile = state.tiles[state.flippedIndices[0]];
+    if (firstTile) {
+      const match = rememberedAvailable.find((t) => t.card.rank === firstTile.card.rank);
+      if (match) {
+        return { type: 'flip', payload: { index: match.index } };
+      }
+    }
+    // 記憶になければ、ハズレと分かっている既知タイルを避けて未知タイルをめくる
+    const pool = unseenAvailable.length > 0 ? unseenAvailable : available;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    return { type: 'flip', payload: { index: pick.index } };
+  }
+
+  return null;
 }
 
 export function sanitizeMemoryState(state: MemoryInternalState, playerId: string): MemoryClientState {

@@ -321,19 +321,152 @@ export function applyHoldemAction(
   };
 }
 
+function estimateHoldemEquity(
+  holeCards: Card[],
+  communityCards: Card[],
+  activeOpponents: number,
+  iterations = 44
+): number {
+  if (holeCards.length < 2) return 0.5;
+  const oppCount = Math.max(1, activeOpponents);
+  const knownIds = new Set<string>([...holeCards.map((c) => c.id), ...communityCards.map((c) => c.id)]);
+  const unknownPool = createDeck(0).filter((c) => !knownIds.has(c.id));
+  const neededBoard = Math.max(0, 5 - communityCards.length);
+  const totalNeeded = neededBoard + oppCount * 2;
+
+  let equitySum = 0;
+
+  for (let iter = 0; iter < iterations; iter++) {
+    // 必要な枚数だけ部分Fisher-Yatesシャッフルで高速抽出
+    for (let i = 0; i < totalNeeded; i++) {
+      const r = i + Math.floor(Math.random() * (unknownPool.length - i));
+      const tmp = unknownPool[i];
+      unknownPool[i] = unknownPool[r];
+      unknownPool[r] = tmp;
+    }
+
+    const simBoard =
+      neededBoard > 0
+        ? [...communityCards, ...unknownPool.slice(0, neededBoard)]
+        : communityCards;
+    const myEval = evaluateBestSeven([...holeCards, ...simBoard]);
+    const myScore = myEval ? myEval.score : 0;
+
+    let bestOppScore = -1;
+    let tieCount = 1;
+    for (let o = 0; o < oppCount; o++) {
+      const offset = neededBoard + o * 2;
+      const oppHole = [unknownPool[offset], unknownPool[offset + 1]];
+      const oppEval = evaluateBestSeven([...oppHole, ...simBoard]);
+      const oppScore = oppEval ? oppEval.score : 0;
+      if (oppScore > bestOppScore) {
+        bestOppScore = oppScore;
+      }
+      if (oppScore === myScore) {
+        tieCount++;
+      }
+    }
+
+    if (myScore > bestOppScore) {
+      equitySum += 1;
+    } else if (myScore === bestOppScore) {
+      equitySum += 1 / tieCount;
+    }
+  }
+
+  return equitySum / iterations;
+}
+
 export function computeHoldemBotAction(state: HoldemInternalState): { type: string; payload?: unknown } | null {
   if (state.subPhase === 'showdown') return null;
   const bot = state.players[state.turnIndex];
+  const bb = Math.max(5, state.rules.bigBlind);
   const toCall = Math.max(0, state.highestBet - bot.currentBet);
+  const activeOpponents = state.players.filter(
+    (p, idx) => idx !== state.turnIndex && !p.folded
+  ).length;
 
-  const ev = evaluateBestSeven([...bot.holeCards, ...state.communityCards]);
-  if (toCall > state.rules.bigBlind * 3 && (!ev || ev.category === 1) && Math.random() < 0.55) {
+  if (activeOpponents === 0 || bot.chips === 0) {
+    return { type: 'call' };
+  }
+
+  const equity = estimateHoldemEquity(bot.holeCards, state.communityCards, activeOpponents, 44);
+  const fairShare = 1 / (activeOpponents + 1);
+  const relativeStrength = equity / fairShare; // 1.0 = 平均的, 1.4+ = 有利, 1.75+ = 圧倒的
+  const potOdds = toCall > 0 ? toCall / (state.pot + toCall) : 0;
+
+  const snapBet = (raw: number) => {
+    const step = Math.max(5, Math.floor(bb / 2));
+    const snapped = Math.round(raw / step) * step;
+    return Math.max(bb, Math.min(bot.chips - toCall, snapped));
+  };
+
+  // チェック可能な場面 (toCall === 0)
+  if (toCall === 0) {
+    if (bot.chips < bb) return { type: 'call' };
+
+    // 非常に強いハンド：バリューベット（ポットの60%〜85%）
+    if (equity >= 0.72 || relativeStrength >= 1.65) {
+      const mult = state.subPhase === 'river' ? 0.8 : 0.6;
+      const betAmt = snapBet(state.pot * mult);
+      return { type: 'raise', payload: { amount: betAmt } };
+    }
+
+    // 有利なハンド：プロテクション＆バリューベット（ポットの50%）
+    if (relativeStrength >= 1.28 && Math.random() < 0.78) {
+      const betAmt = snapBet(state.pot * 0.5);
+      return { type: 'raise', payload: { amount: betAmt } };
+    }
+
+    // フロップでのセミブラフ / コンティニュエーションベット
+    if (state.subPhase === 'flop' && relativeStrength >= 0.95 && Math.random() < 0.25) {
+      const betAmt = snapBet(state.pot * 0.45);
+      return { type: 'raise', payload: { amount: betAmt } };
+    }
+
+    return { type: 'call' };
+  }
+
+  // ベット・レイズに直面している場面 (toCall > 0)
+  // 1. プリフロップでBB以下の少額コール（ブラインド補完やリンプ）
+  if (state.subPhase === 'preflop' && toCall <= bb) {
+    if (relativeStrength >= 1.42 && bot.chips >= toCall + bb * 2) {
+      return { type: 'raise', payload: { amount: snapBet(bb * 2) } };
+    }
+    if (relativeStrength >= 0.78 || toCall <= Math.floor(bb / 2)) {
+      return { type: 'call' };
+    }
     return { type: 'fold' };
   }
-  if (ev && ev.category >= 3 && Math.random() < 0.35 && bot.chips >= toCall + state.rules.bigBlind) {
-    return { type: 'raise', payload: { amount: state.rules.bigBlind } };
+
+  // 2. モンスターハンドならリレイズでポットを膨らませる
+  if (
+    (equity >= 0.74 || relativeStrength >= 1.75) &&
+    bot.chips > toCall + bb &&
+    state.highestBet < state.rules.startChips * 0.55
+  ) {
+    const raiseAmt = snapBet(Math.max(bb * 2, (state.pot + toCall) * 0.6));
+    return { type: 'raise', payload: { amount: raiseAmt } };
   }
-  return { type: 'call' };
+
+  // 3. ポットオッズとインプライドオッズに基づくコール/フォールド判定
+  const impliedBonus =
+    state.subPhase === 'preflop' ? 0.06 : state.subPhase === 'flop' ? 0.05 : state.subPhase === 'turn' ? 0.03 : 0;
+
+  // スタックの大部分を要求される大勝負では平均以上の勝率も要求
+  const heavyCommit = toCall > bot.chips * 0.45;
+  const minStrengthRequired = heavyCommit ? 1.05 : 0.82;
+
+  if (equity + impliedBonus >= potOdds && relativeStrength >= minStrengthRequired) {
+    return { type: 'call' };
+  }
+
+  // リバーや小額ベットに対して十分な勝率がある場合はコール
+  if (toCall <= bb && relativeStrength >= 0.92) {
+    return { type: 'call' };
+  }
+
+  return { type: 'fold' };
 }
 
 export function sanitizeHoldemState(state: HoldemInternalState, playerId: string): HoldemClientState {

@@ -11,18 +11,18 @@ export interface SevensPlayerState {
   isBot: boolean;
   hand: Card[];
   passesUsed: number;
-  eliminated: boolean;
+  eliminated: boolean; // パス上限ドボン
   finishRank: number | null;
 }
 
 export interface SevensInternalState {
   rules: SevensRules;
   players: SevensPlayerState[];
-  board: Record<NormalSuit, boolean[]>;
-  jokerSlots: Record<string, string>;
+  board: Record<NormalSuit, boolean[]>; // index 1..13 (true = placed)
+  jokerSlots: Record<string, string>; // key: `${suit}-${rank}`, value: joker card id
   turnIndex: number;
   finishedOrder: string[];
-  eliminatedOrder: string[];
+  eliminatedOrder: string[]; // reverse order for ranking
   phase: 'playing' | 'finished';
   lastLog: string;
 }
@@ -67,6 +67,7 @@ export function initSevens(playersInfo: PlayerInfo[], rules: SevensRules): Seven
     const hasDiamond7 = rawHand.some((c) => c.suit === 'diamond' && c.rank === 7);
     if (hasDiamond7) startIdx = idx;
 
+    // 7をすべて自動で場に出す
     const hand = rawHand.filter((c) => {
       if (c.rank === 7 && c.suit !== 'joker') {
         board[c.suit as NormalSuit][7] = true;
@@ -86,6 +87,7 @@ export function initSevens(playersInfo: PlayerInfo[], rules: SevensRules): Seven
     };
   });
 
+  // 7を出しただけで上がった人がいる場合の確認（稀）
   const finishedOrder: string[] = [];
   players.forEach((p) => {
     if (p.hand.length === 0) {
@@ -195,6 +197,7 @@ export function applySevensAction(
     const players = state.players.map((p, idx) => {
       if (idx !== state.turnIndex) return p;
       if (isEliminated) {
+        // 残りの手札をすべてオープン
         p.hand.forEach((c) => {
           if (c.suit !== 'joker') {
             board[c.suit as NormalSuit][c.rank] = true;
@@ -289,19 +292,96 @@ export function applySevensAction(
   return { state, error: '不明なアクションです' };
 }
 
+function evaluateSevensPlacement(
+  suit: NormalSuit,
+  rank: number,
+  hand: Card[],
+  state: SevensInternalState
+): { score: number; myDownstream: number; oppDownstream: number } {
+  const row = state.board[suit];
+  const downstreamRanks: number[] = [];
+
+  if (rank < 7) {
+    for (let r = rank - 1; r >= 1; r--) {
+      if (!row[r]) downstreamRanks.push(r);
+    }
+    if (state.rules.tunnel && !row[13]) {
+      for (let r = 13; r >= 8; r--) {
+        if (!row[r]) downstreamRanks.push(r);
+        else break;
+      }
+    }
+  } else if (rank > 7) {
+    for (let r = rank + 1; r <= 13; r++) {
+      if (!row[r]) downstreamRanks.push(r);
+    }
+    if (state.rules.tunnel && !row[1]) {
+      for (let r = 1; r <= 6; r++) {
+        if (!row[r]) downstreamRanks.push(r);
+        else break;
+      }
+    }
+  }
+
+  let myDownstream = 0;
+  let myExtremeWeight = 0;
+  for (const r of downstreamRanks) {
+    if (hand.some((c) => c.suit === suit && c.rank === r)) {
+      myDownstream++;
+      myExtremeWeight += Math.abs(r - 7);
+    }
+  }
+  const oppDownstream = Math.max(0, downstreamRanks.length - myDownstream);
+
+  const nextImmediateRank =
+    rank < 7
+      ? rank > 1
+        ? rank - 1
+        : state.rules.tunnel
+        ? 13
+        : -1
+      : rank < 13
+      ? rank + 1
+      : state.rules.tunnel
+      ? 1
+      : -1;
+  const iHaveNextImmediate =
+    nextImmediateRank >= 1 && hand.some((c) => c.suit === suit && c.rank === nextImmediateRank);
+
+  let score = 0;
+  // 自分の奥のカード（AやK側）を救出できるラインを最優先で開拓する
+  score += myDownstream * 42 + myExtremeWeight * 8;
+  // 直後の隣を自分が持っていれば、相手に手番を渡してもその列を相手に使われない
+  if (iHaveNextImmediate) score += 35;
+
+  // 自分が奥に1枚も持っていないのに相手だけ持っているラインは徹底的に止める（ロック戦術）
+  if (myDownstream === 0 && oppDownstream > 0) {
+    score -= oppDownstream * 48 + 30;
+  } else {
+    score -= oppDownstream * 14;
+  }
+
+  return { score, myDownstream, oppDownstream };
+}
+
 export function computeSevensBotAction(state: SevensInternalState): { type: string; payload?: unknown } {
   const bot = state.players[state.turnIndex];
-  const normalPlayable = bot.hand.filter(
-    (c) => c.suit !== 'joker' && canPlaceNormalCard(c.suit as NormalSuit, c.rank, state)
-  );
+  const hand = bot.hand;
 
-  if (normalPlayable.length > 0) {
-    normalPlayable.sort((a, b) => Math.abs(b.rank - 7) - Math.abs(a.rank - 7));
+  // 最後の1枚が出せるなら迷わず出して上がる
+  const normalPlayable = hand.filter((c) => {
+    if (c.suit === 'joker') return false;
+    const suit = c.suit as NormalSuit;
+    const isReplacingJoker = Boolean(state.jokerSlots[`${suit}-${c.rank}`]);
+    return isReplacingJoker || canPlaceNormalCard(suit, c.rank, state);
+  });
+
+  if (hand.length === 1 && normalPlayable.length === 1) {
     return { type: 'play', payload: { cardId: normalPlayable[0].id } };
   }
 
-  const joker = bot.hand.find((c) => c.suit === 'joker');
-  if (joker) {
+  const joker = hand.find((c) => c.suit === 'joker');
+  if (hand.length === 1 && joker) {
     const positions = getPlayablePositionsForJoker(state);
     if (positions.length > 0) {
       return {
@@ -309,6 +389,84 @@ export function computeSevensBotAction(state: SevensInternalState): { type: stri
         payload: { cardId: joker.id, targetSuit: positions[0].suit, targetRank: positions[0].rank },
       };
     }
+  }
+
+  const remainingPasses =
+    state.rules.passLimit >= 99 ? 99 : Math.max(0, state.rules.passLimit - bot.passesUsed);
+
+  const scoredNormals = normalPlayable.map((c) => {
+    const evalRes = evaluateSevensPlacement(c.suit as NormalSuit, c.rank, hand, state);
+    return { card: c, ...evalRes };
+  });
+  scoredNormals.sort((a, b) => b.score - a.score);
+
+  // ジョーカーの最適配置候補を計算
+  let bestJokerAction: {
+    suit: NormalSuit;
+    rank: number;
+    score: number;
+    myDownstream: number;
+  } | null = null;
+  if (joker) {
+    const positions = getPlayablePositionsForJoker(state);
+    for (const pos of positions) {
+      const evalRes = evaluateSevensPlacement(pos.suit, pos.rank, hand, state);
+      // 自分がその位置の実カードも持っていれば後で回収・上書きできるのでボーナス
+      const iHaveExact = hand.some((c) => c.suit === pos.suit && c.rank === pos.rank);
+      const jScore = evalRes.score + (iHaveExact ? 25 : 0);
+      if (!bestJokerAction || jScore > bestJokerAction.score) {
+        bestJokerAction = {
+          suit: pos.suit,
+          rank: pos.rank,
+          score: jScore,
+          myDownstream: evalRes.myDownstream,
+        };
+      }
+    }
+  }
+
+  // 自分が奥に複数枚抱えて詰まっている列をジョーカーで開通できるなら積極活用
+  if (
+    joker &&
+    bestJokerAction &&
+    bestJokerAction.myDownstream >= 2 &&
+    (scoredNormals.length === 0 || bestJokerAction.score > scoredNormals[0].score + 35)
+  ) {
+    return {
+      type: 'play',
+      payload: {
+        cardId: joker.id,
+        targetSuit: bestJokerAction.suit,
+        targetRank: bestJokerAction.rank,
+      },
+    };
+  }
+
+  if (scoredNormals.length > 0) {
+    const best = scoredNormals[0];
+    // 戦略的パス：出せるカードがすべて「自分は奥に0枚で相手のカードだけを2枚以上解放する悪手」であり、
+    // パス回数に十分な余裕がある場合は意図的にパスして相手をロックする
+    if (
+      best.myDownstream === 0 &&
+      best.oppDownstream >= 2 &&
+      remainingPasses >= 2 &&
+      hand.length >= 3
+    ) {
+      return { type: 'pass' };
+    }
+    return { type: 'play', payload: { cardId: best.card.id } };
+  }
+
+  // 通常カードが出せない場合、パス上限が迫っているか自分の列を開拓できるならジョーカーを使う
+  if (joker && bestJokerAction && (remainingPasses <= 1 || bestJokerAction.myDownstream >= 1)) {
+    return {
+      type: 'play',
+      payload: {
+        cardId: joker.id,
+        targetSuit: bestJokerAction.suit,
+        targetRank: bestJokerAction.rank,
+      },
+    };
   }
 
   return { type: 'pass' };
