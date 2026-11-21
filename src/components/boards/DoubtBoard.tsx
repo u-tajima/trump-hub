@@ -59,7 +59,7 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
           return (
             <div key={p.id} className={`opp-pill ${active ? 'active' : ''} ${p.id === state.myId ? 'me' : ''}`}>
               <div className="opp-name">{p.name}</div>
-              <div className="opp-meta">🃏 {p.handCount}枚</div>
+              <div className="opp-meta">{p.handCount}枚</div>
             </div>
           );
         })}
@@ -91,7 +91,7 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
                 className="danger-btn full-width"
                 onClick={() => onAction({ type: 'doubt' })}
               >
-                🚨 ダウト！！
+                ダウト！
               </button>
             )}
           </div>
@@ -100,11 +100,11 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
         {state.lastReveal && (
           <div className="reveal-box">
             <div className="reveal-title">
-              {state.lastReveal.wasLie ? '💥 ウソでした！' : '✅ 本当でした！'}
+              {state.lastReveal.wasLie ? 'ウソでした！' : '本当でした！'}
             </div>
             <div className="table-cards-row">
               {state.lastReveal.cards.map((c) => (
-                <PlayingCard key={c.id} card={c} size="xs" />
+                <PlayingCard key={c.id} card={c} size="xs" animateIn />
               ))}
             </div>
           </div>
@@ -116,7 +116,7 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
           <div className="hand-header">
             <span>
               {isMyTurn
-                ? `🟢 「${formatRank(state.expectedRank as 1)}」として1〜4枚を出してください`
+                ? `「${formatRank(state.expectedRank as 1)}」として1〜4枚を出してください`
                 : state.subPhase === 'doubtWindow'
                 ? 'ダウト判定中…'
                 : '相手のターン待機中…'}
@@ -148,7 +148,7 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
         </div>
       ) : (
         <div className="result-card">
-          <h3>🏆 勝者決定！</h3>
+          <h3>勝者決定！</h3>
           <p className="panel-desc text-center">
             勝者: <strong>{state.players.find((p) => p.id === state.winnerId)?.name}</strong>
           </p>

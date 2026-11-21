@@ -66,6 +66,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
               <PlayingCard
                 card={state.centerPiles[pileIdx]}
                 size="lg"
+                animateIn
                 highlight={canDrop}
                 onClick={canDrop ? () => handlePileClick(pileIdx) : undefined}
               />
@@ -90,6 +91,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
                   key={card.id}
                   card={card}
                   size="lg"
+                  animateIn
                   highlight={playable}
                   selected={selectedCardId === card.id}
                   disabled={!playable}
@@ -113,13 +115,13 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({ state, onAction }) => {
               className={`primary-btn flex-1 ${state.me.readyFlip ? 'pulse' : ''}`}
               onClick={() => onAction({ type: 'readyFlip' })}
             >
-              {state.me.readyFlip ? '相手を待っています…（取消）' : '⚡ せーの！（台札をめくる）'}
+              {state.me.readyFlip ? '相手を待っています…（取消）' : 'せーの！（台札をめくる）'}
             </button>
           </div>
         </div>
       ) : (
         <div className="result-card">
-          <h3>{state.winnerId === state.myId ? '🏆 あなたの勝利！' : '😢 相手の勝利…'}</h3>
+          <h3>{state.winnerId === state.myId ? 'あなたの勝利！' : '相手の勝利…'}</h3>
           <p className="panel-desc text-center">
             勝者: {state.winnerId === state.me.id ? state.me.name : state.opponent.name}
           </p>

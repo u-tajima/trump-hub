@@ -23,7 +23,7 @@ export const MemoryBoard: React.FC<MemoryBoardProps> = ({ state, onAction }) => 
           return (
             <div key={p.id} className={`opp-pill ${active ? 'active' : ''} ${p.id === state.myId ? 'me' : ''}`}>
               <div className="opp-name">{p.name}</div>
-              <div className="opp-meta">✨ {p.pairs}ペア</div>
+              <div className="opp-meta">{p.pairs}ペア</div>
             </div>
           );
         })}
@@ -44,6 +44,7 @@ export const MemoryBoard: React.FC<MemoryBoardProps> = ({ state, onAction }) => 
                 <PlayingCard
                   card={tile.card ?? undefined}
                   faceDown={!isFlipped}
+                  animateIn={isFlipped}
                   size="sm"
                   disabled={!isMyTurn || isFlipped || isMatched}
                   onClick={
@@ -58,7 +59,7 @@ export const MemoryBoard: React.FC<MemoryBoardProps> = ({ state, onAction }) => 
         </div>
       ) : (
         <div className="result-card">
-          <h3>🏆 結果発表</h3>
+          <h3>結果発表</h3>
           <ul className="result-list">
             {[...state.players]
               .sort((a, b) => b.pairs - a.pairs)

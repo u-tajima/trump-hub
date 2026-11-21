@@ -8,6 +8,7 @@ import { applyDoubtAction, initDoubt } from '../doubt';
 import { applyGomokuAction, initGomoku } from '../gomoku';
 import { applyMemoryAction, initMemory } from '../memory';
 import { applyOldMaidAction, initOldMaid } from '../oldMaid';
+import { applyPokerAction, evaluatePokerHand, initPoker } from '../poker';
 import { GAME_REGISTRY } from '../registry';
 import { applyReversiAction, initReversi } from '../reversi';
 import { applySevensAction, canPlaceNormalCard, initSevens } from '../sevens';
@@ -72,6 +73,48 @@ describe('Daifugo engine', () => {
     res = applyDaifugoAction(res.state, 'p1', { type: 'play', payload: { cardIds: ['spade-3'] } });
     expect(res.error).toBeUndefined();
     expect(res.state.table.length).toBe(0);
+  });
+
+  it('supports 7-pass, 10-discard, 5-skip, and sandstorm', () => {
+    const players = makePlayers(3);
+    const rules = {
+      ...GAME_REGISTRY.daifugo.defaultRules,
+      sevenPass: true,
+      tenDiscard: true,
+      fiveSkip: true,
+      sandstorm: true,
+    };
+    const state = initDaifugo(players, rules);
+    state.turnIndex = 0;
+    state.players[0].hand = [c('spade', 7), c('heart', 4), c('club', 6)];
+    state.players[1].hand = [c('diamond', 9), c('spade', 10)];
+
+    let res = applyDaifugoAction(state, 'p1', { type: 'play', payload: { cardIds: ['spade-7'] } });
+    expect(res.state.pendingEffect?.type).toBe('sevenPass');
+    res = applyDaifugoAction(res.state, 'p1', { type: 'resolveSevenPass', payload: { cardIds: ['heart-4'] } });
+    expect(res.state.pendingEffect).toBeNull();
+    expect(res.state.players[1].hand.some((card) => card.id === 'heart-4')).toBe(true);
+  });
+});
+
+describe('Poker engine', () => {
+  it('evaluates poker hands and completes bet -> draw -> showdown', () => {
+    const royal = [c('spade', 1), c('spade', 13), c('spade', 12), c('spade', 11), c('spade', 10)];
+    expect(evaluatePokerHand(royal).category).toBe(9);
+    expect(evaluatePokerHand(royal).name).toBe('ロイヤルフラッシュ');
+
+    const players = makePlayers(2);
+    let state = initPoker(players, GAME_REGISTRY.poker.defaultRules);
+    expect(state.subPhase).toBe('bet1');
+    state = applyPokerAction(state, 'p2', { type: 'call' }).state;
+    state = applyPokerAction(state, 'p1', { type: 'call' }).state;
+    expect(state.subPhase).toBe('draw');
+    state = applyPokerAction(state, 'p2', { type: 'draw', payload: { discardIds: [] } }).state;
+    state = applyPokerAction(state, 'p1', { type: 'draw', payload: { discardIds: [] } }).state;
+    expect(state.subPhase).toBe('bet2');
+    state = applyPokerAction(state, 'p2', { type: 'call' }).state;
+    state = applyPokerAction(state, 'p1', { type: 'call' }).state;
+    expect(state.subPhase).toBe('showdown');
   });
 });
 
@@ -197,7 +240,7 @@ describe('Chinchiro engine', () => {
     expect(evaluateChinchiroDice([2, 2, 5]).strength).toBe(15);
 
     const players = makePlayers(2);
-    let state = initChinchiro(players, { rounds: 3, startPoints: 100, shonbenEnabled: false });
+    const state = initChinchiro(players, { rounds: 3, startPoints: 100, shonbenEnabled: false });
     const res = applyChinchiroAction(state, 'p1', { type: 'roll' });
     expect(res.error).toBeUndefined();
     expect(res.state.players[0].currentHand).not.toBeNull();

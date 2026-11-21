@@ -22,7 +22,7 @@ export const Connect4Board: React.FC<Connect4BoardProps> = ({ state, onAction })
           return (
             <div key={p.id} className={`opp-pill ${active ? 'active' : ''} ${p.id === state.myId ? 'me' : ''}`}>
               <div className="opp-name">
-                {p.disc === 1 ? '🔴' : '🟡'} {p.name}
+                <span className={`mini-dot ${p.disc === 1 ? 'red' : 'yellow'}`} /> {p.name}
               </div>
               <div className="opp-meta">{active ? 'あなたの番' : '待機'}</div>
             </div>
@@ -66,10 +66,10 @@ export const Connect4Board: React.FC<Connect4BoardProps> = ({ state, onAction })
         <div className="result-card">
           <h3>
             {state.winnerId === 'draw'
-              ? '🤝 引き分け！'
+              ? '引き分け！'
               : state.winnerId === state.myId
-              ? '🏆 あなたの勝利！'
-              : '😢 相手の勝利…'}
+              ? 'あなたの勝利！'
+              : '相手の勝利…'}
           </h3>
         </div>
       )}

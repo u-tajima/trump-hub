@@ -23,7 +23,7 @@ export const ReversiBoard: React.FC<ReversiBoardProps> = ({ state, onAction }) =
           return (
             <div key={p.id} className={`opp-pill ${active ? 'active' : ''} ${p.id === state.myId ? 'me' : ''}`}>
               <div className="opp-name">
-                {p.color === 1 ? '⚫' : '⚪'} {p.name}
+                <span className={`mini-dot ${p.color === 1 ? 'black' : 'white'}`} /> {p.name}
               </div>
               <div className="opp-meta">{count}枚</div>
             </div>
@@ -64,10 +64,10 @@ export const ReversiBoard: React.FC<ReversiBoardProps> = ({ state, onAction }) =
         <div className="result-card">
           <h3>
             {state.winnerId === 'draw'
-              ? '🤝 引き分け！'
+              ? '引き分け！'
               : state.winnerId === state.myId
-              ? '🏆 あなたの勝利！'
-              : '😢 相手の勝利…'}
+              ? 'あなたの勝利！'
+              : '相手の勝利…'}
           </h3>
           <p className="panel-desc">
             黒 {state.counts.black} 枚 / 白 {state.counts.white} 枚
