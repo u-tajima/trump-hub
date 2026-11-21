@@ -17,7 +17,7 @@ export type GameId =
   | 'roulette';
 
 export interface ScoreBoardRoomRules {
-  startScore: 0 | 100 | 1000 | 25000; // 初期持ち点（基準点）
+  startScore: number;                 // 初期持ち点（基準点、任意入力可）
   unitStep: 1 | 5 | 10 | 100 | 1000;  // 数値増減の単位
   zeroSumCheck: boolean;              // ゼロサム不一致時の警告表示
 }
@@ -42,7 +42,7 @@ export interface DaifugoRules {
 }
 
 export interface SevensRules {
-  passLimit: 0 | 3 | 5 | 99; // 99 = 無制限
+  passLimit: number;         // パス上限（99 = 上限なし、任意入力可）
   tunnel: boolean;           // A-Kトンネル
   jokerEnabled: boolean;     // ジョーカーあり
 }
@@ -60,7 +60,7 @@ export interface OldMaidRules {
 
 export interface DoubtRules {
   jokerEnabled: boolean;     // ジョーカー（ワイルドカード）あり
-  doubtWindowSec: 3 | 5 | 8; // ダウト宣言の猶予時間（秒）
+  doubtWindowSec: number;    // ダウト宣言の猶予時間（秒、任意入力可）
 }
 
 export interface MemoryRules {
@@ -70,16 +70,16 @@ export interface MemoryRules {
 }
 
 export interface PokerRules {
-  rounds: 3 | 5 | 10;        // ラウンド数
-  startChips: 500 | 1000;    // 初期チップ
-  ante: 10 | 20;             // 参加費
+  rounds: number;            // ラウンド数（0 = 上限なし、任意入力可）
+  startChips: number;        // 初期チップ（任意入力可）
+  ante: number;              // 参加費（任意入力可）
   jokerEnabled: boolean;     // ジョーカー（ワイルド）あり
 }
 
 export interface HoldemRules {
-  rounds: 3 | 5 | 10;        // ラウンド数
-  startChips: 500 | 1000;    // 初期チップ
-  bigBlind: 10 | 20;         // ビッグブラインド
+  rounds: number;            // ラウンド数（0 = 上限なし、任意入力可）
+  startChips: number;        // 初期チップ（任意入力可）
+  bigBlind: number;          // ビッグブラインド（任意入力可）
 }
 
 export interface ReversiRules {
@@ -98,15 +98,15 @@ export interface Connect4Rules {
 }
 
 export interface ChinchiroRules {
-  rounds: 3 | 5 | 10;        // ラウンド数
-  startPoints: 100 | 300;    // 初期持ち点
+  rounds: number;            // ラウンド数（0 = 上限なし、任意入力可）
+  startPoints: number;       // 初期持ち点（任意入力可）
   shonbenEnabled: boolean;   // ションベン（振り直し扱い/即負け）あり
 }
 
 export interface RouletteRules {
-  rounds: 3 | 5 | 10;        // ラウンド数
-  startChips: 500 | 1000;    // 初期チップ
-  minBet: 10 | 50;           // 最小ベット単位
+  rounds: number;            // ラウンド数（0 = 上限なし、任意入力可）
+  startChips: number;        // 初期チップ（任意入力可）
+  minBet: number;            // 最小ベット単位（任意入力可）
 }
 
 export type GameRulesMap = {

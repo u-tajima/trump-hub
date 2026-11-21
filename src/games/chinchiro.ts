@@ -155,7 +155,7 @@ function settleRound(state: ChinchiroInternalState): ChinchiroInternalState {
     }
   }
 
-  if (state.round >= state.rules.rounds) {
+  if (state.rules.rounds > 0 && state.round >= state.rules.rounds) {
     const sorted = [...players].sort((a, b) => b.points - a.points);
     return {
       ...state,
@@ -298,7 +298,7 @@ export function computeChinchiroBotAction(
     const maxStake = getChinchiroMaxStake(bot.points);
     const maxLeaderPoints = Math.max(...state.players.map((p) => p.points));
     const deficit = Math.max(0, maxLeaderPoints - bot.points);
-    const isFinalRound = state.round >= state.rules.rounds;
+    const isFinalRound = state.rules.rounds > 0 && state.round >= state.rules.rounds;
 
     let desired = 10;
     if (dealerHand) {

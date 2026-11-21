@@ -131,6 +131,7 @@ function startNewHoldemHand(
   const pot = sbAmt + bbAmt;
   const highestBet = Math.max(sbAmt, bbAmt);
   const turnIndex = nextActiveIndex(players, bbIdx, true);
+  const roundLabel = rules.rounds > 0 ? `${round}/${rules.rounds}` : `${round}`;
 
   return {
     rules,
@@ -145,7 +146,7 @@ function startNewHoldemHand(
     subPhase: 'preflop',
     handWinners: [],
     phase: 'playing',
-    lastLog: `ハンド ${round}/${rules.rounds} プリフロップ開始（BB ${rules.bigBlind}）`,
+    lastLog: `ハンド ${roundLabel} プリフロップ開始（BB ${rules.bigBlind}）`,
   };
 }
 
@@ -195,7 +196,7 @@ function resolveHoldemShowdown(state: HoldemInternalState): HoldemInternalState 
     if (target) target.chips += share + (idx === 0 ? remainder : 0);
   });
 
-  const isFinal = state.round >= state.rules.rounds;
+  const isFinal = state.rules.rounds > 0 && state.round >= state.rules.rounds;
   const winnerNames = winners.map((w) => (w.evaluated ? `${w.name}(${w.evaluated.name})` : w.name)).join(' & ');
 
   return {

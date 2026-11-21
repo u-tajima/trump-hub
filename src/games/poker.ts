@@ -228,6 +228,7 @@ function startNewHand(
   });
 
   const turnIndex = nextActiveIndex(players, dealerIndex, true);
+  const roundLabel = rules.rounds > 0 ? `${round}/${rules.rounds}` : `${round}`;
 
   return {
     rules,
@@ -241,7 +242,7 @@ function startNewHand(
     subPhase: 'bet1',
     handWinners: [],
     phase: 'playing',
-    lastLog: `ハンド ${round}/${rules.rounds} 開始（アンティ ${rules.ante}）`,
+    lastLog: `ハンド ${roundLabel} 開始（アンティ ${rules.ante}）`,
   };
 }
 
@@ -284,7 +285,7 @@ function resolveShowdown(state: PokerInternalState): PokerInternalState {
   });
 
   const winnerNames = winners.map((w) => `${w.name}(${w.evaluated?.name})`).join(' & ');
-  const isFinalRound = state.round >= state.rules.rounds;
+  const isFinalRound = state.rules.rounds > 0 && state.round >= state.rules.rounds;
 
   return {
     ...state,
