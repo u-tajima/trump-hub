@@ -76,10 +76,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         <button
           type="button"
           className="icon-text-btn"
-          onClick={isHost ? onBackToLobby : onLeave}
+          onClick={isHost && gameId !== 'scoreboard' ? onBackToLobby : onLeave}
         >
           <ArrowLeft size={16} />
-          {isHost ? 'ロビー' : '退出'}
+          {isHost && gameId !== 'scoreboard' ? 'ロビー' : '退出'}
         </button>
         <div className="top-bar-center">
           <span className="top-bar-title title-with-icon">

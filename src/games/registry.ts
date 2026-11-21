@@ -55,14 +55,15 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
       },
       {
         key: 'unitStep',
-        label: 'クイック入力単位',
-        description: 'ワンタップ加減点ボタンの基準単位',
+        label: '入力単位（くの字ステップ）',
+        description: '左右くの字ボタン1回あたりの増減単位（二重くの字は10倍）',
         type: 'select',
         options: [
-          { value: 1, label: '1点単位 (±1, ±5, ±10, ±50)' },
-          { value: 5, label: '5点単位 (±5, ±25, ±50, ±100)' },
-          { value: 10, label: '10点単位 (±10, ±50, ±100, ±500)' },
-          { value: 100, label: '100点単位 (±100, ±500, ±1000, ±5000)' },
+          { value: 1, label: '1点単位 (±1 / ±10)' },
+          { value: 5, label: '5点単位 (±5 / ±50)' },
+          { value: 10, label: '10点単位 (±10 / ±100)' },
+          { value: 100, label: '100点単位 (±100 / ±1,000)' },
+          { value: 1000, label: '1,000点単位 (±1,000 / ±10,000)' },
         ],
       },
       {

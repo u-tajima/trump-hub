@@ -18,7 +18,7 @@ export type GameId =
 
 export interface ScoreBoardRoomRules {
   startScore: 0 | 100 | 1000 | 25000; // 初期持ち点（基準点）
-  unitStep: 1 | 5 | 10 | 100;         // クイック増減の単位
+  unitStep: 1 | 5 | 10 | 100 | 1000;  // 数値増減の単位
   zeroSumCheck: boolean;              // ゼロサム不一致時の警告表示
 }
 

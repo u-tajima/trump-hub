@@ -48,7 +48,7 @@ export function App() {
 
   const [lobby, setLobby] = useState<LobbyState | null>(null);
   const [clientGameState, setClientGameState] = useState<unknown>(null);
-  const [toolMode, setToolMode] = useState<boolean>(false);
+  const [activeTool, setActiveTool] = useState<'dice' | 'roulette' | null>(null);
   const [roomScoreBoard, setRoomScoreBoard] = useState<ScoreBoardState | null>(null);
   const [showScoreModal, setShowScoreModal] = useState<boolean>(false);
 
@@ -399,8 +399,8 @@ export function App() {
     <div className="app-shell">
       {toast && <div className="toast-banner">{toast}</div>}
 
-      {toolMode ? (
-        <ToolModeScreen onBack={() => setToolMode(false)} />
+      {activeTool ? (
+        <ToolModeScreen tool={activeTool} onBack={() => setActiveTool(null)} />
       ) : !lobby ? (
         <HomeScreen
           playerName={playerName}
@@ -410,7 +410,7 @@ export function App() {
           error={error}
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
-          onOpenTools={() => setToolMode(true)}
+          onOpenTool={(tool) => setActiveTool(tool)}
         />
       ) : lobby.phase === 'lobby' || !clientGameState ? (
         <LobbyScreen
