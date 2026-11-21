@@ -6,6 +6,7 @@ import { applyConnect4Action, initConnect4 } from '../connect4';
 import { applyDaifugoAction, canPlayOnTable, initDaifugo, parsePlay } from '../daifugo';
 import { applyDoubtAction, initDoubt } from '../doubt';
 import { applyGomokuAction, initGomoku } from '../gomoku';
+import { applyHoldemAction, evaluateBestSeven, initHoldem } from '../holdem';
 import { applyMemoryAction, initMemory } from '../memory';
 import { applyOldMaidAction, initOldMaid } from '../oldMaid';
 import { applyPokerAction, evaluatePokerHand, initPoker } from '../poker';
@@ -115,6 +116,24 @@ describe('Poker engine', () => {
     state = applyPokerAction(state, 'p2', { type: 'call' }).state;
     state = applyPokerAction(state, 'p1', { type: 'call' }).state;
     expect(state.subPhase).toBe('showdown');
+  });
+});
+
+describe('Texas Holdem engine', () => {
+  it('evaluates best 5 of 7 cards and progresses preflop to showdown', () => {
+    const seven = [
+      c('spade', 1), c('spade', 13), c('spade', 12), c('spade', 11), c('spade', 10),
+      c('heart', 2), c('club', 3),
+    ];
+    expect(evaluateBestSeven(seven)?.name).toBe('ロイヤルフラッシュ');
+
+    const players = makePlayers(2);
+    let state = initHoldem(players, GAME_REGISTRY.holdem.defaultRules);
+    expect(state.subPhase).toBe('preflop');
+    state = applyHoldemAction(state, 'p1', { type: 'call' }).state;
+    state = applyHoldemAction(state, 'p2', { type: 'call' }).state;
+    expect(state.subPhase).toBe('flop');
+    expect(state.communityCards.length).toBe(3);
   });
 });
 
