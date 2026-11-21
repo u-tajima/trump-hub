@@ -1,4 +1,18 @@
 import {
+  applyChinchiroAction,
+  type ChinchiroInternalState,
+  computeChinchiroBotAction,
+  initChinchiro,
+  sanitizeChinchiroState,
+} from './chinchiro';
+import {
+  applyConnect4Action,
+  computeConnect4BotAction,
+  type Connect4InternalState,
+  initConnect4,
+  sanitizeConnect4State,
+} from './connect4';
+import {
   applyDaifugoAction,
   computeDaifugoBotAction,
   type DaifugoInternalState,
@@ -12,6 +26,13 @@ import {
   initDoubt,
   sanitizeDoubtState,
 } from './doubt';
+import {
+  applyGomokuAction,
+  computeGomokuBotAction,
+  type GomokuInternalState,
+  initGomoku,
+  sanitizeGomokuState,
+} from './gomoku';
 import {
   applyMemoryAction,
   computeMemoryBotAction,
@@ -27,6 +48,13 @@ import {
   sanitizeOldMaidState,
 } from './oldMaid';
 import {
+  applyReversiAction,
+  computeReversiBotAction,
+  initReversi,
+  type ReversiInternalState,
+  sanitizeReversiState,
+} from './reversi';
+import {
   applySevensAction,
   computeSevensBotAction,
   initSevens,
@@ -41,13 +69,17 @@ import {
   type SpeedInternalState,
 } from './speed';
 import type {
+  ChinchiroRules,
+  Connect4Rules,
   DaifugoRules,
   DoubtRules,
   GameId,
   GameRulesMap,
+  GomokuRules,
   MemoryRules,
   OldMaidRules,
   PlayerInfo,
+  ReversiRules,
   SevensRules,
   SpeedRules,
 } from '../types/game';
@@ -58,7 +90,11 @@ export type AnyInternalState =
   | SpeedInternalState
   | OldMaidInternalState
   | DoubtInternalState
-  | MemoryInternalState;
+  | MemoryInternalState
+  | ReversiInternalState
+  | GomokuInternalState
+  | Connect4InternalState
+  | ChinchiroInternalState;
 
 export function initGameEngine(
   gameId: GameId,
@@ -78,6 +114,14 @@ export function initGameEngine(
       return initDoubt(players, rules as DoubtRules);
     case 'memory':
       return initMemory(players, rules as MemoryRules);
+    case 'reversi':
+      return initReversi(players, rules as ReversiRules);
+    case 'gomoku':
+      return initGomoku(players, rules as GomokuRules);
+    case 'connect4':
+      return initConnect4(players, rules as Connect4Rules);
+    case 'chinchiro':
+      return initChinchiro(players, rules as ChinchiroRules);
   }
 }
 
@@ -100,6 +144,14 @@ export function applyGameAction(
       return applyDoubtAction(state as DoubtInternalState, playerId, action);
     case 'memory':
       return applyMemoryAction(state as MemoryInternalState, playerId, action);
+    case 'reversi':
+      return applyReversiAction(state as ReversiInternalState, playerId, action);
+    case 'gomoku':
+      return applyGomokuAction(state as GomokuInternalState, playerId, action);
+    case 'connect4':
+      return applyConnect4Action(state as Connect4InternalState, playerId, action);
+    case 'chinchiro':
+      return applyChinchiroAction(state as ChinchiroInternalState, playerId, action);
   }
 }
 
@@ -117,6 +169,14 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizeDoubtState(state as DoubtInternalState, playerId);
     case 'memory':
       return sanitizeMemoryState(state as MemoryInternalState, playerId);
+    case 'reversi':
+      return sanitizeReversiState(state as ReversiInternalState, playerId);
+    case 'gomoku':
+      return sanitizeGomokuState(state as GomokuInternalState, playerId);
+    case 'connect4':
+      return sanitizeConnect4State(state as Connect4InternalState, playerId);
+    case 'chinchiro':
+      return sanitizeChinchiroState(state as ChinchiroInternalState, playerId);
   }
 }
 
@@ -186,6 +246,38 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
       const act = computeMemoryBotAction(s);
       if (!act) return null;
       return applyMemoryAction(s, current.id, act).state;
+    }
+    case 'reversi': {
+      const s = state as ReversiInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeReversiBotAction(s);
+      if (!act) return null;
+      return applyReversiAction(s, current.id, act).state;
+    }
+    case 'gomoku': {
+      const s = state as GomokuInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeGomokuBotAction(s);
+      if (!act) return null;
+      return applyGomokuAction(s, current.id, act).state;
+    }
+    case 'connect4': {
+      const s = state as Connect4InternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeConnect4BotAction(s);
+      if (!act) return null;
+      return applyConnect4Action(s, current.id, act).state;
+    }
+    case 'chinchiro': {
+      const s = state as ChinchiroInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeChinchiroBotAction(s);
+      if (!act) return null;
+      return applyChinchiroAction(s, current.id, act).state;
     }
   }
 }
