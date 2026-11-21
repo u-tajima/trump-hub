@@ -80,8 +80,12 @@ export function evaluateBestSeven(cards: Card[]): EvaluatedPokerHand | null {
   return best;
 }
 
-function nextActiveIndex(players: HoldemPlayerState[], fromIdx: number): number {
+function nextActiveIndex(players: HoldemPlayerState[], fromIdx: number, requireChips = false): number {
   const n = players.length;
+  for (let step = 1; step <= n; step++) {
+    const idx = (fromIdx + step) % n;
+    if (!players[idx].folded && (!requireChips || players[idx].chips > 0)) return idx;
+  }
   for (let step = 1; step <= n; step++) {
     const idx = (fromIdx + step) % n;
     if (!players[idx].folded) return idx;
@@ -103,6 +107,8 @@ function startNewHoldemHand(
     cursor += 2;
     return {
       ...p,
+      // チップ0で破産したプレイヤーは救済ブラインド（bigBlind * 2）を付与して全ハンド参加可能にする
+      chips: p.chips <= 0 ? rules.bigBlind * 2 : p.chips,
       holeCards,
       currentBet: 0,
       folded: false,
@@ -124,7 +130,7 @@ function startNewHoldemHand(
 
   const pot = sbAmt + bbAmt;
   const highestBet = Math.max(sbAmt, bbAmt);
-  const turnIndex = nextActiveIndex(players, bbIdx);
+  const turnIndex = nextActiveIndex(players, bbIdx, true);
 
   return {
     rules,
@@ -160,9 +166,17 @@ export function initHoldem(playersInfo: PlayerInfo[], rules: HoldemRules): Holde
 
 function resolveHoldemShowdown(state: HoldemInternalState): HoldemInternalState {
   const active = state.players.filter((p) => !p.folded);
+  let communityCards = [...state.communityCards];
+  let deck = [...state.deck];
+  if (active.length > 1 && communityCards.length < 5) {
+    const need = 5 - communityCards.length;
+    communityCards = [...communityCards, ...deck.slice(0, need)];
+    deck = deck.slice(need);
+  }
+
   const players = state.players.map((p) => ({
     ...p,
-    evaluated: p.folded ? null : evaluateBestSeven([...p.holeCards, ...state.communityCards]),
+    evaluated: p.folded ? null : evaluateBestSeven([...p.holeCards, ...communityCards]),
   }));
 
   let bestScore = -1;
@@ -173,10 +187,12 @@ function resolveHoldemShowdown(state: HoldemInternalState): HoldemInternalState 
   }
 
   const winners = players.filter((p) => !p.folded && (active.length === 1 || p.evaluated?.score === bestScore));
-  const share = Math.floor(state.pot / Math.max(1, winners.length));
-  winners.forEach((w) => {
+  const winCount = Math.max(1, winners.length);
+  const share = Math.floor(state.pot / winCount);
+  const remainder = state.pot - share * winCount;
+  winners.forEach((w, idx) => {
     const target = players.find((p) => p.id === w.id);
-    if (target) target.chips += share;
+    if (target) target.chips += share + (idx === 0 ? remainder : 0);
   });
 
   const isFinal = state.round >= state.rules.rounds;
@@ -185,6 +201,8 @@ function resolveHoldemShowdown(state: HoldemInternalState): HoldemInternalState 
   return {
     ...state,
     players,
+    deck,
+    communityCards,
     subPhase: 'showdown',
     handWinners: winners.map((w) => w.id),
     phase: isFinal ? 'finished' : 'playing',
@@ -201,15 +219,19 @@ function advanceHoldemPhase(state: HoldemInternalState): HoldemInternalState {
     return resolveHoldemShowdown(state);
   }
 
-  const settled = active.every(
-    (p) => p.actedThisRound && (p.currentBet === state.highestBet || p.chips === 0)
-  );
+  const activeWithChips = active.filter((p) => p.chips > 0);
+  const settled =
+    activeWithChips.length === 0 ||
+    activeWithChips.every((p) => p.actedThisRound && p.currentBet === state.highestBet);
   if (!settled) {
-    return { ...state, turnIndex: nextActiveIndex(state.players, state.turnIndex) };
+    return { ...state, turnIndex: nextActiveIndex(state.players, state.turnIndex, true) };
   }
 
   const resetPlayers = state.players.map((p) => ({ ...p, currentBet: 0, actedThisRound: false }));
-  const nextTurn = nextActiveIndex(resetPlayers, state.dealerIndex);
+  if (activeWithChips.length <= 1) {
+    return resolveHoldemShowdown({ ...state, players: resetPlayers, highestBet: 0 });
+  }
+  const nextTurn = nextActiveIndex(resetPlayers, state.dealerIndex, true);
 
   if (state.subPhase === 'preflop') {
     const flop = state.deck.slice(0, 3);
@@ -268,6 +290,9 @@ export function applyHoldemAction(
     }
     return { state, error: '次のハンドへ進んでください' };
   }
+  if (action.type === 'nextHand') {
+    return { state };
+  }
 
   const current = state.players[state.turnIndex];
   if (current.id !== playerId) return { state, error: 'あなたのターンではありません' };
@@ -299,7 +324,14 @@ export function applyHoldemAction(
     me.currentBet += paid;
     me.actedThisRound = true;
     pot += paid;
-    if (me.currentBet > highestBet) highestBet = me.currentBet;
+    if (me.currentBet > highestBet) {
+      highestBet = me.currentBet;
+      players.forEach((p, idx) => {
+        if (idx !== state.turnIndex && !p.folded && p.chips > 0) {
+          p.actedThisRound = false;
+        }
+      });
+    }
     log =
       me.chips === 0
         ? `${me.name} がオールイン (${paid})`

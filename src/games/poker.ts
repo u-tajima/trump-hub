@@ -3,6 +3,7 @@ import type { PlayerInfo, PokerRules } from '../types/game';
 import { createDeck, shuffle, sortCardsByRank } from '../utils/deck';
 
 export type PokerHandCategory =
+  | 10 // Five of a Kind (with Joker)
   | 9 // Straight Flush / Royal
   | 8 // Four of a Kind
   | 7 // Full House
@@ -161,6 +162,17 @@ export function evaluatePokerHand(cards: Card[]): EvaluatedPokerHand {
   if (jokers.length === 0) return evaluateFiveNormal(cards);
 
   const normals = cards.filter((c) => c.suit !== 'joker');
+  // 同じランク4枚 + ジョーカー = ファイブカード
+  if (normals.length === 4 && normals.every((c) => c.rank === normals[0].rank)) {
+    const rv = rankVal(normals[0].rank);
+    return {
+      category: 10,
+      tiebreakers: [rv],
+      name: 'ファイブカード',
+      score: 10 * 1e10 + rv * 1e8,
+    };
+  }
+
   const suits: Card['suit'][] = ['spade', 'heart', 'diamond', 'club'];
   let best: EvaluatedPokerHand | null = null;
 
@@ -174,6 +186,19 @@ export function evaluatePokerHand(cards: Card[]): EvaluatedPokerHand {
   return best!;
 }
 
+function nextActiveIndex(players: PokerPlayerState[], fromIdx: number, requireChips = false): number {
+  const n = players.length;
+  for (let step = 1; step <= n; step++) {
+    const idx = (fromIdx + step) % n;
+    if (!players[idx].folded && (!requireChips || players[idx].chips > 0)) return idx;
+  }
+  for (let step = 1; step <= n; step++) {
+    const idx = (fromIdx + step) % n;
+    if (!players[idx].folded) return idx;
+  }
+  return fromIdx;
+}
+
 function startNewHand(
   playersIn: PokerPlayerState[],
   rules: PokerRules,
@@ -185,13 +210,15 @@ function startNewHand(
   let pot = 0;
 
   const players: PokerPlayerState[] = playersIn.map((p) => {
-    const antePaid = Math.min(p.chips, rules.ante);
+    // チップ0で破産したプレイヤーは救済アンティ（ante * 2）を付与して全ハンド参加可能にする
+    const effectiveChips = p.chips <= 0 ? rules.ante * 2 : p.chips;
+    const antePaid = Math.min(effectiveChips, rules.ante);
     pot += antePaid;
     const hand = sortCardsByRank(deck.slice(cursor, cursor + 5));
     cursor += 5;
     return {
       ...p,
-      chips: p.chips - antePaid,
+      chips: effectiveChips - antePaid,
       hand,
       currentBet: 0,
       folded: false,
@@ -200,7 +227,7 @@ function startNewHand(
     };
   });
 
-  const turnIndex = (dealerIndex + 1) % players.length;
+  const turnIndex = nextActiveIndex(players, dealerIndex, true);
 
   return {
     rules,
@@ -233,15 +260,6 @@ export function initPoker(playersInfo: PlayerInfo[], rules: PokerRules): PokerIn
   return startNewHand(players, rules, 1, 0);
 }
 
-function nextActiveIndex(players: PokerPlayerState[], fromIdx: number): number {
-  const n = players.length;
-  for (let step = 1; step <= n; step++) {
-    const idx = (fromIdx + step) % n;
-    if (!players[idx].folded) return idx;
-  }
-  return fromIdx;
-}
-
 function resolveShowdown(state: PokerInternalState): PokerInternalState {
   const active = state.players.filter((p) => !p.folded);
   const players = state.players.map((p) => ({
@@ -256,11 +274,13 @@ function resolveShowdown(state: PokerInternalState): PokerInternalState {
     }
   }
 
-  const winners = players.filter((p) => !p.folded && p.evaluated?.score === bestScore);
-  const share = Math.floor(state.pot / Math.max(1, winners.length));
-  winners.forEach((w) => {
+  const winners = players.filter((p) => !p.folded && (active.length === 1 || p.evaluated?.score === bestScore));
+  const winCount = Math.max(1, winners.length);
+  const share = Math.floor(state.pot / winCount);
+  const remainder = state.pot - share * winCount;
+  winners.forEach((w, idx) => {
     const target = players.find((p) => p.id === w.id);
-    if (target) target.chips += share;
+    if (target) target.chips += share + (idx === 0 ? remainder : 0);
   });
 
   const winnerNames = winners.map((w) => `${w.name}(${w.evaluated?.name})`).join(' & ');
@@ -285,9 +305,10 @@ function advanceBetOrPhase(state: PokerInternalState): PokerInternalState {
     return resolveShowdown(state);
   }
 
-  const everyoneSettled = active.every(
-    (p) => p.actedThisRound && (p.currentBet === state.highestBet || p.chips === 0)
-  );
+  const activeWithChips = active.filter((p) => p.chips > 0);
+  const everyoneSettled =
+    activeWithChips.length === 0 ||
+    activeWithChips.every((p) => p.actedThisRound && p.currentBet === state.highestBet);
 
   if (everyoneSettled) {
     if (state.subPhase === 'bet1') {
@@ -297,7 +318,7 @@ function advanceBetOrPhase(state: PokerInternalState): PokerInternalState {
         players,
         highestBet: 0,
         subPhase: 'draw',
-        turnIndex: nextActiveIndex(players, state.dealerIndex),
+        turnIndex: nextActiveIndex(players, state.dealerIndex, false),
         lastLog: 'カード交換フェーズ：不要なカードを選んで交換してください',
       };
     }
@@ -306,7 +327,7 @@ function advanceBetOrPhase(state: PokerInternalState): PokerInternalState {
 
   return {
     ...state,
-    turnIndex: nextActiveIndex(state.players, state.turnIndex),
+    turnIndex: nextActiveIndex(state.players, state.turnIndex, true),
   };
 }
 
@@ -324,6 +345,9 @@ export function applyPokerAction(
     }
     return { state, error: '次のハンドへ進んでください' };
   }
+  if (action.type === 'nextHand') {
+    return { state };
+  }
 
   const current = state.players[state.turnIndex];
   if (current.id !== playerId) return { state, error: 'あなたのターンではありません' };
@@ -333,8 +357,23 @@ export function applyPokerAction(
     const discardIds = (action.payload as { discardIds?: string[] })?.discardIds ?? [];
     const kept = current.hand.filter((c) => !discardIds.includes(c.id));
     const drawCount = current.hand.length - kept.length;
-    const drawn = state.deck.slice(0, drawCount);
-    const nextDeck = state.deck.slice(drawCount);
+
+    let poolDeck = [...state.deck];
+    if (poolDeck.length < drawCount) {
+      const inUseIds = new Set<string>();
+      state.players.forEach((p, idx) => {
+        const cards = idx === state.turnIndex ? kept : p.hand;
+        cards.forEach((c) => inUseIds.add(c.id));
+      });
+      poolDeck.forEach((c) => inUseIds.add(c.id));
+      const recycled = shuffle(
+        createDeck(state.rules.jokerEnabled ? 1 : 0).filter((c) => !inUseIds.has(c.id))
+      );
+      poolDeck = [...poolDeck, ...recycled];
+    }
+
+    const drawn = poolDeck.slice(0, drawCount);
+    const nextDeck = poolDeck.slice(drawCount);
 
     const players = state.players.map((p, idx) =>
       idx === state.turnIndex
@@ -345,6 +384,17 @@ export function applyPokerAction(
     const active = players.filter((p) => !p.folded);
     if (active.every((p) => p.actedThisRound)) {
       const resetPlayers = players.map((p) => ({ ...p, currentBet: 0, actedThisRound: false }));
+      const canBetCount = resetPlayers.filter((p) => !p.folded && p.chips > 0).length;
+      if (canBetCount <= 1) {
+        return {
+          state: resolveShowdown({
+            ...state,
+            players: resetPlayers,
+            deck: nextDeck,
+            highestBet: 0,
+          }),
+        };
+      }
       return {
         state: {
           ...state,
@@ -352,7 +402,7 @@ export function applyPokerAction(
           deck: nextDeck,
           highestBet: 0,
           subPhase: 'bet2',
-          turnIndex: nextActiveIndex(resetPlayers, state.dealerIndex),
+          turnIndex: nextActiveIndex(resetPlayers, state.dealerIndex, true),
           lastLog: `${current.name} が${drawCount}枚交換 → 最終ベット開始`,
         },
       };
@@ -363,7 +413,7 @@ export function applyPokerAction(
         ...state,
         players,
         deck: nextDeck,
-        turnIndex: nextActiveIndex(players, state.turnIndex),
+        turnIndex: nextActiveIndex(players, state.turnIndex, false),
         lastLog: `${current.name} が ${drawCount}枚 交換しました`,
       },
     };
@@ -399,6 +449,11 @@ export function applyPokerAction(
     pot += totalPay;
     if (me.currentBet > highestBet) {
       highestBet = me.currentBet;
+      players.forEach((p, idx) => {
+        if (idx !== state.turnIndex && !p.folded && p.chips > 0) {
+          p.actedThisRound = false;
+        }
+      });
     }
     log =
       me.chips === 0

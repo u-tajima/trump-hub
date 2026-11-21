@@ -158,29 +158,31 @@ function analyzeGomokuAxis(
   allowOverline: boolean
 ): AxisPatternResult {
   const n = board.length;
-  // 中心(index 4)から前後4マス（計9マス）のラインを取得 (-1 = 盤外または相手石, 0 = 空, 1 = 自分石)
-  const line: number[] = new Array(9).fill(-1);
-  line[4] = 1;
-  for (let d = 1; d <= 4; d++) {
+  // 中心(index 5)から前後5マス（計11マス）のラインを取得 (-1 = 盤外または相手石, 0 = 空, 1 = 自分石)
+  const C = 5;
+  const LEN = 11;
+  const line: number[] = new Array(LEN).fill(-1);
+  line[C] = 1;
+  for (let d = 1; d <= C; d++) {
     const rPos = row + dr * d;
     const cPos = col + dc * d;
     if (rPos >= 0 && rPos < n && cPos >= 0 && cPos < n) {
       const cell = board[rPos][cPos];
-      line[4 + d] = cell === stone ? 1 : cell === 0 ? 0 : -1;
+      line[C + d] = cell === stone ? 1 : cell === 0 ? 0 : -1;
     }
     const rNeg = row - dr * d;
     const cNeg = col - dc * d;
     if (rNeg >= 0 && rNeg < n && cNeg >= 0 && cNeg < n) {
       const cell = board[rNeg][cNeg];
-      line[4 - d] = cell === stone ? 1 : cell === 0 ? 0 : -1;
+      line[C - d] = cell === stone ? 1 : cell === 0 ? 0 : -1;
     }
   }
 
   // 中心から連続する石の数
   let leftCont = 0;
-  while (4 - leftCont - 1 >= 0 && line[4 - leftCont - 1] === 1) leftCont++;
+  while (C - leftCont - 1 >= 0 && line[C - leftCont - 1] === 1) leftCont++;
   let rightCont = 0;
-  while (4 + rightCont + 1 < 9 && line[4 + rightCont + 1] === 1) rightCont++;
+  while (C + rightCont + 1 < LEN && line[C + rightCont + 1] === 1) rightCont++;
   const contiguous = 1 + leftCont + rightCont;
 
   if (allowOverline ? contiguous >= 5 : contiguous === 5) {
@@ -190,10 +192,10 @@ function analyzeGomokuAxis(
     return { isWin: false, open4: 0, half4: 0, open3: 0, half3: 0, open2: 0, score: -500 };
   }
 
-  const leftEndIdx = 4 - leftCont - 1;
-  const rightEndIdx = 4 + rightCont + 1;
+  const leftEndIdx = C - leftCont - 1;
+  const rightEndIdx = C + rightCont + 1;
   const leftOpen = leftEndIdx >= 0 && line[leftEndIdx] === 0;
-  const rightOpen = rightEndIdx < 9 && line[rightEndIdx] === 0;
+  const rightOpen = rightEndIdx < LEN && line[rightEndIdx] === 0;
 
   // 1マス空き（飛び石）を含めた連続数の確認
   let leftJump = 0;
@@ -207,7 +209,7 @@ function analyzeGomokuAxis(
   let rightJump = 0;
   if (rightOpen) {
     let idx = rightEndIdx + 1;
-    while (idx < 9 && line[idx] === 1) {
+    while (idx < LEN && line[idx] === 1) {
       rightJump++;
       idx++;
     }
@@ -215,9 +217,9 @@ function analyzeGomokuAxis(
 
   // 5連を作れる空間（自分石または空マスが連続5マス以上あるか）
   let spanLeft = 0;
-  while (4 - spanLeft - 1 >= 0 && line[4 - spanLeft - 1] !== -1) spanLeft++;
+  while (C - spanLeft - 1 >= 0 && line[C - spanLeft - 1] !== -1) spanLeft++;
   let spanRight = 0;
-  while (4 + spanRight + 1 < 9 && line[4 + spanRight + 1] !== -1) spanRight++;
+  while (C + spanRight + 1 < LEN && line[C + spanRight + 1] !== -1) spanRight++;
   if (1 + spanLeft + spanRight < 5) {
     return { isWin: false, open4: 0, half4: 0, open3: 0, half3: 0, open2: 0, score: 0 };
   }
@@ -244,7 +246,7 @@ function analyzeGomokuAxis(
 
   if (contiguous === 3) {
     const leftTwoOpen = leftOpen && leftEndIdx - 1 >= 0 && line[leftEndIdx - 1] === 0;
-    const rightTwoOpen = rightOpen && rightEndIdx + 1 < 9 && line[rightEndIdx + 1] === 0;
+    const rightTwoOpen = rightOpen && rightEndIdx + 1 < LEN && line[rightEndIdx + 1] === 0;
     if (leftOpen && rightOpen && (leftTwoOpen || rightTwoOpen)) {
       return { isWin: false, open4: 0, half4: 0, open3: 1, half3: 0, open2: 0, score: 12000 };
     }
@@ -266,7 +268,7 @@ function analyzeGomokuAxis(
   }
   if (jumpTotalRight === 3) {
     const outerRightIdx = rightEndIdx + rightJump + 1;
-    const outerRightOpen = outerRightIdx < 9 && line[outerRightIdx] === 0;
+    const outerRightOpen = outerRightIdx < LEN && line[outerRightIdx] === 0;
     if (leftOpen && outerRightOpen) {
       return { isWin: false, open4: 0, half4: 0, open3: 1, half3: 0, open2: 0, score: 9500 };
     }

@@ -90,12 +90,15 @@ describe('Daifugo engine', () => {
 });
 
 describe('Sevens engine', () => {
-  it('supports tunnel rule and pass limit elimination', () => {
+  it('supports tunnel rule (including continuing past A/K) and pass limit elimination', () => {
     const players = makePlayers(2);
     const rules = { ...GAME_REGISTRY.sevens.defaultRules, passLimit: 0 as const, tunnel: true };
     const state = initSevens(players, rules);
     state.board.spade[1] = true;
     expect(canPlaceNormalCard('spade', 13, state)).toBe(true);
+    // トンネルで K(13) が置かれた後、その隣の Q(12) も続けて出せること
+    state.board.spade[13] = true;
+    expect(canPlaceNormalCard('spade', 12, state)).toBe(true);
 
     // passLimit=0 -> 1回目で超過してドボン
     state.turnIndex = 0;
@@ -120,6 +123,18 @@ describe('Speed engine', () => {
     expect(res.error).toBeUndefined();
     expect(res.state.phase).toBe('finished');
     expect(res.state.winnerId).toBe('p1');
+
+    // 山札0枚かつ場札1枚ずつの終盤デッドロックでも readyFlip で台札が更新されること
+    const endState = initSpeed(players, rules);
+    endState.centerPiles = [c('heart', 2), c('club', 2)];
+    endState.players[0].fieldHand = [c('spade', 9)];
+    endState.players[0].drawPile = [];
+    endState.players[1].fieldHand = [c('diamond', 9)];
+    endState.players[1].drawPile = [];
+    let flipRes = applySpeedAction(endState, 'p1', { type: 'readyFlip' });
+    flipRes = applySpeedAction(flipRes.state, 'p2', { type: 'readyFlip' });
+    expect(flipRes.state.centerPiles[0].id).not.toBe('heart-2');
+    expect(flipRes.state.centerPiles[1].id).not.toBe('club-2');
   });
 });
 
@@ -218,23 +233,34 @@ describe('Chinchiro engine', () => {
     expect(staked.error).toBeUndefined();
     expect(staked.state.players[1].stake).toBe(35);
 
+    // 親(p1)がピンゾロ(5倍・即決役)を出した時点で即座にその局が精算され、35 * 5 = 175点移動して第2局に進む
     const res = applyChinchiroAction(staked.state, 'p1', {
       type: 'roll',
-      payload: { dice: [1, 1, 1] },
+      payload: { dice: [1, 1, 1], isShonben: false },
     });
     expect(res.error).toBeUndefined();
     expect(res.state.rollSeq).toBe(1);
     expect(res.state.lastRolledPlayerId).toBe('p1');
     expect(res.state.lastRolledHand?.rank).toBe('pinzoro');
-    expect(res.state.players[0].currentHand?.dice).toEqual([1, 1, 1]);
+    expect(res.state.round).toBe(2);
+    expect(res.state.players[0].points).toBe(275);
+    expect(res.state.players[1].points).toBe(-75);
 
-    // p2が3の目を出して親のピンゾロ(5倍)に負けると 35 * 5 = 175点移動
-    const settled = applyChinchiroAction(res.state, 'p2', {
+    // 第2局（親はp2）：親(p2)が通常の目（5の目）を出した場合は即決にならず子(p1)に手番が回る
+    const r2p2 = applyChinchiroAction(res.state, 'p2', {
       type: 'roll',
-      payload: { dice: [2, 2, 3] },
+      payload: { dice: [2, 2, 5], isShonben: false },
     });
-    expect(settled.state.players[0].points).toBe(275);
-    expect(settled.state.players[1].points).toBe(-75);
+    expect(r2p2.state.round).toBe(2);
+    expect(r2p2.state.turnIndex).toBe(0);
+    // 子(p1)が3の目を出すと親(p2)の5の目に負けて 10点移動
+    const r2p1 = applyChinchiroAction(r2p2.state, 'p1', {
+      type: 'roll',
+      payload: { dice: [4, 4, 3], isShonben: false },
+    });
+    expect(r2p1.state.round).toBe(3);
+    expect(r2p1.state.players[0].points).toBe(265);
+    expect(r2p1.state.players[1].points).toBe(-65);
   });
 });
 
@@ -259,6 +285,21 @@ describe('Daifugo extended rules', () => {
     res = applyDaifugoAction(res.state, 'p1', { type: 'resolveSevenPass', payload: { cardIds: ['heart-4'] } });
     expect(res.state.pendingEffect).toBeNull();
     expect(res.state.players[1].hand.some((card) => card.id === 'heart-4')).toBe(true);
+
+    // 都落ち(miyakoochi): 前回1位がp1の状態でp2が先に1位上がりするとp1が即都落ちになること
+    const miyakoState = initDaifugo(
+      players,
+      { ...GAME_REGISTRY.daifugo.defaultRules, miyakoochi: true },
+      ['p1']
+    );
+    miyakoState.turnIndex = 1; // p2
+    miyakoState.players[1].hand = [c('spade', 5)];
+    const miyakoRes = applyDaifugoAction(miyakoState, 'p2', {
+      type: 'play',
+      payload: { cardIds: ['spade-5'] },
+    });
+    expect(miyakoRes.state.players[0].foulFinish).toBe(true);
+    expect(miyakoRes.state.phase).toBe('finished');
   });
 });
 
