@@ -2,9 +2,13 @@ import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRightLeft,
+  Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Crown,
+  Edit3,
   History,
   Minus,
   Plus,
@@ -12,7 +16,7 @@ import {
   Trash2,
   UserCheck,
   UserPlus,
-  Users,
+  X,
 } from 'lucide-react';
 import {
   getScoreBoardZeroSumInfo,
@@ -44,14 +48,21 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
   zeroSumCheck = true,
 }) => {
   const [newName, setNewName] = useState('');
-  const [customByEntry, setCustomByEntry] = useState<Record<string, string>>({});
+  const [showAddForm, setShowAddForm] = useState(false);
   const [showSavedPicker, setShowSavedPicker] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
-  // 「自分」として操作する対象エントリーID（未指定時は myPlayerName と一致するメンバーを自動選択）
+  // 「自分」としてマークするエントリーID（未指定時は myPlayerName と一致するメンバーを自動選択）
   const [manualMyId, setManualMyId] = useState<string | null>(null);
-  // 自分の変動値入力用ステート
-  const [myDeltaInput, setMyDeltaInput] = useState<string>('');
+
+  // 点数を押して展開中のエントリーID（null のときは全行閉じてスッキリ表示）
+  const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
+
+  // 点数操作パネル内の入力ステート
+  const [deltaInput, setDeltaInput] = useState<string>('');
   const [counterpartyId, setCounterpartyId] = useState<string>('');
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editingNameDraft, setEditingNameDraft] = useState<string>('');
 
   const myEntry = useMemo(() => {
     if (board.entries.length === 0) return null;
@@ -86,20 +97,34 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
     return map;
   }, [board.entries]);
 
+  // 自分の行を先頭に、他は現在の並び順で表示
+  const orderedEntries = useMemo(() => {
+    if (!myEntry) return board.entries;
+    const mine = board.entries.filter((e) => e.id === myEntry.id);
+    const others = board.entries.filter((e) => e.id !== myEntry.id);
+    return [...mine, ...others];
+  }, [board.entries, myEntry]);
+
   const zeroSumInfo = useMemo(() => getScoreBoardZeroSumInfo(board), [board]);
 
   const step = Math.max(1, unitStep);
   const quickMagnitudes = useMemo(() => [1 * step, 5 * step, 10 * step, 50 * step], [step]);
-  const rowQuickDeltas = useMemo(
-    () => [-10 * step, -1 * step, 1 * step, 5 * step, 10 * step],
-    [step]
-  );
 
   const remainHours = Math.max(1, Math.ceil((board.expiresAt - Date.now()) / (60 * 60 * 1000)));
   const remainDaysText =
-    remainHours >= 24
-      ? `約${Math.ceil(remainHours / 24)}日間保持`
-      : `残り約${remainHours}時間保持`;
+    remainHours >= 24 ? `${Math.ceil(remainHours / 24)}日保存` : `${remainHours}時間保存`;
+
+  const toggleActiveEntry = (entryId: string) => {
+    if (activeEntryId === entryId) {
+      setActiveEntryId(null);
+      setEditingNameId(null);
+    } else {
+      setActiveEntryId(entryId);
+      setDeltaInput('');
+      setCounterpartyId('');
+      setEditingNameId(null);
+    }
+  };
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,26 +132,26 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
     if (!trimmed) return;
     onOp({ type: 'addEntry', name: trimmed });
     setNewName('');
+    setShowAddForm(false);
   };
 
-  const handleApplyMyDelta = (signedDelta: number) => {
-    if (!myEntry || !Number.isFinite(signedDelta) || signedDelta === 0) return;
+  const handleApplyDelta = (targetEntryId: string, signedDelta: number) => {
+    if (!Number.isFinite(signedDelta) || signedDelta === 0) return;
     const val = Math.trunc(signedDelta);
-    if (counterpartyId && counterpartyId !== myEntry.id) {
+    if (counterpartyId && counterpartyId !== targetEntryId) {
       const targetExists = board.entries.some((e) => e.id === counterpartyId);
       if (targetExists) {
-        // 自分が +val なら相手から自分へ val 移動、自分が -val なら自分から相手へ |val| 移動
         if (val > 0) {
           onOp({
             type: 'transferScore',
             fromEntryId: counterpartyId,
-            toEntryId: myEntry.id,
+            toEntryId: targetEntryId,
             amount: val,
           });
         } else {
           onOp({
             type: 'transferScore',
-            fromEntryId: myEntry.id,
+            fromEntryId: targetEntryId,
             toEntryId: counterpartyId,
             amount: Math.abs(val),
           });
@@ -134,33 +159,26 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
         return;
       }
     }
-    onOp({ type: 'addDelta', entryId: myEntry.id, delta: val });
+    onOp({ type: 'addDelta', entryId: targetEntryId, delta: val });
   };
 
-  const handleMyCustomCommit = (sign: 1 | -1) => {
-    const raw = Number(myDeltaInput);
-    if (!Number.isFinite(raw) || raw === 0) return;
-    const absVal = Math.abs(Math.trunc(raw));
-    handleApplyMyDelta(sign * absVal);
-    setMyDeltaInput('');
-  };
-
-  const handleBumpMyInput = (addAmt: number) => {
-    const cur = Number(myDeltaInput) || 0;
-    const next = Math.max(0, Math.trunc(cur) + addAmt);
-    setMyDeltaInput(next > 0 ? String(next) : '');
-  };
-
-  const handleCustomApply = (entryId: string, mode: 'add' | 'sub' | 'set') => {
-    const raw = Number(customByEntry[entryId]);
+  const handleCustomCommit = (targetEntryId: string, mode: 'add' | 'sub' | 'set') => {
+    const raw = Number(deltaInput);
     if (!Number.isFinite(raw)) return;
     const val = Math.trunc(raw);
     if (mode === 'set') {
-      onOp({ type: 'setScore', entryId, score: val });
+      onOp({ type: 'setScore', entryId: targetEntryId, score: val });
     } else if (val !== 0) {
-      onOp({ type: 'addDelta', entryId, delta: mode === 'add' ? Math.abs(val) : -Math.abs(val) });
+      const absVal = Math.abs(val);
+      handleApplyDelta(targetEntryId, mode === 'add' ? absVal : -absVal);
     }
-    setCustomByEntry((prev) => ({ ...prev, [entryId]: '' }));
+    setDeltaInput('');
+  };
+
+  const handleBumpInput = (addAmt: number) => {
+    const cur = Number(deltaInput) || 0;
+    const next = Math.max(0, Math.trunc(cur) + addAmt);
+    setDeltaInput(next > 0 ? String(next) : '');
   };
 
   const handleSyncRoomMembers = () => {
@@ -173,263 +191,139 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
     }
   };
 
-  const myNetFromBase = myEntry ? myEntry.score - zeroSumInfo.baseScore : 0;
-  const parsedMyInput = Math.abs(Math.trunc(Number(myDeltaInput) || 0));
+  const missingRoomMembersCount = useMemo(() => {
+    if (!isRoomMode || !roomPlayerNames || roomPlayerNames.length === 0) return 0;
+    const existingNames = new Set(board.entries.map((e) => e.name));
+    return roomPlayerNames.filter((n) => !existingNames.has(n)).length;
+  }, [isRoomMode, roomPlayerNames, board.entries]);
+
+  const parsedInput = Math.abs(Math.trunc(Number(deltaInput) || 0));
+  const hasRawInput = deltaInput.trim() !== '' && Number.isFinite(Number(deltaInput));
 
   return (
     <div className="scoreboard-wrap">
-      <div className="scoreboard-meta-bar">
-        <div className="scoreboard-badge-row">
-          {isRoomMode && (
-            <span className="flag-badge info">
-              <Users size={11} /> 全員で同時編集OK
-            </span>
-          )}
-          <span className="flag-badge warn">
-            <Clock size={11} /> {isRoomMode ? `ホスト端末に${remainDaysText}` : `ブラウザに${remainDaysText}`}
-          </span>
-        </div>
-        <div className="scoreboard-badge-row">
-          {canRestoreSaved && (
-            <button
-              type="button"
-              className="chip-btn"
-              onClick={() => setShowSavedPicker((v) => !v)}
-            >
-              <History size={12} />
-              履歴復元
-            </button>
-          )}
-          <button
-            type="button"
-            className="chip-btn"
-            disabled={board.entries.length === 0}
-            onClick={() => onOp({ type: 'resetScores' })}
-          >
-            <RotateCcw size={12} />
-            {zeroSumInfo.baseScore !== 0 ? `${zeroSumInfo.baseScore}点に戻す` : '0点に戻す'}
-          </button>
-        </div>
-      </div>
-
-      {/* ゼロサムチェック警告 / 一致ステータス */}
-      {zeroSumCheck && board.entries.length > 0 && (
-        <div
-          className={`scoreboard-zerosum-alert ${
-            zeroSumInfo.isZeroSum ? 'ok' : 'warning'
-          }`}
-          role="status"
-        >
-          {zeroSumInfo.isZeroSum ? (
-            <div className="zerosum-ok-row">
-              <CheckCircle2 size={16} />
+      {/* ゼロサム不一致のときだけ目立つ警告バナーを表示 */}
+      {zeroSumCheck && board.entries.length > 0 && !zeroSumInfo.isZeroSum && (
+        <div className="scoreboard-zerosum-alert warning" role="status">
+          <div className="zerosum-warn-content">
+            <div className="zerosum-warn-head">
+              <AlertTriangle size={16} />
               <span>
-                ゼロサム一致（全員の収支合計 ±0
-                {zeroSumInfo.baseScore !== 0
-                  ? ` / 基準 ${zeroSumInfo.baseScore}点×${board.entries.length}名`
-                  : ''}
+                ゼロサム不一致（合計差額:{' '}
+                <strong>
+                  {zeroSumInfo.totalDelta > 0
+                    ? `+${zeroSumInfo.totalDelta}`
+                    : zeroSumInfo.totalDelta}
+                  点
+                </strong>
                 ）
               </span>
             </div>
-          ) : (
-            <div className="zerosum-warn-content">
-              <div className="zerosum-warn-head">
-                <AlertTriangle size={18} />
-                <span>
-                  ゼロサムになっていません！（合計差額:{' '}
-                  <strong>
-                    {zeroSumInfo.totalDelta > 0
-                      ? `+${zeroSumInfo.totalDelta}`
-                      : zeroSumInfo.totalDelta}
-                    点
-                  </strong>
-                  ）
-                </span>
-              </div>
-              <div className="zerosum-warn-desc">
-                {zeroSumInfo.totalDelta > 0
-                  ? `全体でプラスが +${zeroSumInfo.totalDelta} 点超過しています。マイナス側の入力漏れや加算ミスがないか確認してください。`
-                  : `全体でマイナスが ${zeroSumInfo.totalDelta} 点超過しています。プラス側の入力漏れや減算ミスがないか確認してください。`}
-              </div>
-              {myEntry && (
-                <button
-                  type="button"
-                  className="zerosum-fix-btn"
-                  onClick={() =>
-                    onOp({
-                      type: 'addDelta',
-                      entryId: myEntry.id,
-                      delta: -zeroSumInfo.totalDelta,
-                    })
-                  }
-                >
-                  自分の得点（{myEntry.name}）に差額{' '}
-                  {-zeroSumInfo.totalDelta > 0
-                    ? `+${-zeroSumInfo.totalDelta}`
-                    : -zeroSumInfo.totalDelta}
-                  点 を反映してゼロサムにする
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 自分の得点変動クイック入力パネル */}
-      {myEntry && (
-        <div className="my-score-hero-card">
-          <div className="my-score-hero-top">
-            <div className="my-score-title-group">
-              <span className="my-score-label-badge">
-                <UserCheck size={13} /> 自分の得点変動を入力
-              </span>
-              {board.entries.length > 1 && (
-                <select
-                  className="my-score-member-select"
-                  value={myEntry.id}
-                  onChange={(e) => setManualMyId(e.target.value)}
-                  aria-label="自分のメンバーを選択"
-                >
-                  {board.entries.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name}（自分）
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            <div className="my-score-current-box">
-              <span className="my-score-rank-chip">
-                {rankById.get(myEntry.id) ?? 1}位
-              </span>
-              <span
-                className={`my-score-big-num ${
-                  myNetFromBase > 0 ? 'plus' : myNetFromBase < 0 ? 'minus' : ''
-                }`}
-              >
-                {myEntry.score}
-                <small>点</small>
-              </span>
-              {zeroSumInfo.baseScore !== 0 && (
-                <span className="my-score-net-sub">
-                  ({myNetFromBase > 0 ? `+${myNetFromBase}` : myNetFromBase})
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* 相手を指定して同時ゼロサム移動（任意） */}
-          {board.entries.length > 1 && (
-            <div className="my-score-transfer-bar">
-              <span className="my-score-transfer-label">
-                <ArrowRightLeft size={12} /> 連動精算:
-              </span>
-              <select
-                className="my-score-counterparty-select"
-                value={counterpartyId}
-                onChange={(e) => setCounterpartyId(e.target.value)}
-              >
-                <option value="">自分のみ変動（各自が自分のスマホで入力）</option>
-                {board.entries
-                  .filter((e) => e.id !== myEntry.id)
-                  .map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name} とゼロサム移動（相手も自動で逆変動）
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
-
-          {/* ワンタップ即時変動ボタン（プラス段・マイナス段） */}
-          <div className="my-score-instant-grid">
-            <div className="my-score-instant-row">
-              {quickMagnitudes.map((m) => (
-                <button
-                  key={`plus-${m}`}
-                  type="button"
-                  className="my-instant-btn plus"
-                  onClick={() => handleApplyMyDelta(m)}
-                >
-                  +{m}
-                </button>
-              ))}
-            </div>
-            <div className="my-score-instant-row">
-              {quickMagnitudes.map((m) => (
-                <button
-                  key={`minus-${m}`}
-                  type="button"
-                  className="my-instant-btn minus"
-                  onClick={() => handleApplyMyDelta(-m)}
-                >
-                  -{m}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 変動値を数値入力・積み上げして一括反映 */}
-          <div className="my-score-calc-box">
-            <div className="my-score-calc-input-row">
-              <input
-                type="number"
-                inputMode="numeric"
-                className="my-score-delta-input"
-                placeholder="変動点数を入力 (例: 30)"
-                value={myDeltaInput}
-                onChange={(e) => setMyDeltaInput(e.target.value)}
-              />
-              {quickMagnitudes.slice(0, 3).map((m) => (
-                <button
-                  key={`bump-${m}`}
-                  type="button"
-                  className="chip-btn"
-                  onClick={() => handleBumpMyInput(m)}
-                  title={`入力欄に +${m}`}
-                >
-                  +{m}
-                </button>
-              ))}
-              {myDeltaInput && (
-                <button
-                  type="button"
-                  className="chip-btn"
-                  onClick={() => setMyDeltaInput('')}
-                >
-                  クリア
-                </button>
-              )}
-            </div>
-            <div className="my-score-commit-row">
+            {myEntry && (
               <button
                 type="button"
-                className="my-commit-btn minus"
-                disabled={parsedMyInput === 0}
-                onClick={() => handleMyCustomCommit(-1)}
+                className="zerosum-fix-btn"
+                onClick={() =>
+                  onOp({
+                    type: 'addDelta',
+                    entryId: myEntry.id,
+                    delta: -zeroSumInfo.totalDelta,
+                  })
+                }
               >
-                <Minus size={15} />
-                {parsedMyInput > 0 ? `${parsedMyInput}点 減らす (-${parsedMyInput})` : '減点する'}
+                {myEntry.name} に差額{' '}
+                {-zeroSumInfo.totalDelta > 0
+                  ? `+${-zeroSumInfo.totalDelta}`
+                  : -zeroSumInfo.totalDelta}
+                点 を反映して精算
               </button>
-              <button
-                type="button"
-                className="my-commit-btn plus"
-                disabled={parsedMyInput === 0}
-                onClick={() => handleMyCustomCommit(1)}
-              >
-                <Plus size={15} />
-                {parsedMyInput > 0 ? `${parsedMyInput}点 増やす (+${parsedMyInput})` : '加点する'}
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
 
+      {/* コンパクトな上部ステータス＆アクションバー */}
+      <div className="scoreboard-toolbar">
+        <div className="scoreboard-status-chips">
+          {zeroSumCheck && board.entries.length > 0 && zeroSumInfo.isZeroSum && (
+            <span className="sb-mini-pill ok">
+              <CheckCircle2 size={12} /> ゼロサム ±0
+            </span>
+          )}
+          <span className="sb-mini-pill muted">
+            <Clock size={11} /> {remainDaysText}
+          </span>
+        </div>
+
+        <div className="scoreboard-action-chips">
+          <button
+            type="button"
+            className={`sb-tool-btn ${showAddForm ? 'active' : ''}`}
+            onClick={() => setShowAddForm((v) => !v)}
+          >
+            <Plus size={13} /> メンバー追加
+          </button>
+          {missingRoomMembersCount > 0 && (
+            <button
+              type="button"
+              className="sb-tool-btn accent"
+              onClick={handleSyncRoomMembers}
+            >
+              <UserPlus size={13} /> 参加者反映({missingRoomMembersCount})
+            </button>
+          )}
+          {canRestoreSaved && (
+            <button
+              type="button"
+              className={`sb-tool-btn ${showSavedPicker ? 'active' : ''}`}
+              onClick={() => setShowSavedPicker((v) => !v)}
+              title="保存済みデータから復元"
+            >
+              <History size={13} /> 復元
+            </button>
+          )}
+          {board.entries.length > 0 && (
+            <button
+              type="button"
+              className="sb-tool-btn"
+              onClick={() => onOp({ type: 'resetScores' })}
+              title="全員の点数を初期値に戻す"
+            >
+              <RotateCcw size={13} /> リセット
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 折りたたみ：メンバー追加フォーム */}
+      {showAddForm && (
+        <form className="scoreboard-add-row" onSubmit={handleAddMember}>
+          <input
+            type="text"
+            className="tool-item-input"
+            maxLength={14}
+            placeholder="追加するメンバー名…"
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
+          <button type="submit" className="chip-btn accent" disabled={!newName.trim()}>
+            追加
+          </button>
+          <button
+            type="button"
+            className="chip-btn"
+            onClick={() => setShowAddForm(false)}
+          >
+            閉じる
+          </button>
+        </form>
+      )}
+
+      {/* 折りたたみ：履歴復元ピッカー */}
       {showSavedPicker && (
-        <div className="card-panel">
-          <div className="panel-title" style={{ fontSize: 12, marginBottom: 6 }}>
-            3日以内に保存された得点表から読み込み
-          </div>
+        <div className="sb-sub-panel">
+          <div className="sb-sub-panel-title">3日以内に保存された得点表から読み込み</div>
           {savedBoards.length === 0 ? (
             <div className="text-muted-sm">他の保存済み得点表はありません</div>
           ) : (
@@ -452,172 +346,308 @@ export const ScoreBoardPanel: React.FC<ScoreBoardPanelProps> = ({
         </div>
       )}
 
-      {/* メンバー追加 */}
-      <form className="scoreboard-add-row" onSubmit={handleAddMember}>
-        <input
-          type="text"
-          className="tool-item-input"
-          maxLength={14}
-          placeholder="メンバー名を追加…"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-        />
-        <button type="submit" className="chip-btn accent" disabled={!newName.trim()}>
-          <Plus size={14} />
-          追加
-        </button>
-        {isRoomMode && roomPlayerNames && roomPlayerNames.length > 0 && (
-          <button
-            type="button"
-            className="chip-btn"
-            onClick={handleSyncRoomMembers}
-            title="部屋の参加メンバーを追加"
-          >
-            <UserPlus size={14} />
-            参加者反映
-          </button>
-        )}
-      </form>
+      {/* 操作ヒント（まだ誰も開いていないときのみ控えめに1行表示） */}
+      {board.entries.length > 0 && !activeEntryId && (
+        <div className="sb-tap-guide">点数をタップすると加減点パネルが開きます</div>
+      )}
 
-      {/* 全メンバー得点リスト */}
+      {/* スッキリした得点一覧（点数をタップするとその下に操作ドロワーが展開） */}
       <div className="scoreboard-entry-list">
-        {board.entries.length === 0 ? (
-          <div className="card-panel text-muted-sm" style={{ textAlign: 'center' }}>
-            メンバーを追加して得点管理を始めましょう
+        {orderedEntries.length === 0 ? (
+          <div className="sb-empty-box">
+            <div>メンバーがまだ登録されていません</div>
+            <button
+              type="button"
+              className="chip-btn accent"
+              onClick={() => setShowAddForm(true)}
+            >
+              <Plus size={14} /> メンバーを追加する
+            </button>
           </div>
         ) : (
-          board.entries.map((entry) => {
+          orderedEntries.map((entry) => {
             const rank = rankById.get(entry.id) ?? 1;
             const isTop = rank === 1 && entry.score > zeroSumInfo.baseScore;
             const isMe = myEntry?.id === entry.id;
+            const isOpen = activeEntryId === entry.id;
             const net = entry.score - zeroSumInfo.baseScore;
-            const customVal = customByEntry[entry.id] ?? '';
+            const isEditingName = editingNameId === entry.id;
+
             return (
               <div
                 key={entry.id}
-                className={`scoreboard-entry ${isTop ? 'top-rank' : ''} ${
-                  isMe ? 'is-my-entry' : ''
+                className={`sb-card ${isMe ? 'is-me' : ''} ${isTop ? 'is-top' : ''} ${
+                  isOpen ? 'is-open' : ''
                 }`}
               >
-                <div className="scoreboard-entry-head">
-                  <div className="scoreboard-entry-left">
-                    <span className={`scoreboard-rank ${isTop ? 'first' : ''}`}>
+                {/* 1行メイン行：順位・名前・点数ボタン */}
+                <div className="sb-card-main">
+                  <div className="sb-card-identity">
+                    <span className={`sb-rank-badge ${isTop ? 'first' : ''}`}>
                       {isTop ? <Crown size={13} /> : rank}
                     </span>
-                    <input
-                      type="text"
-                      className="scoreboard-name-input"
-                      maxLength={14}
-                      defaultValue={entry.name}
-                      key={`${entry.id}-${entry.name}`}
-                      onBlur={(e) => {
-                        const val = e.target.value.trim();
-                        if (val && val !== entry.name) {
-                          onOp({ type: 'renameEntry', entryId: entry.id, name: val });
-                        }
-                      }}
-                    />
-                    {isMe ? (
-                      <span className="badge me">自分</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="set-me-mini-btn"
-                        onClick={() => setManualMyId(entry.id)}
-                      >
-                        自分に設定
-                      </button>
-                    )}
+
+                    <div className="sb-name-wrap">
+                      <span className="sb-player-name">{entry.name}</span>
+                      {isMe && <span className="sb-me-chip">自分</span>}
+                    </div>
                   </div>
-                  <div
-                    className={`scoreboard-score-val ${
+
+                  {/* 点数ボタン（ここを押すと操作パネルが開閉） */}
+                  <button
+                    type="button"
+                    className={`sb-score-trigger ${
                       net > 0 ? 'plus' : net < 0 ? 'minus' : ''
-                    }`}
+                    } ${isOpen ? 'active' : ''}`}
+                    onClick={() => toggleActiveEntry(entry.id)}
+                    aria-expanded={isOpen}
+                    title="タップして点数を操作"
                   >
-                    {entry.score}
+                    <div className="sb-score-num-group">
+                      <span className="sb-score-number">{entry.score.toLocaleString()}</span>
+                      <span className="sb-score-unit">点</span>
+                      {zeroSumInfo.baseScore !== 0 && (
+                        <span className="sb-score-diff">
+                          ({net > 0 ? `+${net}` : net})
+                        </span>
+                      )}
+                    </div>
+                    <span className="sb-score-caret">
+                      {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                    </span>
+                  </button>
+                </div>
+
+                {/* 点数を押したときだけ出てくる操作ドロワー */}
+                {isOpen && (
+                  <div className="sb-drawer">
+                    {/* クイック加減点ボタン（上段：加点 / 下段：減点） */}
+                    <div className="sb-quick-grid">
+                      <div className="sb-quick-row">
+                        {quickMagnitudes.map((m) => (
+                          <button
+                            key={`plus-${m}`}
+                            type="button"
+                            className="sb-quick-btn plus"
+                            onClick={() => handleApplyDelta(entry.id, m)}
+                          >
+                            +{m}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="sb-quick-row">
+                        {quickMagnitudes.map((m) => (
+                          <button
+                            key={`minus-${m}`}
+                            type="button"
+                            className="sb-quick-btn minus"
+                            onClick={() => handleApplyDelta(entry.id, -m)}
+                          >
+                            -{m}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 任意の点数入力＆加減算 */}
+                    <div className="sb-custom-box">
+                      <div className="sb-custom-input-row">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          className="sb-delta-input"
+                          placeholder="点数を入力 (例: 30)"
+                          value={deltaInput}
+                          onChange={(e) => setDeltaInput(e.target.value)}
+                        />
+                        {quickMagnitudes.slice(0, 3).map((m) => (
+                          <button
+                            key={`bump-${m}`}
+                            type="button"
+                            className="sb-bump-btn"
+                            onClick={() => handleBumpInput(m)}
+                          >
+                            +{m}
+                          </button>
+                        ))}
+                        {deltaInput && (
+                          <button
+                            type="button"
+                            className="sb-bump-btn"
+                            onClick={() => setDeltaInput('')}
+                            aria-label="入力クリア"
+                          >
+                            <X size={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="sb-commit-row">
+                        <button
+                          type="button"
+                          className="sb-commit-btn minus"
+                          disabled={parsedInput === 0}
+                          onClick={() => handleCustomCommit(entry.id, 'sub')}
+                        >
+                          <Minus size={14} />
+                          {parsedInput > 0 ? `-${parsedInput} 減らす` : '減らす'}
+                        </button>
+                        <button
+                          type="button"
+                          className="sb-commit-btn plus"
+                          disabled={parsedInput === 0}
+                          onClick={() => handleCustomCommit(entry.id, 'add')}
+                        >
+                          <Plus size={14} />
+                          {parsedInput > 0 ? `+${parsedInput} 増やす` : '増やす'}
+                        </button>
+                        <button
+                          type="button"
+                          className="sb-commit-btn neutral"
+                          disabled={!hasRawInput}
+                          onClick={() => handleCustomCommit(entry.id, 'set')}
+                          title="入力した数値に直接変更"
+                        >
+                          直接設定
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 相手との連動ゼロサム移動（2人以上のとき） */}
+                    {board.entries.length > 1 && (
+                      <div className="sb-transfer-row">
+                        <span className="sb-transfer-label">
+                          <ArrowRightLeft size={12} /> 相手と同時精算:
+                        </span>
+                        <select
+                          className="sb-transfer-select"
+                          value={counterpartyId}
+                          onChange={(e) => setCounterpartyId(e.target.value)}
+                        >
+                          <option value="">なし（この人のみ変動）</option>
+                          {board.entries
+                            .filter((e) => e.id !== entry.id)
+                            .map((e) => (
+                              <option key={e.id} value={e.id}>
+                                {e.name} とゼロサム移動
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* サブ操作フッター（自分に設定・名前変更・削除・閉じる） */}
+                    <div className="sb-drawer-footer">
+                      {isEditingName ? (
+                        <div className="sb-rename-inline">
+                          <input
+                            type="text"
+                            className="sb-rename-input"
+                            maxLength={14}
+                            value={editingNameDraft}
+                            autoFocus
+                            onChange={(e) => setEditingNameDraft(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="sb-sub-btn accent"
+                            onClick={() => {
+                              const trimmed = editingNameDraft.trim();
+                              if (trimmed && trimmed !== entry.name) {
+                                onOp({ type: 'renameEntry', entryId: entry.id, name: trimmed });
+                              }
+                              setEditingNameId(null);
+                            }}
+                          >
+                            <Check size={12} /> 保存
+                          </button>
+                          <button
+                            type="button"
+                            className="sb-sub-btn"
+                            onClick={() => setEditingNameId(null)}
+                          >
+                            キャンセル
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="sb-drawer-sub-left">
+                            {!isMe && (
+                              <button
+                                type="button"
+                                className="sb-sub-btn"
+                                onClick={() => setManualMyId(entry.id)}
+                              >
+                                <UserCheck size={12} /> 自分に設定
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="sb-sub-btn"
+                              onClick={() => {
+                                setEditingNameId(entry.id);
+                                setEditingNameDraft(entry.name);
+                              }}
+                            >
+                              <Edit3 size={12} /> 名前変更
+                            </button>
+                            <button
+                              type="button"
+                              className="sb-sub-btn danger"
+                              onClick={() => {
+                                onOp({ type: 'removeEntry', entryId: entry.id });
+                                setActiveEntryId(null);
+                              }}
+                            >
+                              <Trash2 size={12} /> 削除
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className="sb-sub-btn"
+                            onClick={() => setActiveEntryId(null)}
+                          >
+                            閉じる
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className="icon-danger-btn"
-                    onClick={() => onOp({ type: 'removeEntry', entryId: entry.id })}
-                    aria-label={`${entry.name} を削除`}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-
-                {/* クイック加減点 */}
-                <div className="scoreboard-quick-row">
-                  {rowQuickDeltas.map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      className={`score-delta-btn ${d > 0 ? 'plus' : 'minus'}`}
-                      onClick={() => onOp({ type: 'addDelta', entryId: entry.id, delta: d })}
-                    >
-                      {d > 0 ? `+${d}` : d}
-                    </button>
-                  ))}
-                </div>
-
-                {/* 任意数値入力 */}
-                <div className="scoreboard-custom-row">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    className="scoreboard-custom-input"
-                    placeholder="任意点数"
-                    value={customVal}
-                    onChange={(e) =>
-                      setCustomByEntry((prev) => ({ ...prev, [entry.id]: e.target.value }))
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="chip-btn"
-                    disabled={!customVal}
-                    onClick={() => handleCustomApply(entry.id, 'sub')}
-                  >
-                    減算
-                  </button>
-                  <button
-                    type="button"
-                    className="chip-btn accent"
-                    disabled={!customVal}
-                    onClick={() => handleCustomApply(entry.id, 'add')}
-                  >
-                    加算
-                  </button>
-                  <button
-                    type="button"
-                    className="chip-btn"
-                    disabled={!customVal}
-                    onClick={() => handleCustomApply(entry.id, 'set')}
-                  >
-                    直接設定
-                  </button>
-                </div>
+                )}
               </div>
             );
           })
         )}
       </div>
 
-      {/* 変更ログ */}
+      {/* 編集履歴（折りたたみで普段は1行のみ） */}
       {board.logs.length > 0 && (
-        <div className="card-panel">
-          <div className="panel-title" style={{ fontSize: 12, marginBottom: 6 }}>
-            編集履歴
-          </div>
-          <div className="scoreboard-log-list">
-            {board.logs.slice(0, 14).map((log) => (
-              <div key={log.id} className="scoreboard-log-item">
-                <span>
-                  <strong>{log.actor}</strong>: {log.text}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="sb-history-section">
+          <button
+            type="button"
+            className="sb-history-toggle"
+            onClick={() => setShowLogs((v) => !v)}
+          >
+            <span className="sb-history-latest">
+              <History size={12} />
+              最新: <strong>{board.logs[0].actor}</strong> — {board.logs[0].text}
+            </span>
+            <span className="sb-history-more">
+              {showLogs ? '閉じる' : `履歴(${board.logs.length})`}
+            </span>
+          </button>
+
+          {showLogs && (
+            <div className="scoreboard-log-list">
+              {board.logs.slice(0, 16).map((log) => (
+                <div key={log.id} className="scoreboard-log-item">
+                  <span>
+                    <strong>{log.actor}</strong>: {log.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
