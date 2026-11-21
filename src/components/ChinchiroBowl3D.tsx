@@ -1,6 +1,7 @@
 import React, { useEffect, useImperativeHandle, useRef } from 'react';
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import './ChinchiroBowl3D.css';
 
 export interface ChinchiroBowl3DHandle {
@@ -79,12 +80,23 @@ function getTopFaceIndex(q: CANNON.Quaternion): { index: number; alignment: numb
 
 const PIP_COORDS: Record<number, [number, number][]> = {
   1: [[0.5, 0.5]],
-  2: [[0.26, 0.26], [0.74, 0.74]],
-  3: [[0.26, 0.26], [0.5, 0.5], [0.74, 0.74]],
-  4: [[0.26, 0.26], [0.74, 0.26], [0.26, 0.74], [0.74, 0.74]],
-  5: [[0.26, 0.26], [0.74, 0.26], [0.5, 0.5], [0.26, 0.74], [0.74, 0.74]],
-  6: [[0.26, 0.24], [0.74, 0.24], [0.26, 0.5], [0.74, 0.5], [0.26, 0.76], [0.74, 0.76]],
+  2: [[0.29, 0.29], [0.71, 0.71]],
+  3: [[0.29, 0.29], [0.5, 0.5], [0.71, 0.71]],
+  4: [[0.29, 0.29], [0.71, 0.29], [0.29, 0.71], [0.71, 0.71]],
+  5: [[0.29, 0.29], [0.71, 0.29], [0.5, 0.5], [0.29, 0.71], [0.71, 0.71]],
+  6: [[0.29, 0.27], [0.71, 0.27], [0.29, 0.5], [0.71, 0.5], [0.29, 0.73], [0.71, 0.73]],
 };
+
+function createRoundedDieGeometry(size: number): THREE.BufferGeometry {
+  // 辺の約18%の丸み＋5分割で滑らかに角を取った本物のサイコロ形状
+  const geo = new RoundedBoxGeometry(size, size, size, 5, size * 0.18);
+  const vertsPerSide = geo.attributes.position.count / 6;
+  geo.clearGroups();
+  for (let side = 0; side < 6; side++) {
+    geo.addGroup(side * vertsPerSide, vertsPerSide, side);
+  }
+  return geo;
+}
 
 function createDieFaceTexture(value: number): THREE.CanvasTexture {
   const size = 256;
@@ -93,34 +105,42 @@ function createDieFaceTexture(value: number): THREE.CanvasTexture {
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
-  const bg = ctx.createRadialGradient(size * 0.36, size * 0.34, 12, size * 0.5, size * 0.5, size * 0.75);
+  // 角丸の継ぎ目が出ないよう、外周は均一な象牙白でシームレスに繋ぐ
+  ctx.fillStyle = '#f2eee5';
+  ctx.fillRect(0, 0, size, size);
+
+  const bg = ctx.createRadialGradient(size * 0.5, size * 0.5, size * 0.05, size * 0.5, size * 0.5, size * 0.46);
   bg.addColorStop(0, '#ffffff');
-  bg.addColorStop(0.75, '#f5f2ea');
-  bg.addColorStop(1, '#d8d2c3');
+  bg.addColorStop(0.75, '#f8f5ee');
+  bg.addColorStop(1, '#f2eee5');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, size, size);
 
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.14)';
-  ctx.lineWidth = 10;
-  ctx.strokeRect(5, 5, size - 10, size - 10);
-
   const coords = PIP_COORDS[value] ?? PIP_COORDS[1];
-  const radius = value === 1 ? size * 0.145 : size * 0.088;
+  const radius = value === 1 ? size * 0.14 : size * 0.082;
 
   for (const [u, v] of coords) {
     const cx = u * size;
     const cy = v * size;
+
+    // 彫り込みくぼみの外縁ハイライト
+    ctx.beginPath();
+    ctx.arc(cx + 1.5, cy + 1.5, radius * 1.06, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fill();
+
+    // 彫り込みの影と色
     const pipGrad = ctx.createRadialGradient(
-      cx - radius * 0.25,
-      cy - radius * 0.25,
-      radius * 0.1,
+      cx + radius * 0.22,
+      cy + radius * 0.22,
+      radius * 0.08,
       cx,
       cy,
       radius
     );
     if (value === 1) {
       pipGrad.addColorStop(0, '#ef4444');
-      pipGrad.addColorStop(0.7, '#b91c1c');
+      pipGrad.addColorStop(0.65, '#b91c1c');
       pipGrad.addColorStop(1, '#7f1d1d');
     } else {
       pipGrad.addColorStop(0, '#334155');
@@ -131,12 +151,6 @@ function createDieFaceTexture(value: number): THREE.CanvasTexture {
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fillStyle = pipGrad;
     ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0.2 * Math.PI, 0.8 * Math.PI);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
   }
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -597,17 +611,19 @@ export const ChinchiroBowl3D = React.forwardRef<ChinchiroBowl3DHandle, Chinchiro
       rimMesh.castShadow = true;
       bowlGroup.add(rimMesh);
 
-      // 1..6 のダイス面マテリアルをキャッシュ
-      const matByValue: Record<number, THREE.MeshStandardMaterial> = {};
+      // 1..6 のダイス面マテリアルをキャッシュ（丸角に艶が映えるクリアコート仕上げ）
+      const matByValue: Record<number, THREE.MeshPhysicalMaterial> = {};
       for (let v = 1; v <= 6; v++) {
-        matByValue[v] = new THREE.MeshStandardMaterial({
+        matByValue[v] = new THREE.MeshPhysicalMaterial({
           map: createDieFaceTexture(v),
-          roughness: 0.22,
-          metalness: 0.05,
+          roughness: 0.2,
+          metalness: 0.02,
+          clearcoat: 0.65,
+          clearcoatRoughness: 0.14,
         });
       }
 
-      const dieGeo = new THREE.BoxGeometry(DIE_SIZE, DIE_SIZE, DIE_SIZE);
+      const dieGeo = createRoundedDieGeometry(DIE_SIZE);
       const { world, bowlBody, dieBodies } = createPhysicsRig();
       const soundSynth = new DiceSoundSynth();
 
