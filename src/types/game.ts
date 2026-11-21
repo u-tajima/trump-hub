@@ -5,6 +5,7 @@ export type GameId =
   | 'oldmaid'
   | 'doubt'
   | 'memory'
+  | 'poker'
   | 'reversi'
   | 'gomoku'
   | 'connect4'
@@ -13,11 +14,18 @@ export type GameId =
 export interface DaifugoRules {
   jokerCount: 0 | 1 | 2;
   revolution: boolean;
+  kaidanRevolution: boolean;
   eightCut: boolean;
   staircase: boolean;
   suitLock: boolean;
+  numberLock: boolean;
   elevenBack: boolean;
   spade3Return: boolean;
+  fiveSkip: boolean;
+  sevenPass: boolean;
+  tenDiscard: boolean;
+  queenBomber: boolean;
+  sandstorm: boolean;
   miyakoochi: boolean;
   banFinishStrong: boolean;
 }
@@ -50,6 +58,13 @@ export interface MemoryRules {
   jokerPair: boolean;
 }
 
+export interface PokerRules {
+  rounds: 3 | 5 | 10;
+  startChips: 500 | 1000;
+  ante: 10 | 20;
+  jokerEnabled: boolean;
+}
+
 export interface ReversiRules {
   boardSize: 6 | 8;
   parallelSetup: boolean;
@@ -78,6 +93,7 @@ export type GameRulesMap = {
   oldmaid: OldMaidRules;
   doubt: DoubtRules;
   memory: MemoryRules;
+  poker: PokerRules;
   reversi: ReversiRules;
   gomoku: GomokuRules;
   connect4: Connect4Rules;

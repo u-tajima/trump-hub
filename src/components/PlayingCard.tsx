@@ -1,4 +1,5 @@
 import React from 'react';
+import { Sparkles } from 'lucide-react';
 import { type Card, SUIT_COLORS, SUIT_SYMBOLS, formatRank } from '../types/card';
 
 interface PlayingCardProps {
@@ -7,6 +8,7 @@ interface PlayingCardProps {
   selected?: boolean;
   disabled?: boolean;
   highlight?: boolean;
+  animateIn?: boolean;
   size?: 'xs' | 'sm' | 'md' | 'lg';
   onClick?: () => void;
   badge?: string;
@@ -18,6 +20,7 @@ export const PlayingCard: React.FC<PlayingCardProps> = ({
   selected = false,
   disabled = false,
   highlight = false,
+  animateIn = false,
   size = 'md',
   onClick,
   badge,
@@ -29,6 +32,7 @@ export const PlayingCard: React.FC<PlayingCardProps> = ({
     selected ? 'trump-card--selected' : '',
     disabled ? 'trump-card--disabled' : '',
     highlight ? 'trump-card--highlight' : '',
+    animateIn ? 'trump-card--enter' : '',
     onClick && !disabled ? 'trump-card--clickable' : '',
   ]
     .filter(Boolean)
@@ -65,7 +69,7 @@ export const PlayingCard: React.FC<PlayingCardProps> = ({
         <span className="trump-card-suit">{symbol}</span>
       </div>
       <div className="trump-card-center">
-        {card.suit === 'joker' ? '🃏' : symbol}
+        {card.suit === 'joker' ? <Sparkles size={18} /> : symbol}
       </div>
       <div className="trump-card-corner bottom">
         <span className="trump-card-rank">{rankText}</span>
