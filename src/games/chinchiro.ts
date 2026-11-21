@@ -47,30 +47,30 @@ export function evaluateChinchiroDice(
   isShonben = false
 ): ChinchiroHand {
   if (isShonben) {
-    return { dice, rank: 'shonben', strength: -1, multiplier: 1, label: '💦 ションベン' };
+    return { dice, rank: 'shonben', strength: -1, multiplier: 1, label: 'ションベン' };
   }
   const sorted = [...dice].sort((a, b) => a - b) as [number, number, number];
   const [a, b, c] = sorted;
 
   if (a === 1 && b === 1 && c === 1) {
-    return { dice: sorted, rank: 'pinzoro', strength: 100, multiplier: 5, label: '🔥 ピンゾロ (5倍)' };
+    return { dice: sorted, rank: 'pinzoro', strength: 100, multiplier: 5, label: 'ピンゾロ (5倍)' };
   }
   if (a === b && b === c) {
-    return { dice: sorted, rank: 'arashi', strength: 80 + a, multiplier: 3, label: `⚡ アラシ ${a} (3倍)` };
+    return { dice: sorted, rank: 'arashi', strength: 80 + a, multiplier: 3, label: `アラシ ${a} (3倍)` };
   }
   if (a === 4 && b === 5 && c === 6) {
-    return { dice: sorted, rank: 'shigoro', strength: 70, multiplier: 2, label: '✨ シゴロ (2倍)' };
+    return { dice: sorted, rank: 'shigoro', strength: 70, multiplier: 2, label: 'シゴロ (2倍)' };
   }
   if (a === 1 && b === 2 && c === 3) {
-    return { dice: sorted, rank: 'hifumi', strength: -20, multiplier: 2, label: '💀 ヒフミ (2倍払)' };
+    return { dice: sorted, rank: 'hifumi', strength: -20, multiplier: 2, label: 'ヒフミ (2倍払)' };
   }
   if (a === b) {
-    return { dice: sorted, rank: 'normal', strength: 10 + c, multiplier: 1, label: `🎲 ${c} の目` };
+    return { dice: sorted, rank: 'normal', strength: 10 + c, multiplier: 1, label: `${c} の目` };
   }
   if (b === c) {
-    return { dice: sorted, rank: 'normal', strength: 10 + a, multiplier: 1, label: `🎲 ${a} の目` };
+    return { dice: sorted, rank: 'normal', strength: 10 + a, multiplier: 1, label: `${a} の目` };
   }
-  return { dice: sorted, rank: 'menashi', strength: 0, multiplier: 1, label: '💨 目なし' };
+  return { dice: sorted, rank: 'menashi', strength: 0, multiplier: 1, label: '目なし' };
 }
 
 export function initChinchiro(playersInfo: PlayerInfo[], rules: ChinchiroRules): ChinchiroInternalState {
@@ -128,7 +128,7 @@ function settleRound(state: ChinchiroInternalState): ChinchiroInternalState {
       ...state,
       players,
       phase: 'finished',
-      lastLog: `🏆 全${state.rules.rounds}局終了！ 1位: ${sorted[0].name} (${sorted[0].points}点)`,
+      lastLog: `全${state.rules.rounds}局終了！ 1位: ${sorted[0].name} (${sorted[0].points}点)`,
     };
   }
 
