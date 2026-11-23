@@ -266,7 +266,9 @@ export function App() {
       },
       onMessage: (msg) => {
         if (msg.kind === 'welcome' || msg.kind === 'lobby') {
+          lobbyRef.current = msg.lobby;
           setLobby(msg.lobby);
+          setConnecting(false);
           if (msg.lobby.phase === 'lobby') {
             setClientGameState(null);
           }
@@ -276,7 +278,12 @@ export function App() {
           roomScoreBoardRef.current = msg.board;
           setRoomScoreBoard(msg.board);
         } else if (msg.kind === 'error') {
-          showToast(msg.message);
+          if (!lobbyRef.current) {
+            setError(msg.message);
+            cleanupSessions();
+          } else {
+            showToast(msg.message);
+          }
         }
       },
       onDisconnected: () => {
