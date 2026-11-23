@@ -186,78 +186,66 @@ function createBowlInteriorTexture(): THREE.CanvasTexture {
 }
 
 function bowlVisualY(r: number): number {
-  const flatR = 1.15;
+  const flatR = 1.32;
   if (r <= flatR) return 0.14;
   const d = r - flatR;
-  return 0.14 + d * d * 0.88;
+  return 0.14 + d * d * 1.25;
 }
 
 // cannon-es の茶碗＆ダイス物理ワールドを構築する共通ファクトリ
 function createPhysicsRig() {
   const world = new CANNON.World();
-  world.gravity.set(0, -24, 0);
+  world.gravity.set(0, -26, 0);
   world.broadphase = new CANNON.NaiveBroadphase();
   (world.solver as CANNON.GSSolver).iterations = 14;
-  world.allowSleep = false;
+  world.allowSleep = true;
 
   const bowlMat = new CANNON.Material('bowl');
   const dieMat = new CANNON.Material('die');
 
   world.addContactMaterial(
     new CANNON.ContactMaterial(bowlMat, dieMat, {
-      friction: 0.38,
-      restitution: 0.36,
+      friction: 0.3,
+      restitution: 0.14,
+      contactEquationStiffness: 1e7,
+      contactEquationRelaxation: 4,
     })
   );
   world.addContactMaterial(
     new CANNON.ContactMaterial(dieMat, dieMat, {
-      friction: 0.25,
-      restitution: 0.45,
+      friction: 0.2,
+      restitution: 0.18,
+      contactEquationStiffness: 1e7,
+      contactEquationRelaxation: 4,
     })
   );
 
-  // キネマティック剛体の茶碗（底＋2段16角形お椀斜面＋飛び出し防止天井）
+  // キネマティック剛体の茶碗（継ぎ目のない1枚フラット底面＋16角形お椀壁＋飛び出し防止天井）
   const bowlBody = new CANNON.Body({
     type: CANNON.Body.KINEMATIC,
     material: bowlMat,
     position: new CANNON.Vec3(0, 0, 0),
   });
 
-  // 底面プレート（上面が y = 0.14）
+  // 継ぎ目のない1枚のフラット底面（上面が y = 0.14）
   bowlBody.addShape(
-    new CANNON.Box(new CANNON.Vec3(1.22, 0.14, 1.22)),
+    new CANNON.Box(new CANNON.Vec3(2.6, 0.14, 2.6)),
     new CANNON.Vec3(0, 0.0, 0)
   );
 
   const segments = 16;
-  // 下段の緩やかなお椀斜面（bowlVisualY に合わせて外側へ開く -1.02 rad）
+  // 底面外周 (r≈1.42) から急めに立ち上がるお椀壁（ダイスが斜面に引っかかって傾かない）
   for (let i = 0; i < segments; i++) {
     const angle = (i / segments) * Math.PI * 2;
-    const r = 1.56;
+    const r = 2.08;
     const x = Math.cos(angle) * r;
     const z = Math.sin(angle) * r;
     const qYaw = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
-    const qTilt = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), -1.02);
+    const qTilt = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), -0.48);
     const q = qYaw.mult(qTilt);
     bowlBody.addShape(
-      new CANNON.Box(new CANNON.Vec3(0.12, 0.48, 0.56)),
-      new CANNON.Vec3(x, 0.25, z),
-      q
-    );
-  }
-
-  // 上段のお椀壁（bowlVisualY に合わせて外側へ開く -0.52 rad）
-  for (let i = 0; i < segments; i++) {
-    const angle = (i / segments) * Math.PI * 2;
-    const r = 2.24;
-    const x = Math.cos(angle) * r;
-    const z = Math.sin(angle) * r;
-    const qYaw = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
-    const qTilt = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), -0.52);
-    const q = qYaw.mult(qTilt);
-    bowlBody.addShape(
-      new CANNON.Box(new CANNON.Vec3(0.12, 0.68, 0.62)),
-      new CANNON.Vec3(x, 1.0, z),
+      new CANNON.Box(new CANNON.Vec3(0.14, 0.95, 0.64)),
+      new CANNON.Vec3(x, 0.85, z),
       q
     );
   }
@@ -270,8 +258,8 @@ function createPhysicsRig() {
     const z = Math.sin(angle) * r;
     const qYaw = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
     bowlBody.addShape(
-      new CANNON.Box(new CANNON.Vec3(0.12, 0.72, 0.65)),
-      new CANNON.Vec3(x, 2.2, z),
+      new CANNON.Box(new CANNON.Vec3(0.14, 0.85, 0.68)),
+      new CANNON.Vec3(x, 2.1, z),
       qYaw
     );
   }
@@ -297,10 +285,14 @@ function createPhysicsRig() {
       mass: 1,
       material: dieMat,
       shape: dieShape,
-      position: new CANNON.Vec3(x, 0.14 + DIE_HALF + 0.02, z),
-      linearDamping: 0.14,
-      angularDamping: 0.18,
+      position: new CANNON.Vec3(x, 0.14 + DIE_HALF + 0.01, z),
+      linearDamping: 0.24,
+      angularDamping: 0.3,
+      allowSleep: true,
+      sleepSpeedLimit: 0.05,
+      sleepTimeLimit: 10,
     });
+    body.sleep();
     world.addBody(body);
     return body;
   });
@@ -342,6 +334,7 @@ function presimulateRecordedRoll(): RecordedRoll {
           Math.random() * Math.PI * 2
         )
       );
+      b.wakeUp();
       b.position.set(sx, 0.9 + Math.random() * 0.45, sz);
       b.quaternion.set(q.x, q.y, q.z, q.w);
       b.velocity.set((Math.random() - 0.5) * 5.2, 2.2 + Math.random() * 2.0, (Math.random() - 0.5) * 5.2);
@@ -386,11 +379,11 @@ function presimulateRecordedRoll(): RecordedRoll {
         nextRx = Math.cos(t * 14) * 0.11;
       } else {
         // 茶碗を滑らかに水平・中央へ戻す
-        nextBx = bx * 0.72;
-        nextBy = by * 0.72;
-        nextBz = bz * 0.72;
-        nextRx = rx * 0.72;
-        nextRz = rz * 0.72;
+        nextBx = bx * 0.56;
+        nextBy = by * 0.56;
+        nextBz = bz * 0.56;
+        nextRx = rx * 0.56;
+        nextRz = rz * 0.56;
         if (Math.abs(nextBx) < 0.002) nextBx = 0;
         if (Math.abs(nextBy) < 0.002) nextBy = 0;
         if (Math.abs(nextBz) < 0.002) nextBz = 0;
@@ -422,21 +415,35 @@ function presimulateRecordedRoll(): RecordedRoll {
         maxImpact: stepImpact,
       });
 
-      if (step > shakeSteps + 18) {
-        for (const b of dieBodies) {
-          const v = b.velocity.length();
-          const w = b.angularVelocity.length();
-          if (getTopFaceIndex(b.quaternion).alignment > 0.94 && v < 0.45 && w < 0.85) {
-            b.velocity.scale(0.8, b.velocity);
-            b.angularVelocity.scale(0.75, b.angularVelocity);
+      if (step > shakeSteps + 12) {
+        const bowlStill = bx === 0 && by === 0 && bz === 0 && rx === 0 && rz === 0;
+        if (bowlStill) {
+          for (const b of dieBodies) {
+            if (b.sleepState === CANNON.Body.SLEEPING) continue;
+            const v = b.velocity.length();
+            const w = b.angularVelocity.length();
+            const align = getTopFaceIndex(b.quaternion).alignment;
+            if (align > 0.95 && v < 0.7 && w < 1.2) {
+              b.velocity.scale(0.7, b.velocity);
+              b.angularVelocity.scale(0.65, b.angularVelocity);
+              if (v < 0.2 && w < 0.3 && b.position.y < 0.65) {
+                b.velocity.set(0, 0, 0);
+                b.angularVelocity.set(0, 0, 0);
+                b.sleep();
+              }
+            }
           }
         }
-        const allStill = dieBodies.every(
-          (b) => b.velocity.length() < 0.12 && b.angularVelocity.length() < 0.18
-        );
+        const allStill =
+          bowlStill &&
+          dieBodies.every(
+            (b) =>
+              b.sleepState === CANNON.Body.SLEEPING ||
+              (b.velocity.length() < 0.16 && b.angularVelocity.length() < 0.22)
+          );
         if (allStill) {
           stillFrames++;
-          if (stillFrames >= 8) break;
+          if (stillFrames >= 4) break;
         } else {
           stillFrames = 0;
         }
@@ -767,6 +774,10 @@ export const ChinchiroBowl3D = React.forwardRef<ChinchiroBowl3DHandle, Chinchiro
         while (accumulator >= FIXED_DT) {
           accumulator -= FIXED_DT;
 
+          if (simState === 'idle') {
+            continue;
+          }
+
           if (simState === 'replaying') {
             const frame = replayFrames[Math.min(replayCursor, replayFrames.length - 1)];
             bowlBody.position.set(frame.bowlPos[0], frame.bowlPos[1], frame.bowlPos[2]);
@@ -790,6 +801,11 @@ export const ChinchiroBowl3D = React.forwardRef<ChinchiroBowl3DHandle, Chinchiro
             replayCursor++;
             if (replayCursor >= replayFrames.length) {
               resetBowlImmediate();
+              for (const b of dieBodies) {
+                b.velocity.set(0, 0, 0);
+                b.angularVelocity.set(0, 0, 0);
+                b.sleep();
+              }
               simState = 'idle';
               onReplaySettledRef.current();
             }
@@ -828,11 +844,11 @@ export const ChinchiroBowl3D = React.forwardRef<ChinchiroBowl3DHandle, Chinchiro
             }
           } else {
             // 茶碗を滑らかに水平・中央へ戻す（テレポートによるめり込み防止）
-            const nextBx = Math.abs(bowlX) < 0.002 ? 0 : bowlX * 0.72;
-            const nextBy = Math.abs(bowlY) < 0.002 ? 0 : bowlY * 0.72;
-            const nextBz = Math.abs(bowlZ) < 0.002 ? 0 : bowlZ * 0.72;
-            const nextRx = Math.abs(bowlRx) < 0.002 ? 0 : bowlRx * 0.72;
-            const nextRz = Math.abs(bowlRz) < 0.002 ? 0 : bowlRz * 0.72;
+            const nextBx = Math.abs(bowlX) < 0.002 ? 0 : bowlX * 0.56;
+            const nextBy = Math.abs(bowlY) < 0.002 ? 0 : bowlY * 0.56;
+            const nextBz = Math.abs(bowlZ) < 0.002 ? 0 : bowlZ * 0.56;
+            const nextRx = Math.abs(bowlRx) < 0.002 ? 0 : bowlRx * 0.56;
+            const nextRz = Math.abs(bowlRz) < 0.002 ? 0 : bowlRz * 0.56;
 
             bowlBody.velocity.set(
               (nextBx - bowlX) / FIXED_DT,
@@ -856,48 +872,67 @@ export const ChinchiroBowl3D = React.forwardRef<ChinchiroBowl3DHandle, Chinchiro
             settleFrames++;
             const bowlSettled = bowlX === 0 && bowlY === 0 && bowlZ === 0 && bowlRx === 0 && bowlRz === 0;
 
-            // 平らに着地して微振動（ガタガタ）しているダイスを滑らかに静止へ収束させる
+            // 平らに着地したダイスを微振動（ガタガタ）させず滑らかにスリープへ収束させる
             if (bowlSettled) {
               for (const b of dieBodies) {
+                if (b.sleepState === CANNON.Body.SLEEPING) continue;
                 const v = b.velocity.length();
                 const w = b.angularVelocity.length();
                 const align = getTopFaceIndex(b.quaternion).alignment;
-                if (align > 0.94 && v < 0.45 && w < 0.85) {
-                  b.velocity.scale(0.8, b.velocity);
-                  b.angularVelocity.scale(0.75, b.angularVelocity);
+                const onFloor = b.position.y < 0.14 + DIE_HALF + 0.08;
+                if (onFloor && align > 0.94 && v < 1.2 && w < 2.2) {
+                  b.velocity.scale(0.68, b.velocity);
+                  b.angularVelocity.scale(0.6, b.angularVelocity);
+                  if (v < 0.35 && w < 0.65) {
+                    b.velocity.set(0, 0, 0);
+                    b.angularVelocity.set(0, 0, 0);
+                    b.sleep();
+                  }
+                } else if (
+                  (!onFloor || align <= 0.94) &&
+                  v < 0.55 &&
+                  w < 1.3 &&
+                  settleFrames > 14 &&
+                  settleFrames < 140 &&
+                  settleFrames % 10 === 0
+                ) {
+                  // 壁や他ダイスに寄りかかった場合のみ中心方向へ軽く滑り落とす
+                  const r = Math.hypot(b.position.x, b.position.z);
+                  b.velocity.y = Math.max(b.velocity.y, 1.4);
+                  if (r > 0.25) {
+                    b.velocity.x += (-b.position.x / r) * 1.6;
+                    b.velocity.z += (-b.position.z / r) * 1.6;
+                  } else {
+                    b.velocity.x += (Math.random() - 0.5) * 1.8;
+                    b.velocity.z += (Math.random() - 0.5) * 1.8;
+                  }
+                  b.angularVelocity.x += (Math.random() - 0.5) * 3.2;
                 }
               }
             }
 
-            const allSlow =
+            const allStill =
               bowlSettled &&
-              dieBodies.every((b) => b.velocity.length() < 0.12 && b.angularVelocity.length() < 0.18);
+              dieBodies.every(
+                (b) =>
+                  b.sleepState === CANNON.Body.SLEEPING ||
+                  (b.velocity.length() < 0.3 &&
+                    b.angularVelocity.length() < 0.5 &&
+                    getTopFaceIndex(b.quaternion).alignment > 0.94)
+              );
 
-            if (allSlow) {
-              // 立ち目（斜めに引っかかっている）チェック
-              const allFlat = dieBodies.every((b) => getTopFaceIndex(b.quaternion).alignment > 0.92);
-              if (!allFlat && settleFrames < 220) {
-                // 斜めに引っかかったダイスを軽く小突いて自然に転がす
-                for (const b of dieBodies) {
-                  if (getTopFaceIndex(b.quaternion).alignment <= 0.92) {
-                    b.velocity.x += (Math.random() - 0.5) * 1.6;
-                    b.velocity.z += (Math.random() - 0.5) * 1.6;
-                    b.angularVelocity.x += (Math.random() - 0.5) * 4.5;
-                  }
-                }
-                stillFrames = 0;
-              } else {
-                stillFrames++;
-              }
+            if (allStill) {
+              stillFrames++;
             } else {
               stillFrames = 0;
             }
 
-            if (stillFrames >= 8 || settleFrames >= 240) {
+            if (stillFrames >= 3 || settleFrames >= 150) {
               simState = 'idle';
               for (const b of dieBodies) {
                 b.velocity.set(0, 0, 0);
                 b.angularVelocity.set(0, 0, 0);
+                b.sleep();
               }
               const results = dieBodies.map((b, i) => {
                 const topIdx = getTopFaceIndex(b.quaternion).index;
