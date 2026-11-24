@@ -3,13 +3,17 @@ import type { BlackjackInternalState } from '../games/blackjack';
 import type { DaifugoInternalState } from '../games/daifugo';
 import type { DoubtInternalState } from '../games/doubt';
 import type { AnyInternalState } from '../games/engineDispatcher';
+import type { GunjinShogiInternalState } from '../games/gunjinshogi';
 import type { HoldemInternalState } from '../games/holdem';
 import type { IndianPokerInternalState } from '../games/indianPoker';
+import type { InsiderInternalState } from '../games/insider';
 import type { LiarsDiceInternalState } from '../games/liarsDice';
+import type { OneNightInternalState } from '../games/oneNight';
 import type { PokerInternalState } from '../games/poker';
 import { GAME_REGISTRY } from '../games/registry';
 import type { RouletteInternalState } from '../games/roulette';
 import type { WerewolfInternalState } from '../games/werewolf';
+import type { WordWolfInternalState } from '../games/wordWolf';
 import type { LobbyState, PlayerInfo } from '../types/game';
 
 export const SPECTATOR_VIEW_ID = '__spectator__';
@@ -209,6 +213,183 @@ export function resolveHostLocalView(
     if (bjState.subPhase === 'roundEnd') {
       return {
         viewPlayerId: hostId,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+  }
+
+  // 一夜人狼: 夜行動・投票は未完了のローカルプレイヤーを順にカバー付きで回し、議論は共通画面
+  if (gameId === 'onenight') {
+    const oState = game as OneNightInternalState;
+    if (oState.subPhase === 'night') {
+      const nextLocal = lobby.players.find(
+        (lp) => isLocallyControlled(lobby, lp.id, hostId) && !oState.nightDoneIds.includes(lp.id)
+      );
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+    if (oState.subPhase === 'voting') {
+      const nextLocal = lobby.players.find(
+        (lp) => isLocallyControlled(lobby, lp.id, hostId) && !oState.votes[lp.id]
+      );
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+    return {
+      viewPlayerId: SPECTATOR_VIEW_ID,
+      actionPlayerId: hostId,
+      activeLocalPlayer: null,
+      needsHandoff: false,
+    };
+  }
+
+  // ワード人狼: お題確認・投票は未完了のローカルプレイヤーを順にカバー付きで回し、議論・逆転判定は共通画面
+  if (gameId === 'wordwolf') {
+    const wwState = game as WordWolfInternalState;
+    if (wwState.subPhase === 'wordReveal') {
+      const nextLocal = lobby.players.find((lp) => {
+        if (!isLocallyControlled(lobby, lp.id, hostId)) return false;
+        const wp = wwState.players.find((p) => p.id === lp.id);
+        return wp && !wp.ready;
+      });
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+    if (wwState.subPhase === 'voting') {
+      const nextLocal = lobby.players.find(
+        (lp) => isLocallyControlled(lobby, lp.id, hostId) && !wwState.votes[lp.id]
+      );
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+    return {
+      viewPlayerId: SPECTATOR_VIEW_ID,
+      actionPlayerId: hostId,
+      activeLocalPlayer: null,
+      needsHandoff: false,
+    };
+  }
+
+  // シークレットマスター: 役職確認・投票は未完了ローカルプレイヤーをカバー付きで回し、質問・議論は共通画面
+  if (gameId === 'insider') {
+    const inState = game as InsiderInternalState;
+    if (inState.subPhase === 'roleReveal') {
+      const nextLocal = lobby.players.find((lp) => {
+        if (!isLocallyControlled(lobby, lp.id, hostId)) return false;
+        const ip = inState.players.find((p) => p.id === lp.id);
+        return ip && !ip.ready;
+      });
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+    if (inState.subPhase === 'voting') {
+      const nextLocal = lobby.players.find(
+        (lp) => isLocallyControlled(lobby, lp.id, hostId) && !inState.votes[lp.id]
+      );
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+    return {
+      viewPlayerId: SPECTATOR_VIEW_ID,
+      actionPlayerId: hostId,
+      activeLocalPlayer: null,
+      needsHandoff: false,
+    };
+  }
+
+  // 軍人将棋: 配置フェーズは未確定ローカルプレイヤーをカバー付きで順に回す
+  if (gameId === 'gunjinshogi') {
+    const gState = game as GunjinShogiInternalState;
+    if (gState.subPhase === 'setup') {
+      const nextLocal = lobby.players.find((lp) => {
+        if (!isLocallyControlled(lobby, lp.id, hostId)) return false;
+        const gp = gState.players.find((p) => p.id === lp.id);
+        return gp && !gp.setupConfirmed;
+      });
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
         actionPlayerId: hostId,
         activeLocalPlayer: null,
         needsHandoff: false,

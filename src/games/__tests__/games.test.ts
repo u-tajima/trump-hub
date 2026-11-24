@@ -30,6 +30,15 @@ import { applyIndianPokerAction, computeIndianPokerBotAction, initIndianPoker, s
 import { applyLiarsDiceAction, computeLiarsDiceBotAction, initLiarsDice, sanitizeLiarsDiceState } from '../liarsDice';
 import { applyMancalaAction, computeMancalaBotAction, initMancala } from '../mancala';
 import { applyYachtAction, computeYachtBotAction, evaluateYachtCategory, initYacht } from '../yacht';
+import { applyBackgammonAction, computeBackgammonBotAction, initBackgammon } from '../backgammon';
+import { applyCheckersAction, computeCheckersBotAction, initCheckers } from '../checkers';
+import { applyCoinSoccerAction, computeCoinSoccerBotAction, initCoinSoccer } from '../coinSoccer';
+import { applyCrokinoleAction, computeCrokinoleBotAction, initCrokinole } from '../crokinole';
+import { applyGunjinShogiAction, computeGunjinShogiBotAction, initGunjinShogi, sanitizeGunjinShogiState } from '../gunjinshogi';
+import { applyHexAction, computeHexBotAction, initHex } from '../hex';
+import { applyInsiderAction, initInsider, sanitizeInsiderState } from '../insider';
+import { applyOneNightAction, initOneNight, sanitizeOneNightState } from '../oneNight';
+import { applyWordWolfAction, initWordWolf, sanitizeWordWolfState } from '../wordWolf';
 import {
   applyScoreBoardOp,
   createEmptyScoreBoard,
@@ -614,11 +623,16 @@ describe('Perfect Information Local Pass-and-Play', () => {
       .sort();
     expect(perfectIds).toEqual([
       'airhockey',
+      'backgammon',
       'carrom',
+      'checkers',
       'chess',
+      'coinsoccer',
       'connect4',
+      'crokinole',
       'dotsandboxes',
       'gomoku',
+      'hex',
       'igo',
       'mancala',
       'reversi',
@@ -1138,5 +1152,128 @@ describe('11 new games engines (Action, Card, Board, Dice)', () => {
     const crAct = computeCarromBotAction(crState)!;
     const crAfter = applyCarromAction(crState, 'p1', crAct).state;
     expect(crAfter.nextBotActionAt).toBeGreaterThan(Date.now() - 100);
+  });
+});
+
+describe('9 new games engines (Hex, Checkers, Backgammon, GunjinShogi, CoinSoccer, Crokinole, OneNight, WordWolf, Insider)', () => {
+  it('Hex: supports placement, pie swap rule, and Bot', () => {
+    const players = makePlayers(2);
+    players[1].isBot = true;
+    let state = initHex(players, { boardSize: 7, swapRule: true });
+    state = applyHexAction(state, 'p1', { type: 'place', payload: { row: 3, col: 3 } }).state;
+    expect(state.turnIndex).toBe(1);
+    const botAct = computeHexBotAction(state);
+    expect(botAct).not.toBeNull();
+    state = applyHexAction(state, 'p2', { type: 'swap' }).state;
+    expect(state.board[3][3]).toBe(2);
+    expect(state.turnIndex).toBe(0);
+  });
+
+  it('Checkers: validates legal moves, forced captures, and Bot', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    let state = initCheckers(players, { forcedCapture: true });
+    const botAct = computeCheckersBotAction(state);
+    expect(botAct).not.toBeNull();
+    const res = applyCheckersAction(state, 'p1', botAct!);
+    expect(res.error).toBeUndefined();
+    expect(res.state.turnIndex).toBe(1);
+  });
+
+  it('Backgammon: rolls dice, executes moves, and supports Bot', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    let state = initBackgammon(players, { targetPoints: 1 });
+    expect(state.subPhase).toBe('roll');
+    const rollAct = computeBackgammonBotAction(state);
+    expect(rollAct?.type).toBe('roll');
+    state = applyBackgammonAction(state, 'p1', rollAct!).state;
+    if (state.subPhase === 'move' && state.turnIndex === 0) {
+      const moveAct = computeBackgammonBotAction(state);
+      expect(moveAct?.type).toBe('move');
+    }
+  });
+
+  it('GunjinShogi: isolates hidden enemy pieces and runs battle + Bot', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    players[1].isBot = true;
+    let state = initGunjinShogi(players, { autoSetupAllowed: true });
+    expect(state.subPhase).toBe('battle');
+    const viewP1 = sanitizeGunjinShogiState(state, 'p1');
+    const enemyPieces = viewP1.board.flat().filter((cell) => cell && cell.owner === 1);
+    expect(enemyPieces.length).toBe(16);
+    expect(enemyPieces.every((cell) => cell?.type === 'hidden')).toBe(true);
+    const specView = sanitizeGunjinShogiState(state, SPECTATOR_VIEW_ID);
+    const allPieces = specView.board.flat().filter(Boolean);
+    expect(allPieces.every((cell) => cell?.type === 'hidden')).toBe(true);
+    const botAct = computeGunjinShogiBotAction(state);
+    expect(botAct).not.toBeNull();
+    const res = applyGunjinShogiAction(state, 'p1', botAct!);
+    expect(res.error).toBeUndefined();
+  });
+
+  it('CoinSoccer & Crokinole: simulate deterministic shots and set nextBotActionAt', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    let cs = initCoinSoccer(players, { winScore: 3 });
+    const csAct = computeCoinSoccerBotAction(cs);
+    expect(csAct).not.toBeNull();
+    cs = applyCoinSoccerAction(cs, 'p1', csAct!).state;
+    expect(cs.lastShot).not.toBeNull();
+    expect(cs.nextBotActionAt).toBeGreaterThan(Date.now() - 100);
+
+    let cr = initCrokinole(players, { discsPerPlayer: 6, targetScore: 60 });
+    const crAct = computeCrokinoleBotAction(cr);
+    expect(crAct).not.toBeNull();
+    cr = applyCrokinoleAction(cr, 'p1', crAct!).state;
+    expect(cr.lastShot).not.toBeNull();
+    expect(cr.nextBotActionAt).toBeGreaterThan(Date.now() - 100);
+  });
+
+  it('OneNight, WordWolf, and Insider: enforce human-only, secret isolation, and full flow', () => {
+    expect(GAME_REGISTRY.onenight.allowBots).toBe(false);
+    expect(GAME_REGISTRY.wordwolf.allowBots).toBe(false);
+    expect(GAME_REGISTRY.insider.allowBots).toBe(false);
+
+    // OneNight
+    const onPlayers = makePlayers(4);
+    let on = initOneNight(onPlayers, GAME_REGISTRY.onenight.defaultRules);
+    expect(sanitizeOneNightState(on, SPECTATOR_VIEW_ID).myInitialRole).toBeNull();
+    for (const p of onPlayers) {
+      const me = on.players.find((x) => x.id === p.id)!;
+      if (me.initialRole === 'seer') {
+        on = applyOneNightAction(on, p.id, { type: 'seerInspect', payload: { mode: 'center' } }).state;
+      } else if (me.initialRole === 'thief') {
+        on = applyOneNightAction(on, p.id, { type: 'thiefSwap', payload: { targetId: null } }).state;
+      }
+      on = applyOneNightAction(on, p.id, { type: 'confirmNight' }).state;
+    }
+    expect(on.subPhase).toBe('discussion');
+    on = applyOneNightAction(on, 'p1', { type: 'startVoting' }).state;
+    expect(on.subPhase).toBe('voting');
+
+    // WordWolf
+    const wwPlayers = makePlayers(4);
+    let ww = initWordWolf(wwPlayers, GAME_REGISTRY.wordwolf.defaultRules);
+    expect(sanitizeWordWolfState(ww, SPECTATOR_VIEW_ID).myWord).toBeNull();
+    for (const p of wwPlayers) {
+      ww = applyWordWolfAction(ww, p.id, { type: 'confirmWord' }).state;
+    }
+    expect(ww.subPhase).toBe('discussion');
+    ww = applyWordWolfAction(ww, 'p1', { type: 'startVoting' }).state;
+    expect(ww.subPhase).toBe('voting');
+
+    // Insider
+    const inPlayers = makePlayers(4);
+    let ins = initInsider(inPlayers, GAME_REGISTRY.insider.defaultRules);
+    expect(sanitizeInsiderState(ins, SPECTATOR_VIEW_ID).myRole).toBeNull();
+    for (const p of inPlayers) {
+      ins = applyInsiderAction(ins, p.id, { type: 'confirmRole' }).state;
+    }
+    expect(ins.subPhase).toBe('question');
+    const solver = inPlayers.find((p) => p.id !== ins.masterId)!;
+    ins = applyInsiderAction(ins, 'p1', { type: 'markSolved', payload: { solverId: solver.id } }).state;
+    expect(ins.subPhase).toBe('discussion');
   });
 });

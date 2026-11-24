@@ -1,25 +1,33 @@
 import React, { useState } from 'react';
 import { ArrowLeft, BookOpen, ClipboardList, Eye, EyeOff, RotateCcw, Users, X } from 'lucide-react';
 import type { AirHockeyClientState } from '../games/airhockey';
+import type { BackgammonClientState } from '../games/backgammon';
 import type { BattleshipClientState } from '../games/battleship';
 import type { BlackjackClientState } from '../games/blackjack';
 import type { CarromClientState } from '../games/carrom';
+import type { CheckersClientState } from '../games/checkers';
 import type { ChessClientState } from '../games/chess';
 import type { ChinchiroClientState } from '../games/chinchiro';
+import type { CoinSoccerClientState } from '../games/coinSoccer';
 import type { Connect4ClientState } from '../games/connect4';
 import type { Crazy8ClientState } from '../games/crazy8';
+import type { CrokinoleClientState } from '../games/crokinole';
 import type { DaifugoClientState } from '../games/daifugo';
 import type { DotsAndBoxesClientState } from '../games/dotsAndBoxes';
 import type { DoubtClientState } from '../games/doubt';
 import type { GomokuClientState } from '../games/gomoku';
+import type { GunjinShogiClientState } from '../games/gunjinshogi';
+import type { HexClientState } from '../games/hex';
 import type { HitAndBlowClientState } from '../games/hitAndBlow';
 import type { HoldemClientState } from '../games/holdem';
 import type { IgoClientState } from '../games/igo';
 import type { IndianPokerClientState } from '../games/indianPoker';
+import type { InsiderClientState } from '../games/insider';
 import type { LiarsDiceClientState } from '../games/liarsDice';
 import type { MancalaClientState } from '../games/mancala';
 import type { MemoryClientState } from '../games/memory';
 import type { OldMaidClientState } from '../games/oldMaid';
+import type { OneNightClientState } from '../games/oneNight';
 import type { PokerClientState } from '../games/poker';
 import type { ReversiClientState } from '../games/reversi';
 import type { RouletteClientState } from '../games/roulette';
@@ -28,31 +36,40 @@ import type { SevensClientState } from '../games/sevens';
 import type { ShogiClientState } from '../games/shogi';
 import type { SpeedClientState } from '../games/speed';
 import type { WerewolfClientState } from '../games/werewolf';
+import type { WordWolfClientState } from '../games/wordWolf';
 import type { YachtClientState } from '../games/yacht';
 import type { GameId, GameRulesMap, ScoreBoardRoomRules } from '../types/game';
 import type { ScoreBoardOp, ScoreBoardState } from '../utils/scoreBoard';
 import { GameIcon } from './GameIcon';
 import { RuleConfigurator } from './RuleConfigurator';
 import { AirHockeyBoard } from './boards/AirHockeyBoard';
+import { BackgammonBoard } from './boards/BackgammonBoard';
 import { BattleshipBoard } from './boards/BattleshipBoard';
 import { BlackjackBoard } from './boards/BlackjackBoard';
 import { CarromBoard } from './boards/CarromBoard';
+import { CheckersBoard } from './boards/CheckersBoard';
 import { ChessBoard } from './boards/ChessBoard';
 import { ChinchiroBoard } from './boards/ChinchiroBoard';
+import { CoinSoccerBoard } from './boards/CoinSoccerBoard';
 import { Connect4Board } from './boards/Connect4Board';
 import { Crazy8Board } from './boards/Crazy8Board';
+import { CrokinoleBoard } from './boards/CrokinoleBoard';
 import { DaifugoBoard } from './boards/DaifugoBoard';
 import { DotsAndBoxesBoard } from './boards/DotsAndBoxesBoard';
 import { DoubtBoard } from './boards/DoubtBoard';
 import { GomokuBoard } from './boards/GomokuBoard';
+import { GunjinShogiBoard } from './boards/GunjinShogiBoard';
+import { HexBoard } from './boards/HexBoard';
 import { HitAndBlowBoard } from './boards/HitAndBlowBoard';
 import { HoldemBoard } from './boards/HoldemBoard';
 import { IgoBoard } from './boards/IgoBoard';
 import { IndianPokerBoard } from './boards/IndianPokerBoard';
+import { InsiderBoard } from './boards/InsiderBoard';
 import { LiarsDiceBoard } from './boards/LiarsDiceBoard';
 import { MancalaBoard } from './boards/MancalaBoard';
 import { MemoryBoard } from './boards/MemoryBoard';
 import { OldMaidBoard } from './boards/OldMaidBoard';
+import { OneNightBoard } from './boards/OneNightBoard';
 import { PokerBoard } from './boards/PokerBoard';
 import { ReversiBoard } from './boards/ReversiBoard';
 import { RouletteBoard } from './boards/RouletteBoard';
@@ -61,6 +78,7 @@ import { SevensBoard } from './boards/SevensBoard';
 import { ShogiBoard } from './boards/ShogiBoard';
 import { SpeedBoard } from './boards/SpeedBoard';
 import { WerewolfBoard } from './boards/WerewolfBoard';
+import { WordWolfBoard } from './boards/WordWolfBoard';
 import { YachtBoard } from './boards/YachtBoard';
 import './PassAndPlayOverlay.css';
 
@@ -161,10 +179,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             <div className="handoff-eyebrow">端末を渡してください</div>
             <h2 className="handoff-player-name">{handoffPlayer.name} の番</h2>
             <p className="handoff-hint">
-              {gameId === 'werewolf'
+              {gameId === 'werewolf' || gameId === 'onenight' || gameId === 'insider'
                 ? `役職や操作が見えないよう画面を隠しています。${handoffPlayer.name} に端末を渡してからボタンを押してください。`
-                : gameId === 'battleship'
-                ? `艦隊配置が見えないよう画面を隠しています。${handoffPlayer.name} に端末を渡してからボタンを押してください。`
+                : gameId === 'wordwolf'
+                ? `お題や投票が見えないよう画面を隠しています。${handoffPlayer.name} に端末を渡してからボタンを押してください。`
+                : gameId === 'battleship' || gameId === 'gunjinshogi'
+                ? `陣地や駒の配置が見えないよう画面を隠しています。${handoffPlayer.name} に端末を渡してからボタンを押してください。`
                 : gameId === 'liarsdice'
                 ? `カップの中のサイコロが見えないよう画面を隠しています。${handoffPlayer.name} に端末を渡してからボタンを押してください。`
                 : gameId === 'indianpoker'
@@ -177,7 +197,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               onClick={onConfirmHandoff}
             >
               <Eye size={18} />
-              {gameId === 'werewolf' || gameId === 'battleship' || gameId === 'liarsdice' || gameId === 'indianpoker'
+              {gameId === 'werewolf' ||
+              gameId === 'onenight' ||
+              gameId === 'wordwolf' ||
+              gameId === 'insider' ||
+              gameId === 'battleship' ||
+              gameId === 'gunjinshogi' ||
+              gameId === 'liarsdice' ||
+              gameId === 'indianpoker'
                 ? `${handoffPlayer.name} の画面を開く`
                 : `${handoffPlayer.name} の手札を見る`}
             </button>
@@ -354,6 +381,72 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             )}
             {gameId === 'liarsdice' && (
               <LiarsDiceBoard state={gameState as LiarsDiceClientState} onAction={onAction} />
+            )}
+            {gameId === 'hex' && (
+              <HexBoard
+                state={gameState as HexClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'checkers' && (
+              <CheckersBoard
+                state={gameState as CheckersClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'backgammon' && (
+              <BackgammonBoard
+                state={gameState as BackgammonClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'gunjinshogi' && (
+              <GunjinShogiBoard
+                state={gameState as GunjinShogiClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'coinsoccer' && (
+              <CoinSoccerBoard
+                state={gameState as CoinSoccerClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'crokinole' && (
+              <CrokinoleBoard
+                state={gameState as CrokinoleClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'onenight' && (
+              <OneNightBoard
+                state={gameState as OneNightClientState}
+                isHost={isHost}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'wordwolf' && (
+              <WordWolfBoard
+                state={gameState as WordWolfClientState}
+                isHost={isHost}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'insider' && (
+              <InsiderBoard
+                state={gameState as InsiderClientState}
+                isHost={isHost}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
             )}
           </>
         )}

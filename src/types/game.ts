@@ -23,9 +23,18 @@ export type GameId =
   | 'dotsandboxes'
   | 'battleship'
   | 'hitandblow'
+  | 'hex'
+  | 'checkers'
+  | 'backgammon'
+  | 'gunjinshogi'
   | 'carrom'
   | 'airhockey'
+  | 'coinsoccer'
+  | 'crokinole'
   | 'werewolf'
+  | 'onenight'
+  | 'wordwolf'
+  | 'insider'
   | 'chinchiro'
   | 'roulette'
   | 'yacht'
@@ -210,6 +219,50 @@ export interface LiarsDiceRules {
   onesWild: boolean;         // 1の目をワイルド扱いするか
 }
 
+export interface HexRules {
+  boardSize: 7 | 9 | 11;     // 六角盤面サイズ（7x7クイック / 9x9スマホ推奨 / 11x11標準）
+  swapRule: boolean;         // パイルール（2手目に後手が初手を奪える）
+}
+
+export interface CheckersRules {
+  forcedCapture: boolean;    // 飛び越し取り強制（公式ルール）
+}
+
+export interface BackgammonRules {
+  targetPoints: 1 | 3;       // 勝利目標ポイント（1ゲーム勝負 / 3ptマッチ）
+}
+
+export interface GunjinShogiRules {
+  autoSetupAllowed: boolean; // 自動配置ボタンを許可するか
+}
+
+export interface CoinSoccerRules {
+  winScore: 3 | 5;           // 先取ゴール数（3点 / 5点）
+}
+
+export interface CrokinoleRules {
+  discsPerPlayer: 6 | 8;     // 1ラウンドあたりのディスク枚数
+  targetScore: 60 | 100;     // 勝利目標点（60点クイック / 100点公式）
+}
+
+export interface OneNightRules {
+  werewolfCount: 2;          // 人狼カード枚数（標準2枚）
+  includeThief: boolean;     // 怪盗を入れるか
+  includeTanner: boolean;    // てるてる坊主を入れるか
+  discussionSec: number;     // 議論時間（秒、0 = 上限なし）
+}
+
+export interface WordWolfRules {
+  wolfCount: 1 | 2;          // 少数派（ウルフ）の人数
+  discussionSec: number;     // 議論時間（秒、0 = 上限なし）
+  allowReversal: boolean;    // ウルフ処刑時に多数派お題を当てたら逆転勝ち
+}
+
+export interface InsiderRules {
+  questionSec: number;       // お題当て質問タイム（秒）
+  discussionSec: number;     // 告発議論タイム（秒）
+}
+
 export type GameRulesMap = {
   scoreboard: ScoreBoardRoomRules;
   daifugo: DaifugoRules;
@@ -233,9 +286,18 @@ export type GameRulesMap = {
   dotsandboxes: DotsAndBoxesRules;
   battleship: BattleshipRules;
   hitandblow: HitAndBlowRules;
+  hex: HexRules;
+  checkers: CheckersRules;
+  backgammon: BackgammonRules;
+  gunjinshogi: GunjinShogiRules;
   carrom: CarromRules;
   airhockey: AirHockeyRules;
+  coinsoccer: CoinSoccerRules;
+  crokinole: CrokinoleRules;
   werewolf: WerewolfRules;
+  onenight: OneNightRules;
+  wordwolf: WordWolfRules;
+  insider: InsiderRules;
   chinchiro: ChinchiroRules;
   roulette: RouletteRules;
   yacht: YachtRules;

@@ -8,16 +8,21 @@ import {
   ClipboardList,
   Coins,
   Columns3,
+  Compass,
   Crosshair,
   Crown,
   Dices,
   Eye,
+  Flag,
   Flame,
   Gem,
   Grid3X3,
   Hash,
+  HelpCircle,
+  Hexagon,
   Layers,
   LayoutGrid,
+  MessageSquare,
   Moon,
   Orbit,
   Shield,
@@ -54,7 +59,12 @@ export type GameIconKey =
   | 'anchor'
   | 'binary'
   | 'crosshair'
-  | 'trophy';
+  | 'trophy'
+  | 'hexagon'
+  | 'compass'
+  | 'flag'
+  | 'messageSquare'
+  | 'helpCircle';
 
 interface GameIconProps {
   name: GameIconKey;
@@ -116,5 +126,15 @@ export const GameIcon: React.FC<GameIconProps> = ({ name, size = 18, className }
       return <Crosshair size={size} className={className} />;
     case 'trophy':
       return <Trophy size={size} className={className} />;
+    case 'hexagon':
+      return <Hexagon size={size} className={className} />;
+    case 'compass':
+      return <Compass size={size} className={className} />;
+    case 'flag':
+      return <Flag size={size} className={className} />;
+    case 'messageSquare':
+      return <MessageSquare size={size} className={className} />;
+    case 'helpCircle':
+      return <HelpCircle size={size} className={className} />;
   }
 };

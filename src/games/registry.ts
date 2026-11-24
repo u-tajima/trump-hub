@@ -1323,6 +1323,315 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
       },
     ],
   },
+  hex: {
+    id: 'hex',
+    category: 'board',
+    name: 'ヘックス',
+    subtitle: '六角マスで対辺をつなぐ引き分けなしの頭脳戦',
+    icon: 'hexagon',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '六角形グリッドに交互に石を置き、自分の色の対辺（赤は上下、青は左右）を先につなげた方が勝利！パイルール（2手目交換）にも対応。',
+    defaultRules: {
+      boardSize: 9,
+      swapRule: true,
+    },
+    ruleFields: [
+      {
+        key: 'boardSize',
+        label: '盤面サイズ',
+        description: '9×9がスマホで遊びやすくおすすめ',
+        type: 'select',
+        options: [
+          { value: 7, label: '7×7（クイック）' },
+          { value: 9, label: '9×9（スマホ推奨）' },
+          { value: 11, label: '11×11（公式）' },
+        ],
+      },
+      {
+        key: 'swapRule',
+        label: 'パイルール（2手目交換）',
+        description: '先手の1手目が強すぎる場合、後手がその石を自分の色に奪える',
+        type: 'boolean',
+      },
+    ],
+  },
+  checkers: {
+    id: 'checkers',
+    category: 'board',
+    name: 'チェッカー',
+    subtitle: '斜め移動と連続飛び越し取りの王道対戦',
+    icon: 'disc',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '8×8盤面で駒を斜めに進め、相手の駒を飛び越して取る伝統ボードゲーム！敵陣到達でキングに昇格し、連続ジャンプで一気に逆転しよう。',
+    defaultRules: {
+      forcedCapture: true,
+    },
+    ruleFields: [
+      {
+        key: 'forcedCapture',
+        label: '飛び越し取り強制',
+        description: '取れる駒があるときは必ずジャンプしなければならない（公式ルール）',
+        type: 'boolean',
+      },
+    ],
+  },
+  backgammon: {
+    id: 'backgammon',
+    category: 'board',
+    name: 'バックギャモン',
+    subtitle: 'サイコロと戦略で全駒のゴールを競う世界4大ゲーム',
+    icon: 'compass',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '2個のダイスで15個の駒を進め、相手の単独駒をヒット（バー送り）しながら全駒をゴール（ベアオフ）させよう！ゾロ目は4回移動。',
+    defaultRules: {
+      targetPoints: 1,
+    },
+    ruleFields: [
+      {
+        key: 'targetPoints',
+        label: '試合形式',
+        description: '1ゲーム勝負か3ポイント先取マッチ',
+        type: 'select',
+        options: [
+          { value: 1, label: '1ゲーム勝負' },
+          { value: 3, label: '3ポイント先取' },
+        ],
+      },
+    ],
+  },
+  gunjinshogi: {
+    id: 'gunjinshogi',
+    category: 'board',
+    name: '軍人将棋',
+    subtitle: '審判自動代行！正体隠匿の本格盤上作戦',
+    icon: 'flag',
+    minPlayers: 2,
+    maxPlayers: 2,
+    localPlayMode: 'passAndPlay',
+    description:
+      '相手の駒が見えない状態でぶつけ合い、アプリが勝敗を自動審判！大将・スパイ・地雷・工兵・飛行機・タンクを駆使して総司令部を占領しよう。',
+    defaultRules: {
+      autoSetupAllowed: true,
+    },
+    ruleFields: [
+      {
+        key: 'autoSetupAllowed',
+        label: 'ランダム自動配置を許可',
+        description: '初期配置フェーズでランダム配置ボタンを使えるようにする',
+        type: 'boolean',
+      },
+    ],
+  },
+  coinsoccer: {
+    id: 'coinsoccer',
+    category: 'action',
+    name: 'コインサッカー',
+    subtitle: '3枚のコインを交互に弾いて間を通すおはじきサッカー',
+    icon: 'circle',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '3枚のコインのうち1枚を引っ張って弾き、残り2枚のコインの間を通してゴールを狙う伝統物理ゲーム！通せなければ即ファウルで相手ボール。',
+    defaultRules: {
+      winScore: 3,
+    },
+    ruleFields: [
+      {
+        key: 'winScore',
+        label: '勝利ゴール数',
+        description: '先にこのゴール数を決めたプレイヤーが勝利',
+        type: 'select',
+        options: [
+          { value: 3, label: '3点先取（標準）' },
+          { value: 5, label: '5点先取' },
+        ],
+      },
+    ],
+  },
+  crokinole: {
+    id: 'crokinole',
+    category: 'action',
+    name: 'クルキノール',
+    subtitle: '円形盤面で弾き合い中央20点ホールを狙う物理戦',
+    icon: 'target',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      'カナダ伝統の円形ボード弾きゲーム！ペグ（柱）をかわしながら中央の20点ホールを狙い、相手のディスクを弾き出して得点を競おう。',
+    defaultRules: {
+      discsPerPlayer: 6,
+      targetScore: 60,
+    },
+    ruleFields: [
+      {
+        key: 'discsPerPlayer',
+        label: '1ラウンドのディスク数',
+        description: '各自が1ラウンドで撃つディスクの枚数',
+        type: 'select',
+        options: [
+          { value: 6, label: '6枚（クイック）' },
+          { value: 8, label: '8枚（標準）' },
+        ],
+      },
+      {
+        key: 'targetScore',
+        label: '勝利目標点',
+        description: '先にこの点数に到達したプレイヤーが勝利',
+        type: 'select',
+        options: [
+          { value: 60, label: '60点（クイック）' },
+          { value: 100, label: '100点（公式）' },
+        ],
+      },
+    ],
+  },
+  onenight: {
+    id: 'onenight',
+    category: 'party',
+    name: '一夜人狼',
+    subtitle: '1夜・1議論・1投票で決着する超高速人狼',
+    icon: 'moon',
+    minPlayers: 3,
+    maxPlayers: 7,
+    allowBots: false,
+    localPlayMode: 'passAndPlay',
+    description:
+      'GM不要の1夜決着人狼！中央余りカード2枚・占い師・怪盗・てるてる坊主で短時間に濃密な心理戦。平和村（全員処刑なし）判定にも対応（人間専用）。',
+    defaultRules: {
+      werewolfCount: 2,
+      includeThief: true,
+      includeTanner: false,
+      discussionSec: 180,
+    },
+    ruleFields: [
+      { key: 'includeThief', label: '怪盗を入れる', description: '夜に他プレイヤー1人と役職を交換し、新役職を知る', type: 'boolean' },
+      { key: 'includeTanner', label: 'てるてる坊主を入れる', description: '自分が処刑されると単独勝利する第三陣営', type: 'boolean' },
+      {
+        key: 'discussionSec',
+        label: '議論時間',
+        description: '昼の議論タイマー（議論中の1分延長可）',
+        type: 'number',
+        min: 60,
+        max: 600,
+        step: 30,
+        unit: '秒',
+        options: [
+          { value: 120, label: '2分' },
+          { value: 180, label: '3分（標準）' },
+          { value: 300, label: '5分' },
+          { value: 0, label: '上限なし' },
+        ],
+      },
+    ],
+  },
+  wordwolf: {
+    id: 'wordwolf',
+    category: 'party',
+    name: 'ワード人狼',
+    subtitle: '似ているお題から少数派を探し出す会話バトル',
+    icon: 'messageSquare',
+    minPlayers: 3,
+    maxPlayers: 10,
+    allowBots: false,
+    localPlayMode: 'passAndPlay',
+    description:
+      '多数派と少数派に似ているお題（例：うどん／そば）を自動配布！会話の中からお題が違う少数派を見抜こう。逆転回答ルール対応（人間専用）。',
+    defaultRules: {
+      wolfCount: 1,
+      discussionSec: 180,
+      allowReversal: true,
+    },
+    ruleFields: [
+      {
+        key: 'wolfCount',
+        label: '少数派（ウルフ）の人数',
+        description: '5人以上のときに2人設定が有効になります',
+        type: 'select',
+        options: [
+          { value: 1, label: '1人（標準）' },
+          { value: 2, label: '2人（5人以上）' },
+        ],
+      },
+      {
+        key: 'discussionSec',
+        label: '議論時間',
+        description: 'フリートークのタイマー（議論中の1分延長可）',
+        type: 'number',
+        min: 60,
+        max: 600,
+        step: 30,
+        unit: '秒',
+        options: [
+          { value: 120, label: '2分' },
+          { value: 180, label: '3分（標準）' },
+          { value: 300, label: '5分' },
+          { value: 0, label: '上限なし' },
+        ],
+      },
+      {
+        key: 'allowReversal',
+        label: 'ウルフ逆転チャンスあり',
+        description: '処刑されたウルフが多数派のお題を言い当てたら逆転勝利',
+        type: 'boolean',
+      },
+    ],
+  },
+  insider: {
+    id: 'insider',
+    category: 'party',
+    name: 'シークレットマスター',
+    subtitle: 'お題当て質問ゲーム＋答えを知る裏切り者探し',
+    icon: 'helpCircle',
+    minPlayers: 4,
+    maxPlayers: 10,
+    allowBots: false,
+    localPlayMode: 'passAndPlay',
+    description:
+      'マスターに「はい／いいえ」質問をして制限時間内にお題を当てよう！正解後、実は最初から答えを知っていた裏切り者（インサイダー）を議論で突き止める2段構成ゲーム（人間専用）。',
+    defaultRules: {
+      questionSec: 300,
+      discussionSec: 180,
+    },
+    ruleFields: [
+      {
+        key: 'questionSec',
+        label: '質問タイム（お題当て）',
+        description: 'マスターへの質問制限時間',
+        type: 'select',
+        options: [
+          { value: 180, label: '3分' },
+          { value: 300, label: '5分（標準）' },
+        ],
+      },
+      {
+        key: 'discussionSec',
+        label: '告発議論タイム',
+        description: '正解後に裏切り者を探す議論時間',
+        type: 'select',
+        options: [
+          { value: 120, label: '2分' },
+          { value: 180, label: '3分（標準）' },
+          { value: 0, label: '上限なし' },
+        ],
+      },
+    ],
+  },
 };
 
 export const GAME_LIST: GameMeta[] = Object.values(GAME_REGISTRY);

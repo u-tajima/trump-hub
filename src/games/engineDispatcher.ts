@@ -5,6 +5,13 @@ import {
   sanitizeAirHockeyState,
 } from './airhockey';
 import {
+  applyBackgammonAction,
+  type BackgammonInternalState,
+  computeBackgammonBotAction,
+  initBackgammon,
+  sanitizeBackgammonState,
+} from './backgammon';
+import {
   applyBattleshipAction,
   type BattleshipInternalState,
   computeBattleshipBotAction,
@@ -26,6 +33,13 @@ import {
   sanitizeCarromState,
 } from './carrom';
 import {
+  applyCheckersAction,
+  type CheckersInternalState,
+  computeCheckersBotAction,
+  initCheckers,
+  sanitizeCheckersState,
+} from './checkers';
+import {
   applyChessAction,
   type ChessInternalState,
   computeChessBotAction,
@@ -40,6 +54,13 @@ import {
   sanitizeChinchiroState,
 } from './chinchiro';
 import {
+  applyCoinSoccerAction,
+  type CoinSoccerInternalState,
+  computeCoinSoccerBotAction,
+  initCoinSoccer,
+  sanitizeCoinSoccerState,
+} from './coinSoccer';
+import {
   applyConnect4Action,
   computeConnect4BotAction,
   type Connect4InternalState,
@@ -53,6 +74,13 @@ import {
   initCrazy8,
   sanitizeCrazy8State,
 } from './crazy8';
+import {
+  applyCrokinoleAction,
+  computeCrokinoleBotAction,
+  type CrokinoleInternalState,
+  initCrokinole,
+  sanitizeCrokinoleState,
+} from './crokinole';
 import {
   applyDaifugoAction,
   computeDaifugoBotAction,
@@ -82,6 +110,20 @@ import {
   sanitizeGomokuState,
 } from './gomoku';
 import {
+  applyGunjinShogiAction,
+  computeGunjinShogiBotAction,
+  type GunjinShogiInternalState,
+  initGunjinShogi,
+  sanitizeGunjinShogiState,
+} from './gunjinshogi';
+import {
+  applyHexAction,
+  computeHexBotAction,
+  type HexInternalState,
+  initHex,
+  sanitizeHexState,
+} from './hex';
+import {
   applyHitAndBlowAction,
   computeHitAndBlowBotAction,
   type HitAndBlowInternalState,
@@ -110,6 +152,12 @@ import {
   sanitizeIndianPokerState,
 } from './indianPoker';
 import {
+  applyInsiderAction,
+  type InsiderInternalState,
+  initInsider,
+  sanitizeInsiderState,
+} from './insider';
+import {
   applyLiarsDiceAction,
   computeLiarsDiceBotAction,
   type LiarsDiceInternalState,
@@ -130,6 +178,12 @@ import {
   type MemoryInternalState,
   sanitizeMemoryState,
 } from './memory';
+import {
+  applyOneNightAction,
+  initOneNight,
+  type OneNightInternalState,
+  sanitizeOneNightState,
+} from './oneNight';
 import {
   applyPokerAction,
   computePokerBotAction,
@@ -186,6 +240,12 @@ import {
   type WerewolfInternalState,
 } from './werewolf';
 import {
+  applyWordWolfAction,
+  initWordWolf,
+  sanitizeWordWolfState,
+  type WordWolfInternalState,
+} from './wordWolf';
+import {
   applyYachtAction,
   computeYachtBotAction,
   initYacht,
@@ -194,27 +254,35 @@ import {
 } from './yacht';
 import type {
   AirHockeyRules,
+  BackgammonRules,
   BattleshipRules,
   BlackjackRules,
   CarromRules,
+  CheckersRules,
   ChessRules,
   ChinchiroRules,
+  CoinSoccerRules,
   Connect4Rules,
   Crazy8Rules,
+  CrokinoleRules,
   DaifugoRules,
   DotsAndBoxesRules,
   DoubtRules,
   GameId,
   GameRulesMap,
   GomokuRules,
+  GunjinShogiRules,
+  HexRules,
   HitAndBlowRules,
   HoldemRules,
   IgoRules,
   IndianPokerRules,
+  InsiderRules,
   LiarsDiceRules,
   MancalaRules,
   MemoryRules,
   OldMaidRules,
+  OneNightRules,
   PlayerInfo,
   PokerRules,
   ReversiRules,
@@ -224,6 +292,7 @@ import type {
   ShogiRules,
   SpeedRules,
   WerewolfRules,
+  WordWolfRules,
   YachtRules,
 } from '../types/game';
 
@@ -255,9 +324,18 @@ export type AnyInternalState =
   | DotsAndBoxesInternalState
   | BattleshipInternalState
   | HitAndBlowInternalState
+  | HexInternalState
+  | CheckersInternalState
+  | BackgammonInternalState
+  | GunjinShogiInternalState
   | CarromInternalState
   | AirHockeyInternalState
+  | CoinSoccerInternalState
+  | CrokinoleInternalState
   | WerewolfInternalState
+  | OneNightInternalState
+  | WordWolfInternalState
+  | InsiderInternalState
   | ChinchiroInternalState
   | RouletteInternalState
   | YachtInternalState
@@ -319,12 +397,30 @@ export function initGameEngine(
       return initBattleship(players, rules as BattleshipRules);
     case 'hitandblow':
       return initHitAndBlow(players, rules as HitAndBlowRules);
+    case 'hex':
+      return initHex(players, rules as HexRules);
+    case 'checkers':
+      return initCheckers(players, rules as CheckersRules);
+    case 'backgammon':
+      return initBackgammon(players, rules as BackgammonRules);
+    case 'gunjinshogi':
+      return initGunjinShogi(players, rules as GunjinShogiRules);
     case 'carrom':
       return initCarrom(players, rules as CarromRules);
     case 'airhockey':
       return initAirHockey(players, rules as AirHockeyRules);
+    case 'coinsoccer':
+      return initCoinSoccer(players, rules as CoinSoccerRules);
+    case 'crokinole':
+      return initCrokinole(players, rules as CrokinoleRules);
     case 'werewolf':
       return initWerewolf(players, rules as WerewolfRules);
+    case 'onenight':
+      return initOneNight(players, rules as OneNightRules);
+    case 'wordwolf':
+      return initWordWolf(players, rules as WordWolfRules);
+    case 'insider':
+      return initInsider(players, rules as InsiderRules);
     case 'chinchiro':
       return initChinchiro(players, rules as ChinchiroRules);
     case 'roulette':
@@ -387,12 +483,30 @@ export function applyGameAction(
       return applyBattleshipAction(state as BattleshipInternalState, playerId, action);
     case 'hitandblow':
       return applyHitAndBlowAction(state as HitAndBlowInternalState, playerId, action);
+    case 'hex':
+      return applyHexAction(state as HexInternalState, playerId, action);
+    case 'checkers':
+      return applyCheckersAction(state as CheckersInternalState, playerId, action);
+    case 'backgammon':
+      return applyBackgammonAction(state as BackgammonInternalState, playerId, action);
+    case 'gunjinshogi':
+      return applyGunjinShogiAction(state as GunjinShogiInternalState, playerId, action);
     case 'carrom':
       return applyCarromAction(state as CarromInternalState, playerId, action);
     case 'airhockey':
       return applyAirHockeyAction(state as AirHockeyInternalState, playerId, action);
+    case 'coinsoccer':
+      return applyCoinSoccerAction(state as CoinSoccerInternalState, playerId, action);
+    case 'crokinole':
+      return applyCrokinoleAction(state as CrokinoleInternalState, playerId, action);
     case 'werewolf':
       return applyWerewolfAction(state as WerewolfInternalState, playerId, action);
+    case 'onenight':
+      return applyOneNightAction(state as OneNightInternalState, playerId, action);
+    case 'wordwolf':
+      return applyWordWolfAction(state as WordWolfInternalState, playerId, action);
+    case 'insider':
+      return applyInsiderAction(state as InsiderInternalState, playerId, action);
     case 'chinchiro':
       return applyChinchiroAction(state as ChinchiroInternalState, playerId, action);
     case 'roulette':
@@ -450,12 +564,30 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizeBattleshipState(state as BattleshipInternalState, playerId);
     case 'hitandblow':
       return sanitizeHitAndBlowState(state as HitAndBlowInternalState, playerId);
+    case 'hex':
+      return sanitizeHexState(state as HexInternalState, playerId);
+    case 'checkers':
+      return sanitizeCheckersState(state as CheckersInternalState, playerId);
+    case 'backgammon':
+      return sanitizeBackgammonState(state as BackgammonInternalState, playerId);
+    case 'gunjinshogi':
+      return sanitizeGunjinShogiState(state as GunjinShogiInternalState, playerId);
     case 'carrom':
       return sanitizeCarromState(state as CarromInternalState, playerId);
     case 'airhockey':
       return sanitizeAirHockeyState(state as AirHockeyInternalState, playerId);
+    case 'coinsoccer':
+      return sanitizeCoinSoccerState(state as CoinSoccerInternalState, playerId);
+    case 'crokinole':
+      return sanitizeCrokinoleState(state as CrokinoleInternalState, playerId);
     case 'werewolf':
       return sanitizeWerewolfState(state as WerewolfInternalState, playerId);
+    case 'onenight':
+      return sanitizeOneNightState(state as OneNightInternalState, playerId);
+    case 'wordwolf':
+      return sanitizeWordWolfState(state as WordWolfInternalState, playerId);
+    case 'insider':
+      return sanitizeInsiderState(state as InsiderInternalState, playerId);
     case 'chinchiro':
       return sanitizeChinchiroState(state as ChinchiroInternalState, playerId);
     case 'roulette':
@@ -742,5 +874,64 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
       if (!act) return null;
       return applyLiarsDiceAction(s, current.id, act).state;
     }
+    case 'hex': {
+      const s = state as HexInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeHexBotAction(s);
+      if (!act) return null;
+      return applyHexAction(s, current.id, act).state;
+    }
+    case 'checkers': {
+      const s = state as CheckersInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeCheckersBotAction(s);
+      if (!act) return null;
+      return applyCheckersAction(s, current.id, act).state;
+    }
+    case 'backgammon': {
+      const s = state as BackgammonInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeBackgammonBotAction(s);
+      if (!act) return null;
+      return applyBackgammonAction(s, current.id, act).state;
+    }
+    case 'gunjinshogi': {
+      const s = state as GunjinShogiInternalState;
+      if (s.subPhase === 'setup') {
+        const bot = s.players.find((p) => p.isBot && !p.setupConfirmed);
+        if (!bot) return null;
+        return applyGunjinShogiAction(s, bot.id, { type: 'confirmSetup' }).state;
+      }
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeGunjinShogiBotAction(s);
+      if (!act) return null;
+      return applyGunjinShogiAction(s, current.id, act).state;
+    }
+    case 'coinsoccer': {
+      const s = state as CoinSoccerInternalState;
+      if (Date.now() < s.nextBotActionAt) return null;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeCoinSoccerBotAction(s);
+      if (!act) return null;
+      return applyCoinSoccerAction(s, current.id, act).state;
+    }
+    case 'crokinole': {
+      const s = state as CrokinoleInternalState;
+      if (Date.now() < s.nextBotActionAt) return null;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeCrokinoleBotAction(s);
+      if (!act) return null;
+      return applyCrokinoleAction(s, current.id, act).state;
+    }
+    case 'onenight':
+    case 'wordwolf':
+    case 'insider':
+      return null;
   }
 }
