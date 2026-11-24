@@ -14,6 +14,7 @@ export interface RuleFieldDef<K extends string = string> {
 }
 
 export type GameCategory = 'tool' | 'card' | 'board' | 'dice';
+export type LocalPlayMode = 'none' | 'direct' | 'passAndPlay';
 
 export interface GameMeta<T extends GameId = GameId> {
   id: T;
@@ -24,6 +25,7 @@ export interface GameMeta<T extends GameId = GameId> {
   minPlayers: number;
   maxPlayers: number;
   isPerfectInfo?: boolean;
+  localPlayMode: LocalPlayMode;
   description: string;
   defaultRules: GameRulesMap[T];
   ruleFields: RuleFieldDef[];
@@ -38,6 +40,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'clipboard',
     minPlayers: 1,
     maxPlayers: 12,
+    localPlayMode: 'none',
     description:
       'リアル対局や別ゲームの得点をみんなで同時記録できる専用ルーム！自分の得点変動を素早く入力でき、全体の収支がゼロサム（合計±0）になっていない時は警告を表示します。データはホスト端末に3日間保存されます。',
     defaultRules: {
@@ -91,6 +94,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'crown',
     minPlayers: 2,
     maxPlayers: 6,
+    localPlayMode: 'passAndPlay',
     description: '手札を早く出し切った人が勝ち！革命・8切り・しばり・7渡し・10捨てなど豊富なローカルルールに対応。',
     defaultRules: {
       jokerCount: 1,
@@ -147,6 +151,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'gem',
     minPlayers: 2,
     maxPlayers: 6,
+    localPlayMode: 'passAndPlay',
     description: '手札5枚を1回交換して役を作る本格ドローポーカー！ベット・レイズ・フォールドの駆け引きを楽しもう。',
     defaultRules: {
       rounds: 10,
@@ -212,6 +217,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'gem',
     minPlayers: 2,
     maxPlayers: 6,
+    localPlayMode: 'passAndPlay',
     description: '手札2枚と場の共通カード5枚から最強の5枚を作る本格ポーカー！プリフロップ〜リバーの心理戦を楽しもう。',
     defaultRules: {
       rounds: 10,
@@ -275,6 +281,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'hash',
     minPlayers: 2,
     maxPlayers: 6,
+    localPlayMode: 'passAndPlay',
     description: '7を起点に同じスートの数字をつなげて手札をなくそう。パス回数やトンネル設定が可能。',
     defaultRules: {
       passLimit: 3,
@@ -310,6 +317,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'zap',
     minPlayers: 2,
     maxPlayers: 2,
+    localPlayMode: 'none',
     description: 'ターンなし！2人同時進行で台札の±1のカードを素早く出し切ろう（2人専用）。',
     defaultRules: {
       akConnect: true,
@@ -330,6 +338,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'spade',
     minPlayers: 2,
     maxPlayers: 6,
+    localPlayMode: 'passAndPlay',
     description: '同じ数字のペアを捨てて、最後の手札が0枚になれば勝ち。ジジ抜きモードにも対応！',
     defaultRules: {
       mode: 'baba',
@@ -357,6 +366,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'eye',
     minPlayers: 2,
     maxPlayers: 6,
+    localPlayMode: 'passAndPlay',
     description: 'A→2→3…の順に裏向きでカードを出す。ウソだと思ったら「ダウト！」を宣言しよう。',
     defaultRules: {
       jokerEnabled: true,
@@ -390,6 +400,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'brain',
     minPlayers: 1,
     maxPlayers: 6,
+    localPlayMode: 'direct',
     description: '裏向きのカードを2枚めくって同じ数字なら獲得！1人プレイから6人対戦まで対応。',
     defaultRules: {
       deckSize: 26,
@@ -421,6 +432,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     minPlayers: 2,
     maxPlayers: 2,
     isPerfectInfo: true,
+    localPlayMode: 'direct',
     description: '相手の石を挟んで自分の色に変えよう！パス自動スキップや6×6クイック対戦に対応。',
     defaultRules: {
       boardSize: 8,
@@ -449,6 +461,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     minPlayers: 2,
     maxPlayers: 2,
     isPerfectInfo: true,
+    localPlayMode: 'direct',
     description: '縦・横・斜めのいずれかに自分の石を5つ並べよう。盤面サイズや長連ルールを選択可能。',
     defaultRules: {
       boardSize: 13,
@@ -478,6 +491,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     minPlayers: 2,
     maxPlayers: 2,
     isPerfectInfo: true,
+    localPlayMode: 'direct',
     description: '上からコインを落として縦・横・斜めに4つ連続で並べよう！スマホ片手でサクッと遊べます。',
     defaultRules: {
       cols: 7,
@@ -514,6 +528,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'dice',
     minPlayers: 2,
     maxPlayers: 6,
+    localPlayMode: 'direct',
     description: '親と子がサイコロ3つを最大3回振って役を競う日本の伝統ダイスゲーム！',
     defaultRules: {
       rounds: 12,
@@ -564,6 +579,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'target',
     minPlayers: 1,
     maxPlayers: 6,
+    localPlayMode: 'direct',
     description: '本格的な3D物理エンジンで回るヨーロピアンルーレット！赤黒・ダズン・一点賭けでチップを増やそう。',
     defaultRules: {
       rounds: 10,

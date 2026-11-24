@@ -21,6 +21,8 @@ import {
   getScoreBoardZeroSumInfo,
   SCOREBOARD_TTL_MS,
 } from '../../utils/scoreBoard';
+import { resolveHostLocalView, SPECTATOR_VIEW_ID } from '../../utils/localPlay';
+import type { LobbyState } from '../../types/game';
 
 const makePlayers = (count: number): PlayerInfo[] =>
   Array.from({ length: count }, (_, i) => ({
@@ -625,5 +627,53 @@ describe('Perfect Information Local Pass-and-Play', () => {
     expect(c4.players[c4.turnIndex].id).toBe('local-2');
     c4 = applyConnect4Action(c4, 'local-2', { type: 'drop', payload: { col: 3 } }).state;
     expect(c4.players[c4.turnIndex].id).toBe('host-1');
+  });
+
+  it('resolves pass-and-play handoff, spectator view on bot turn, doubtWindow, and sequential roulette betting', () => {
+    const players: PlayerInfo[] = [
+      { id: 'host-1', name: 'ホスト', isHost: true, isBot: false, connected: true },
+      { id: 'local-2', name: 'プレイヤー2', isHost: false, isBot: false, isLocal: true, connected: true },
+      { id: 'bot-3', name: 'CPU 1', isHost: false, isBot: true, connected: true },
+    ];
+
+    // 1. 大富豪: ローカル手番は needsHandoff=true、CPU手番は観戦者ビュー（手札非表示）
+    const daifugoLobby: LobbyState = {
+      phase: 'playing',
+      config: { roomCode: 'ABCD', gameId: 'daifugo', rules: GAME_REGISTRY.daifugo.defaultRules },
+      players,
+    };
+    const daifugoState = initDaifugo(players, GAME_REGISTRY.daifugo.defaultRules);
+    daifugoState.turnIndex = 1; // local-2
+    const vLocal = resolveHostLocalView(daifugoLobby, daifugoState, 'host-1');
+    expect(vLocal.viewPlayerId).toBe('local-2');
+    expect(vLocal.needsHandoff).toBe(true);
+
+    daifugoState.turnIndex = 2; // bot-3
+    const vBot = resolveHostLocalView(daifugoLobby, daifugoState, 'host-1');
+    expect(vBot.viewPlayerId).toBe(SPECTATOR_VIEW_ID);
+    expect(vBot.needsHandoff).toBe(false);
+
+    // 2. ダウト: doubtWindow 中は観戦者ビュー（手札非表示）かつカバーなし
+    const doubtLobby: LobbyState = {
+      phase: 'playing',
+      config: { roomCode: 'ABCD', gameId: 'doubt', rules: GAME_REGISTRY.doubt.defaultRules },
+      players,
+    };
+    const doubtState = initDoubt(players, GAME_REGISTRY.doubt.defaultRules);
+    doubtState.subPhase = 'doubtWindow';
+    const vDoubtWin = resolveHostLocalView(doubtLobby, doubtState, 'host-1');
+    expect(vDoubtWin.viewPlayerId).toBe(SPECTATOR_VIEW_ID);
+    expect(vDoubtWin.needsHandoff).toBe(false);
+
+    // 3. ルーレット: betting 中は未確定のローカルプレイヤーが順に操作対象になる
+    const rouletteLobby: LobbyState = {
+      phase: 'playing',
+      config: { roomCode: 'ABCD', gameId: 'roulette', rules: GAME_REGISTRY.roulette.defaultRules },
+      players,
+    };
+    let rState = initRoulette(players, GAME_REGISTRY.roulette.defaultRules);
+    expect(resolveHostLocalView(rouletteLobby, rState, 'host-1').viewPlayerId).toBe('host-1');
+    rState = applyRouletteAction(rState, 'host-1', { type: 'confirmBets' }).state;
+    expect(resolveHostLocalView(rouletteLobby, rState, 'host-1').viewPlayerId).toBe('local-2');
   });
 });

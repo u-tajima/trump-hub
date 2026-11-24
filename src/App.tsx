@@ -15,6 +15,11 @@ import {
 import { GAME_REGISTRY } from './games/registry';
 import { GuestPeerSession, HostPeerSession } from './network/peerManager';
 import type { GameId, GameRulesMap, LobbyState, PlayerInfo, ScoreBoardRoomRules } from './types/game';
+import {
+  getLocalControlledPlayers,
+  type HostLocalView,
+  resolveHostLocalView,
+} from './utils/localPlay';
 import { getRoomCodeFromUrl } from './utils/roomCode';
 import {
   applyScoreBoardOp,
@@ -35,16 +40,6 @@ function getOrCreatePlayerId(): string {
   return id;
 }
 
-function resolveHostActorId(lobby: LobbyState, game: AnyInternalState | null, myId: string): string {
-  if (!game || !GAME_REGISTRY[lobby.config.gameId].isPerfectInfo) return myId;
-  if (!('players' in game) || !('turnIndex' in game)) return myId;
-  const turnState = game as { players: { id: string }[]; turnIndex: number };
-  const turnPlayer = turnState.players[turnState.turnIndex];
-  if (!turnPlayer) return myId;
-  const lobbyPlayer = lobby.players.find((p) => p.id === turnPlayer.id);
-  return lobbyPlayer?.isLocal ? lobbyPlayer.id : myId;
-}
-
 export function App() {
   const [myId] = useState<string>(() => getOrCreatePlayerId());
   const [playerName, setPlayerName] = useState<string>(
@@ -59,6 +54,8 @@ export function App() {
 
   const [lobby, setLobby] = useState<LobbyState | null>(null);
   const [clientGameState, setClientGameState] = useState<unknown>(null);
+  const [hostLocalView, setHostLocalView] = useState<HostLocalView | null>(null);
+  const [revealedLocalActorId, setRevealedLocalActorId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<'dice' | 'roulette' | null>(null);
   const [roomScoreBoard, setRoomScoreBoard] = useState<ScoreBoardState | null>(null);
   const [showScoreModal, setShowScoreModal] = useState<boolean>(false);
@@ -90,8 +87,15 @@ export function App() {
     host.broadcast({ kind: 'lobby', lobby: nextLobby });
 
     if (nextLobby.phase === 'playing' && nextGame) {
-      const hostViewPlayerId = resolveHostActorId(nextLobby, nextGame, myId);
-      setClientGameState(sanitizeGameState(nextLobby.config.gameId, nextGame, hostViewPlayerId));
+      const view = resolveHostLocalView(nextLobby, nextGame, myId);
+      setHostLocalView(view);
+      if (!view.needsHandoff || !view.activeLocalPlayer) {
+        setRevealedLocalActorId(null);
+      } else {
+        const nextActorId = view.activeLocalPlayer.id;
+        setRevealedLocalActorId((prev) => (prev === nextActorId ? prev : null));
+      }
+      setClientGameState(sanitizeGameState(nextLobby.config.gameId, nextGame, view.viewPlayerId));
       for (const p of nextLobby.players) {
         if (!p.isHost && !p.isBot && !p.isLocal) {
           host.sendTo(p.id, {
@@ -102,6 +106,8 @@ export function App() {
         }
       }
     } else {
+      setHostLocalView(null);
+      setRevealedLocalActorId(null);
       setClientGameState(null);
     }
   }, [myId]);
@@ -123,6 +129,8 @@ export function App() {
     roomScoreBoardRef.current = null;
     setLobby(null);
     setClientGameState(null);
+    setHostLocalView(null);
+    setRevealedLocalActorId(null);
     setRoomScoreBoard(null);
     setShowScoreModal(false);
     setRole('none');
@@ -332,12 +340,14 @@ export function App() {
     const cur = lobbyRef.current;
     if (!cur || role !== 'host') return;
     const meta = GAME_REGISTRY[cur.config.gameId];
-    if (!meta.isPerfectInfo) return;
+    if (meta.localPlayMode === 'none') return;
     if (cur.players.length >= meta.maxPlayers) return;
-    if (cur.players.some((p) => p.isLocal)) return;
+    const usedNames = new Set(cur.players.map((p) => p.name));
+    let num = 2;
+    while (usedNames.has(`プレイヤー${num}`)) num++;
     const localPlayer: PlayerInfo = {
-      id: `local-${Date.now()}`,
-      name: 'プレイヤー2',
+      id: `local-${Date.now()}-${num}`,
+      name: `プレイヤー${num}`,
       isHost: false,
       isBot: false,
       isLocal: true,
@@ -360,9 +370,24 @@ export function App() {
     if (!cur || role !== 'host') return;
     const nextMeta = GAME_REGISTRY[gameId];
     let nextPlayers = cur.players;
-    if (!nextMeta.isPerfectInfo && cur.players.some((p) => p.isLocal)) {
+    if (nextMeta.localPlayMode === 'none' && cur.players.some((p) => p.isLocal)) {
       nextPlayers = cur.players.filter((p) => !p.isLocal);
-      showToast('非完全情報ゲームのためローカル2Pを外しました');
+      showToast('このゲームはローカル複数人非対応のためローカルメンバーを外しました');
+    } else if (nextPlayers.length > nextMeta.maxPlayers && nextPlayers.some((p) => p.isLocal)) {
+      const trimmed = [...nextPlayers];
+      while (trimmed.length > nextMeta.maxPlayers) {
+        let removeIdx = -1;
+        for (let i = trimmed.length - 1; i >= 0; i--) {
+          if (trimmed[i].isLocal) {
+            removeIdx = i;
+            break;
+          }
+        }
+        if (removeIdx < 0) break;
+        trimmed.splice(removeIdx, 1);
+      }
+      nextPlayers = trimmed;
+      showToast(`最大${nextMeta.maxPlayers}人に合わせてローカルメンバーを調整しました`);
     }
     syncAllClients(
       { ...cur, players: nextPlayers, config: { ...cur.config, gameId, rules } },
@@ -400,6 +425,7 @@ export function App() {
         cur.config.rules,
         internalGameRef.current
       );
+      setRevealedLocalActorId(null);
       syncAllClients({ ...cur, phase: 'playing' }, game);
   };
 
@@ -429,12 +455,16 @@ export function App() {
     [role, playerName, myId, syncScoreBoard]
   );
 
-  const handleGameAction = (action: { type: string; payload?: unknown }) => {
+  const handleGameAction = (
+    action: { type: string; payload?: unknown },
+    overrideActorId?: string
+  ) => {
     if (role === 'host') {
       const curLobby = lobbyRef.current;
       const curGame = internalGameRef.current;
       if (!curLobby || !curGame) return;
-      const actorId = resolveHostActorId(curLobby, curGame, myId);
+      const view = resolveHostLocalView(curLobby, curGame, myId);
+      const actorId = overrideActorId ?? view.actionPlayerId;
       const res = applyGameAction(curLobby.config.gameId, curGame, actorId, action);
       if (res.error) {
         showToast(res.error);
@@ -445,6 +475,19 @@ export function App() {
       guestSessionRef.current?.send({ kind: 'action', playerId: myId, action });
     }
   };
+
+  const isLocalPassAndPlay = role === 'host' && Boolean(lobby?.players.some((p) => p.isLocal));
+  const handoffPlayer =
+    isLocalPassAndPlay &&
+    hostLocalView?.needsHandoff &&
+    hostLocalView.activeLocalPlayer &&
+    revealedLocalActorId !== hostLocalView.activeLocalPlayer.id
+      ? { id: hostLocalView.activeLocalPlayer.id, name: hostLocalView.activeLocalPlayer.name }
+      : null;
+  const localControlledPlayers =
+    isLocalPassAndPlay && lobby
+      ? getLocalControlledPlayers(lobby, myId).map((p) => ({ id: p.id, name: p.name }))
+      : [];
 
   return (
     <div className="app-shell">
@@ -483,7 +526,13 @@ export function App() {
           rules={lobby.config.rules}
           gameState={clientGameState}
           isHost={role === 'host'}
-          isLocalPassAndPlay={role === 'host' && lobby.players.some((p) => p.isLocal)}
+          isLocalPassAndPlay={isLocalPassAndPlay}
+          handoffPlayer={handoffPlayer}
+          onConfirmHandoff={() => {
+            if (handoffPlayer) setRevealedLocalActorId(handoffPlayer.id);
+          }}
+          activeLocalPlayerName={hostLocalView?.activeLocalPlayer?.name ?? null}
+          localPlayers={localControlledPlayers}
           onAction={handleGameAction}
           onRestart={handleStartGame}
           onBackToLobby={handleBackToLobby}

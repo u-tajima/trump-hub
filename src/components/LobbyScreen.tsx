@@ -125,7 +125,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           </h2>
           {isHost && lobby.config.gameId !== 'scoreboard' && lobby.players.length < meta.maxPlayers && (
             <div className="lobby-add-actions">
-              {meta.isPerfectInfo && !lobby.players.some((p) => p.isLocal) && (
+              {meta.localPlayMode !== 'none' && (
                 <button type="button" className="chip-btn local-accent" onClick={onAddLocalPlayer}>
                   <Users size={15} />
                   ローカル追加
@@ -217,7 +217,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           {!canStart && (
             <div className="warn-text">
               {lobby.players.length < meta.minPlayers
-                ? meta.isPerfectInfo
+                ? meta.localPlayMode !== 'none'
                   ? `あと ${meta.minPlayers - lobby.players.length} 人（ローカル追加またはCPU）必要です`
                   : `あと ${meta.minPlayers - lobby.players.length} 人（またはCPU）必要です`
                 : `最大 ${meta.maxPlayers} 人までプレイできます`}

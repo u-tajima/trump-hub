@@ -5,10 +5,17 @@ import { PlayingCard } from '../PlayingCard';
 
 interface DoubtBoardProps {
   state: DoubtClientState;
-  onAction: (action: { type: string; payload?: unknown }) => void;
+  onAction: (action: { type: string; payload?: unknown }, overrideActorId?: string) => void;
+  isLocalPassAndPlay?: boolean;
+  localPlayers?: { id: string; name: string }[];
 }
 
-export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
+export const DoubtBoard: React.FC<DoubtBoardProps> = ({
+  state,
+  onAction,
+  isLocalPassAndPlay = false,
+  localPlayers = [],
+}) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [remainSec, setRemainSec] = useState(0);
 
@@ -57,6 +64,11 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
     state.lastPlayMeta !== null &&
     state.lastPlayMeta.playerId !== state.myId;
 
+  const localDoubtCallers =
+    isLocalPassAndPlay && state.subPhase === 'doubtWindow' && state.lastPlayMeta
+      ? localPlayers.filter((p) => p.id !== state.lastPlayMeta!.playerId)
+      : [];
+
   return (
     <div className="board-container">
       <div className="opponents-bar">
@@ -91,14 +103,40 @@ export const DoubtBoard: React.FC<DoubtBoardProps> = ({ state, onAction }) => {
               {state.lastPlayMeta.playerName} が「{formatRank(state.lastPlayMeta.declaredRank as 1)}」を{' '}
               {state.lastPlayMeta.count}枚 出しました（残り {remainSec}秒）
             </div>
-            {canDoubt && (
-              <button
-                type="button"
-                className="danger-btn full-width"
-                onClick={() => onAction({ type: 'doubt' })}
-              >
-                ダウト！
-              </button>
+            {isLocalPassAndPlay ? (
+              <div className="doubt-local-actions">
+                {localDoubtCallers.length > 0 && (
+                  <div className="doubt-local-btn-grid">
+                    {localDoubtCallers.map((caller) => (
+                      <button
+                        key={caller.id}
+                        type="button"
+                        className="danger-btn"
+                        onClick={() => onAction({ type: 'doubt' }, caller.id)}
+                      >
+                        {caller.name} がダウト！
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="secondary-btn full-width"
+                  onClick={() => onAction({ type: 'proceedWindow' })}
+                >
+                  ダウトなし（次へ進む）
+                </button>
+              </div>
+            ) : (
+              canDoubt && (
+                <button
+                  type="button"
+                  className="danger-btn full-width"
+                  onClick={() => onAction({ type: 'doubt' })}
+                >
+                  ダウト！
+                </button>
+              )
             )}
           </div>
         )}

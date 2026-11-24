@@ -21,6 +21,7 @@ import { RouletteWheel3D, type RouletteWheel3DHandle } from '../RouletteWheel3D'
 interface RouletteBoardProps {
   state: RouletteClientState;
   onAction: (action: { type: string; payload?: unknown }) => void;
+  isLocalPassAndPlay?: boolean;
 }
 
 type UiSpinMode = 'idle' | 'spinning' | 'replaying';
@@ -37,7 +38,11 @@ const OUTSIDE_BETS: { kind: RouletteBetKind; label: string; mult: string; tone?:
   { kind: 'dozen3', label: '25-36', mult: '3倍' },
 ];
 
-export const RouletteBoard: React.FC<RouletteBoardProps> = ({ state, onAction }) => {
+export const RouletteBoard: React.FC<RouletteBoardProps> = ({
+  state,
+  onAction,
+  isLocalPassAndPlay = false,
+}) => {
   const wheelRef = useRef<RouletteWheel3DHandle | null>(null);
   const [uiSpinMode, setUiSpinMode] = useState<UiSpinMode>('idle');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
@@ -201,7 +206,9 @@ export const RouletteBoard: React.FC<RouletteBoardProps> = ({ state, onAction })
       {state.phase === 'playing' && state.subPhase === 'betting' && (
         <section className="card-panel roulette-bet-panel">
           <div className="panel-header-row">
-            <span className="panel-title">ベット選択（合計: {totalMyBet}）</span>
+            <span className="panel-title">
+              {isLocalPassAndPlay ? `${me.name} のベット` : 'ベット選択'}（合計: {totalMyBet}）
+            </span>
             <div className="roulette-chip-selector">
               {chipOptions.map((amt) => (
                 <button

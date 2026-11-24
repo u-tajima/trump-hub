@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, BookOpen, ClipboardList, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, ClipboardList, Eye, EyeOff, RotateCcw, Users, X } from 'lucide-react';
 import type { ChinchiroClientState } from '../games/chinchiro';
 import type { Connect4ClientState } from '../games/connect4';
 import type { DaifugoClientState } from '../games/daifugo';
@@ -32,6 +32,7 @@ import { RouletteBoard } from './boards/RouletteBoard';
 import { ScoreRoomBoard } from './boards/ScoreRoomBoard';
 import { SevensBoard } from './boards/SevensBoard';
 import { SpeedBoard } from './boards/SpeedBoard';
+import './PassAndPlayOverlay.css';
 
 interface GameBoardProps {
   gameId: GameId;
@@ -40,7 +41,11 @@ interface GameBoardProps {
   gameState: unknown;
   isHost: boolean;
   isLocalPassAndPlay?: boolean;
-  onAction: (action: { type: string; payload?: unknown }) => void;
+  handoffPlayer?: { id: string; name: string } | null;
+  onConfirmHandoff?: () => void;
+  activeLocalPlayerName?: string | null;
+  localPlayers?: { id: string; name: string }[];
+  onAction: (action: { type: string; payload?: unknown }, overrideActorId?: string) => void;
   onRestart: () => void;
   onBackToLobby: () => void;
   onLeave: () => void;
@@ -58,6 +63,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   gameState,
   isHost,
   isLocalPassAndPlay = false,
+  handoffPlayer = null,
+  onConfirmHandoff,
+  activeLocalPlayerName = null,
+  localPlayers = [],
   onAction,
   onRestart,
   onBackToLobby,
@@ -114,67 +123,105 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       </header>
 
       <main className="game-main">
-        {gameId === 'scoreboard' && roomScoreBoard && onScoreOp && (
-          <ScoreRoomBoard
-            roomCode={roomCode}
-            rules={rules as ScoreBoardRoomRules}
-            board={roomScoreBoard}
-            onScoreOp={onScoreOp}
-            isHost={isHost}
-            myPlayerName={myPlayerName}
-            roomPlayerNames={roomPlayerNames}
-          />
-        )}
-        {gameId === 'daifugo' && (
-          <DaifugoBoard state={gameState as DaifugoClientState} onAction={onAction} />
-        )}
-        {gameId === 'sevens' && (
-          <SevensBoard state={gameState as SevensClientState} onAction={onAction} />
-        )}
-        {gameId === 'speed' && (
-          <SpeedBoard state={gameState as SpeedClientState} onAction={onAction} />
-        )}
-        {gameId === 'oldmaid' && (
-          <OldMaidBoard state={gameState as OldMaidClientState} onAction={onAction} />
-        )}
-        {gameId === 'doubt' && (
-          <DoubtBoard state={gameState as DoubtClientState} onAction={onAction} />
-        )}
-        {gameId === 'memory' && (
-          <MemoryBoard state={gameState as MemoryClientState} onAction={onAction} />
-        )}
-        {gameId === 'poker' && (
-          <PokerBoard state={gameState as PokerClientState} onAction={onAction} />
-        )}
-        {gameId === 'holdem' && (
-          <HoldemBoard state={gameState as HoldemClientState} onAction={onAction} />
-        )}
-        {gameId === 'reversi' && (
-          <ReversiBoard
-            state={gameState as ReversiClientState}
-            onAction={onAction}
-            isLocalPassAndPlay={isLocalPassAndPlay}
-          />
-        )}
-        {gameId === 'gomoku' && (
-          <GomokuBoard
-            state={gameState as GomokuClientState}
-            onAction={onAction}
-            isLocalPassAndPlay={isLocalPassAndPlay}
-          />
-        )}
-        {gameId === 'connect4' && (
-          <Connect4Board
-            state={gameState as Connect4ClientState}
-            onAction={onAction}
-            isLocalPassAndPlay={isLocalPassAndPlay}
-          />
-        )}
-        {gameId === 'chinchiro' && (
-          <ChinchiroBoard state={gameState as ChinchiroClientState} onAction={onAction} />
-        )}
-        {gameId === 'roulette' && (
-          <RouletteBoard state={gameState as RouletteClientState} onAction={onAction} />
+        {handoffPlayer ? (
+          <div className="handoff-screen">
+            <div className="handoff-icon-circle">
+              <EyeOff size={32} />
+            </div>
+            <div className="handoff-eyebrow">端末を渡してください</div>
+            <h2 className="handoff-player-name">{handoffPlayer.name} の番</h2>
+            <p className="handoff-hint">
+              手札が見えないよう画面を隠しています。{handoffPlayer.name} に端末を渡してからボタンを押してください。
+            </p>
+            <button
+              type="button"
+              className="primary-btn handoff-reveal-btn"
+              onClick={onConfirmHandoff}
+            >
+              <Eye size={18} />
+              {handoffPlayer.name} の手札を見る
+            </button>
+          </div>
+        ) : (
+          <>
+            {isLocalPassAndPlay && activeLocalPlayerName && phase === 'playing' && (
+              <div className="local-turn-bar">
+                <Users size={14} />
+                操作中: {activeLocalPlayerName}
+              </div>
+            )}
+            {gameId === 'scoreboard' && roomScoreBoard && onScoreOp && (
+              <ScoreRoomBoard
+                roomCode={roomCode}
+                rules={rules as ScoreBoardRoomRules}
+                board={roomScoreBoard}
+                onScoreOp={onScoreOp}
+                isHost={isHost}
+                myPlayerName={myPlayerName}
+                roomPlayerNames={roomPlayerNames}
+              />
+            )}
+            {gameId === 'daifugo' && (
+              <DaifugoBoard state={gameState as DaifugoClientState} onAction={onAction} />
+            )}
+            {gameId === 'sevens' && (
+              <SevensBoard state={gameState as SevensClientState} onAction={onAction} />
+            )}
+            {gameId === 'speed' && (
+              <SpeedBoard state={gameState as SpeedClientState} onAction={onAction} />
+            )}
+            {gameId === 'oldmaid' && (
+              <OldMaidBoard state={gameState as OldMaidClientState} onAction={onAction} />
+            )}
+            {gameId === 'doubt' && (
+              <DoubtBoard
+                state={gameState as DoubtClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+                localPlayers={localPlayers}
+              />
+            )}
+            {gameId === 'memory' && (
+              <MemoryBoard state={gameState as MemoryClientState} onAction={onAction} />
+            )}
+            {gameId === 'poker' && (
+              <PokerBoard state={gameState as PokerClientState} onAction={onAction} />
+            )}
+            {gameId === 'holdem' && (
+              <HoldemBoard state={gameState as HoldemClientState} onAction={onAction} />
+            )}
+            {gameId === 'reversi' && (
+              <ReversiBoard
+                state={gameState as ReversiClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'gomoku' && (
+              <GomokuBoard
+                state={gameState as GomokuClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'connect4' && (
+              <Connect4Board
+                state={gameState as Connect4ClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'chinchiro' && (
+              <ChinchiroBoard state={gameState as ChinchiroClientState} onAction={onAction} />
+            )}
+            {gameId === 'roulette' && (
+              <RouletteBoard
+                state={gameState as RouletteClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+          </>
         )}
       </main>
 
