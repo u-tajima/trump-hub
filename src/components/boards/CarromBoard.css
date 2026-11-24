@@ -1,0 +1,298 @@
+.carrom-arena {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.carrom-scoreboard {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.carrom-player-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: rgba(15, 42, 29, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-width: 0;
+}
+
+.carrom-player-card.active {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.35), 0 4px 14px rgba(245, 158, 11, 0.18);
+}
+
+.carrom-player-card.right {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.carrom-disc-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.35), 0 2px 5px rgba(0, 0, 0, 0.45);
+  position: relative;
+}
+
+.carrom-disc-badge.white {
+  background: radial-gradient(circle at 35% 30%, #fffdf5, #e5d8b8 75%, #bda77c);
+  border: 1.5px solid #c9b58a;
+}
+
+.carrom-disc-badge.black {
+  background: radial-gradient(circle at 35% 30%, #52525b, #27272a 70%, #09090b);
+  border: 1.5px solid #52525b;
+}
+
+.carrom-player-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.carrom-player-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carrom-player-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.carrom-player-card.right .carrom-player-stats {
+  justify-content: flex-end;
+}
+
+.carrom-score-num {
+  color: var(--accent-gold);
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.carrom-queen-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.25);
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  color: #fca5a5;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.carrom-queen-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.carrom-queen-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f87171, #dc2626 65%, #7f1d1d);
+  border: 1.5px solid #fca5a5;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.45);
+}
+
+.carrom-queen-dot.taken {
+  opacity: 0.35;
+  box-shadow: none;
+}
+
+.carrom-queen-dot.pending {
+  animation: carromPulse 0.8s infinite alternate;
+}
+
+.carrom-queen-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.carrom-board-stage {
+  position: relative;
+  width: 100%;
+  max-width: min(100%, 440px);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(255, 255, 255, 0.12);
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.carrom-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+.carrom-canvas:active {
+  cursor: grabbing;
+}
+
+.carrom-canvas.disabled {
+  cursor: default;
+}
+
+.carrom-shot-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(9, 24, 16, 0.88);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fef3c7;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.carrom-controls-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(15, 42, 29, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.carrom-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.carrom-slider-icon {
+  color: var(--accent-gold);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.carrom-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.45), rgba(245, 158, 11, 0.2));
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  outline: none;
+  touch-action: pan-x;
+}
+
+.carrom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fef3c7, #f59e0b 70%, #b45309);
+  border: 2px solid #fffbeb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.carrom-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fef3c7, #f59e0b 70%, #b45309);
+  border: 2px solid #fffbeb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.carrom-slider:disabled {
+  opacity: 0.4;
+}
+
+.carrom-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.carrom-status-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #e2e8f0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carrom-result-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(16, 185, 129, 0.16));
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fef3c7;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+@keyframes carromPulse {
+  from {
+    transform: scale(0.92);
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+  }
+  to {
+    transform: scale(1.12);
+    box-shadow: 0 0 14px rgba(248, 113, 113, 0.9);
+  }
+}

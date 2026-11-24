@@ -19,6 +19,17 @@ import { applySevensAction, canPlaceNormalCard, computeSevensBotAction, initSeve
 import { applyShogiAction, computeShogiBotAction, getShogiLegalMoves, initShogi } from '../shogi';
 import { applySpeedAction, canPlaceOnSpeedPile, computeSpeedBotAction, initSpeed, sanitizeSpeedState } from '../speed';
 import { applyWerewolfAction, initWerewolf, sanitizeWerewolfState } from '../werewolf';
+import { applyAirHockeyAction, initAirHockey } from '../airhockey';
+import { applyBattleshipAction, computeBattleshipBotAction, initBattleship, sanitizeBattleshipState } from '../battleship';
+import { applyBlackjackAction, computeBlackjackBotAction, evaluateBlackjackHand, initBlackjack } from '../blackjack';
+import { applyCarromAction, computeCarromBotAction, initCarrom } from '../carrom';
+import { applyCrazy8Action, computeCrazy8BotAction, initCrazy8 } from '../crazy8';
+import { applyDotsAndBoxesAction, computeDotsAndBoxesBotAction, initDotsAndBoxes } from '../dotsAndBoxes';
+import { applyHitAndBlowAction, computeHitAndBlowBotAction, evaluateHitAndBlow, initHitAndBlow } from '../hitAndBlow';
+import { applyIndianPokerAction, computeIndianPokerBotAction, initIndianPoker, sanitizeIndianPokerState } from '../indianPoker';
+import { applyLiarsDiceAction, computeLiarsDiceBotAction, initLiarsDice, sanitizeLiarsDiceState } from '../liarsDice';
+import { applyMancalaAction, computeMancalaBotAction, initMancala } from '../mancala';
+import { applyYachtAction, computeYachtBotAction, evaluateYachtCategory, initYacht } from '../yacht';
 import {
   applyScoreBoardOp,
   createEmptyScoreBoard,
@@ -601,7 +612,18 @@ describe('Perfect Information Local Pass-and-Play', () => {
       .filter((g) => g.isPerfectInfo)
       .map((g) => g.id)
       .sort();
-    expect(perfectIds).toEqual(['chess', 'connect4', 'gomoku', 'igo', 'reversi', 'shogi']);
+    expect(perfectIds).toEqual([
+      'airhockey',
+      'carrom',
+      'chess',
+      'connect4',
+      'dotsandboxes',
+      'gomoku',
+      'igo',
+      'mancala',
+      'reversi',
+      'shogi',
+    ]);
   });
 
   it('allows host and local player to alternate turns in reversi, gomoku, and connect4', () => {
@@ -889,5 +911,157 @@ describe('Werewolf auto-moderator engine', () => {
     state = applyWerewolfAction(state, 'p3', { type: 'castVote', payload: { targetId: 'p1' } }).state;
     expect(state.phase).toBe('finished');
     expect(state.winnerTeam).toBe('village');
+  });
+});
+
+describe('11 new games engines (Action, Card, Board, Dice)', () => {
+  it('Crazy8: supports wild 8 suit selection, +2 draw stack, and Bot', () => {
+    const players = makePlayers(2);
+    players[1].isBot = true;
+    let state = initCrazy8(players, GAME_REGISTRY.crazy8.defaultRules);
+    state.turnIndex = 0;
+    state.discardPile = [c('heart', 5)];
+    state.currentSuit = 'heart';
+    state.players[0].hand = [c('spade', 8), c('diamond', 2), c('club', 9)];
+    state.players[1].hand = [c('club', 4), c('spade', 3)];
+    // 8でダイヤ指定
+    state = applyCrazy8Action(state, 'p1', {
+      type: 'play',
+      payload: { cardId: 'spade-8', chosenSuit: 'diamond' },
+    }).state;
+    expect(state.currentSuit).toBe('diamond');
+    expect(state.turnIndex).toBe(1);
+    expect(computeCrazy8BotAction(state)).not.toBeNull();
+  });
+
+  it('Blackjack: evaluates soft hands, runs betting -> playing -> dealer resolution', () => {
+    expect(evaluateBlackjackHand([c('spade', 1), c('heart', 13)]).isBlackjack).toBe(true);
+    expect(evaluateBlackjackHand([c('spade', 1), c('heart', 6)]).isSoft).toBe(true);
+    expect(evaluateBlackjackHand([c('spade', 1), c('heart', 6), c('club', 10)]).total).toBe(17);
+
+    const players = makePlayers(2);
+    players[1].isBot = true;
+    let state = initBlackjack(players, GAME_REGISTRY.blackjack.defaultRules);
+    expect(state.subPhase).toBe('betting');
+    state = applyBlackjackAction(state, 'p1', { type: 'placeBet', payload: { amount: 40 } }).state;
+    const botAct = computeBlackjackBotAction(state, 'p2');
+    expect(botAct).not.toBeNull();
+    state = applyBlackjackAction(state, 'p2', botAct!).state;
+    expect(['playing', 'roundEnd']).toContain(state.subPhase);
+  });
+
+  it('IndianPoker: hides own card while revealing opponents until showdown', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    players[1].isBot = true;
+    let state = initIndianPoker(players, GAME_REGISTRY.indianpoker.defaultRules);
+    const viewP1 = sanitizeIndianPokerState(state, 'p1');
+    expect(viewP1.players.find((p) => p.id === 'p1')?.card).toBeNull();
+    expect(viewP1.players.find((p) => p.id === 'p2')?.card).not.toBeNull();
+    const act = computeIndianPokerBotAction(state);
+    expect(act).not.toBeNull();
+    state = applyIndianPokerAction(state, state.players[state.turnIndex].id, { type: 'fold' }).state;
+    expect(state.subPhase).toBe('showdown');
+    const afterView = sanitizeIndianPokerState(state, 'p1');
+    expect(afterView.players.find((p) => p.id === 'p1')?.card).not.toBeNull();
+  });
+
+  it('Mancala: grants extra turn on store landing and captures opposite stones', () => {
+    const players = makePlayers(2);
+    let state = initMancala(players, { initialStones: 4, captureRule: true });
+    // pit 2 has 4 stones -> lands on index 6 (P0 store) -> extra turn for P0!
+    state = applyMancalaAction(state, 'p1', { type: 'sow', payload: { pitIndex: 2 } }).state;
+    expect(state.turnIndex).toBe(0);
+    expect(state.pits[6]).toBe(1);
+    expect(computeMancalaBotAction(state)).not.toBeNull();
+  });
+
+  it('DotsAndBoxes: awards box and extra turn on 4th edge completion', () => {
+    const players = makePlayers(2);
+    let state = initDotsAndBoxes(players, { gridSize: 3 });
+    state = applyDotsAndBoxesAction(state, 'p1', { type: 'drawLine', payload: { kind: 'h', row: 0, col: 0 } }).state;
+    state = applyDotsAndBoxesAction(state, 'p2', { type: 'drawLine', payload: { kind: 'h', row: 1, col: 0 } }).state;
+    state = applyDotsAndBoxesAction(state, 'p1', { type: 'drawLine', payload: { kind: 'v', row: 0, col: 0 } }).state;
+    // p2 completes box (0,0) -> score +1 and stays p2's turn
+    state = applyDotsAndBoxesAction(state, 'p2', { type: 'drawLine', payload: { kind: 'v', row: 0, col: 1 } }).state;
+    expect(state.players[1].score).toBe(1);
+    expect(state.turnIndex).toBe(1);
+    expect(computeDotsAndBoxesBotAction(state)).not.toBeNull();
+  });
+
+  it('Battleship: isolates enemy ships until sunk and runs hunter/target Bot', () => {
+    const players = makePlayers(2);
+    players[0].isBot = true;
+    players[1].isBot = true;
+    let state = initBattleship(players, { boardSize: 8, extraTurnOnHit: true });
+    expect(state.subPhase).toBe('battle');
+    const viewP1 = sanitizeBattleshipState(state, 'p1');
+    expect(viewP1.myShips.length).toBe(4);
+    expect(viewP1.opponentRevealedShips.length).toBe(0);
+    const botAct = computeBattleshipBotAction(state);
+    expect(botAct).not.toBeNull();
+    const afterFire = applyBattleshipAction(state, 'p1', botAct!);
+    expect(afterFire.error).toBeUndefined();
+    expect(afterFire.state.lastShot).not.toBeNull();
+  });
+
+  it('HitAndBlow: evaluates hits/blows accurately and finishes on exact match', () => {
+    expect(evaluateHitAndBlow([1, 2, 3, 4], [1, 3, 2, 9])).toEqual({ hit: 1, blow: 2 });
+    const players = makePlayers(1);
+    players[0].isBot = true;
+    let state = initHitAndBlow(players, { digits: 4, maxAttempts: 10 });
+    const guessAct = computeHitAndBlowBotAction(state);
+    expect(guessAct).not.toBeNull();
+    state = applyHitAndBlowAction(state, 'p1', { type: 'guess', payload: { digits: state.secret } }).state;
+    expect(state.phase).toBe('finished');
+    expect(state.winnerId).toBe('p1');
+  });
+
+  it('Carrom: simulates deterministic shot physics and computes Bot shots', () => {
+    const players = makePlayers(2);
+    let state = initCarrom(players, { piecesPerSide: 5, queenBonus: 3 });
+    expect(state.pieces.length).toBe(11); // 5 white + 5 black + 1 queen
+    const botAct = computeCarromBotAction(state);
+    expect(botAct).not.toBeNull();
+    state = applyCarromAction(state, 'p1', botAct!).state;
+    expect(state.lastShot).not.toBeNull();
+    expect(state.shotSeq).toBe(1);
+  });
+
+  it('AirHockey: tracks goals and declares winner at winScore', () => {
+    const players = makePlayers(2);
+    let state = initAirHockey(players, { winScore: 2, puckSpeed: 'normal' });
+    state = applyAirHockeyAction(state, 'p1', { type: 'goal', payload: { scorerIndex: 0 } }).state;
+    expect(state.scores).toEqual([1, 0]);
+    state = applyAirHockeyAction(state, 'p1', { type: 'goal', payload: { scorerIndex: 0 } }).state;
+    expect(state.phase).toBe('finished');
+    expect(state.winnerId).toBe('p1');
+  });
+
+  it('Yacht: evaluates all major categories and supports roll/hold/score flow', () => {
+    expect(evaluateYachtCategory([6, 6, 6, 6, 6], 'yacht')).toBe(50);
+    expect(evaluateYachtCategory([1, 2, 3, 4, 5], 'largeStraight')).toBe(30);
+    expect(evaluateYachtCategory([2, 2, 5, 5, 5], 'fullHouse')).toBe(19);
+    const players = makePlayers(2);
+    let state = initYacht(players, { bonusThreshold: 63 });
+    state = applyYachtAction(state, 'p1', { type: 'roll' }).state;
+    expect(state.rollsUsed).toBe(1);
+    const botAct = computeYachtBotAction(state);
+    expect(botAct).not.toBeNull();
+  });
+
+  it('LiarsDice: hides opponent dice during bidding and reveals on challenge', () => {
+    const players = makePlayers(2);
+    players[1].isBot = true;
+    let state = initLiarsDice(players, { startDice: 5, onesWild: true });
+    const viewP1 = sanitizeLiarsDiceState(state, 'p1');
+    expect(viewP1.players.find((p) => p.id === 'p1')?.dice?.length).toBe(5);
+    expect(viewP1.players.find((p) => p.id === 'p2')?.dice).toEqual([]);
+    state = applyLiarsDiceAction(state, 'p1', { type: 'bid', payload: { quantity: 2, face: 4 } }).state;
+    expect(state.currentBid).toEqual({ quantity: 2, face: 4 });
+    const botAct = computeLiarsDiceBotAction(state);
+    expect(botAct).not.toBeNull();
+    state = applyLiarsDiceAction(state, 'p2', { type: 'challenge' }).state;
+    expect(state.subPhase).toBe('reveal');
   });
 });

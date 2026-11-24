@@ -1,0 +1,180 @@
+.airhockey-arena {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.airhockey-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(9, 17, 32, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.airhockey-bar.top {
+  border-color: rgba(244, 63, 94, 0.4);
+}
+
+.airhockey-bar.top.flipped {
+  transform: rotate(180deg);
+}
+
+.airhockey-bar.bottom {
+  border-color: rgba(34, 211, 238, 0.4);
+}
+
+.airhockey-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.airhockey-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.airhockey-dot.top {
+  background: #fb7185;
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.8);
+}
+
+.airhockey-dot.bottom {
+  background: #22d3ee;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.8);
+}
+
+.airhockey-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.airhockey-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.airhockey-target-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.airhockey-score {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  min-width: 24px;
+  text-align: right;
+}
+
+.airhockey-score.top {
+  color: #fda4af;
+  text-shadow: 0 0 10px rgba(244, 63, 94, 0.55);
+}
+
+.airhockey-score.bottom {
+  color: #67e8f9;
+  text-shadow: 0 0 10px rgba(34, 211, 238, 0.55);
+}
+
+.airhockey-table-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.airhockey-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 5 / 8;
+  height: 100%;
+  width: auto;
+  border-radius: 20px;
+  background: #060b16;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.6),
+    0 0 0 2px rgba(56, 189, 248, 0.25),
+    inset 0 0 24px rgba(14, 165, 233, 0.14);
+  touch-action: none;
+  display: block;
+}
+
+.airhockey-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.airhockey-result-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 24px;
+  border-radius: 18px;
+  background: rgba(7, 13, 25, 0.92);
+  border: 1.5px solid rgba(245, 158, 11, 0.65);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+  color: #fef3c7;
+  text-align: center;
+}
+
+.airhockey-result-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.airhockey-result-score {
+  font-size: 14px;
+  font-weight: 800;
+  color: #94a3b8;
+}
+
+.airhockey-hint-pill {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(6, 11, 22, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}

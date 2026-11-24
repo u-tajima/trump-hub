@@ -1,4 +1,31 @@
 import {
+  applyAirHockeyAction,
+  type AirHockeyInternalState,
+  initAirHockey,
+  sanitizeAirHockeyState,
+} from './airhockey';
+import {
+  applyBattleshipAction,
+  type BattleshipInternalState,
+  computeBattleshipBotAction,
+  initBattleship,
+  sanitizeBattleshipState,
+} from './battleship';
+import {
+  applyBlackjackAction,
+  type BlackjackInternalState,
+  computeBlackjackBotAction,
+  initBlackjack,
+  sanitizeBlackjackState,
+} from './blackjack';
+import {
+  applyCarromAction,
+  type CarromInternalState,
+  computeCarromBotAction,
+  initCarrom,
+  sanitizeCarromState,
+} from './carrom';
+import {
   applyChessAction,
   type ChessInternalState,
   computeChessBotAction,
@@ -20,12 +47,26 @@ import {
   sanitizeConnect4State,
 } from './connect4';
 import {
+  applyCrazy8Action,
+  computeCrazy8BotAction,
+  type Crazy8InternalState,
+  initCrazy8,
+  sanitizeCrazy8State,
+} from './crazy8';
+import {
   applyDaifugoAction,
   computeDaifugoBotAction,
   type DaifugoInternalState,
   initDaifugo,
   sanitizeDaifugoState,
 } from './daifugo';
+import {
+  applyDotsAndBoxesAction,
+  computeDotsAndBoxesBotAction,
+  type DotsAndBoxesInternalState,
+  initDotsAndBoxes,
+  sanitizeDotsAndBoxesState,
+} from './dotsAndBoxes';
 import {
   applyDoubtAction,
   computeDoubtBotAction,
@@ -41,6 +82,13 @@ import {
   sanitizeGomokuState,
 } from './gomoku';
 import {
+  applyHitAndBlowAction,
+  computeHitAndBlowBotAction,
+  type HitAndBlowInternalState,
+  initHitAndBlow,
+  sanitizeHitAndBlowState,
+} from './hitAndBlow';
+import {
   applyHoldemAction,
   computeHoldemBotAction,
   type HoldemInternalState,
@@ -54,6 +102,27 @@ import {
   initIgo,
   sanitizeIgoState,
 } from './igo';
+import {
+  applyIndianPokerAction,
+  computeIndianPokerBotAction,
+  type IndianPokerInternalState,
+  initIndianPoker,
+  sanitizeIndianPokerState,
+} from './indianPoker';
+import {
+  applyLiarsDiceAction,
+  computeLiarsDiceBotAction,
+  type LiarsDiceInternalState,
+  initLiarsDice,
+  sanitizeLiarsDiceState,
+} from './liarsDice';
+import {
+  applyMancalaAction,
+  computeMancalaBotAction,
+  type MancalaInternalState,
+  initMancala,
+  sanitizeMancalaState,
+} from './mancala';
 import {
   applyMemoryAction,
   computeMemoryBotAction,
@@ -116,17 +185,34 @@ import {
   sanitizeWerewolfState,
   type WerewolfInternalState,
 } from './werewolf';
+import {
+  applyYachtAction,
+  computeYachtBotAction,
+  initYacht,
+  sanitizeYachtState,
+  type YachtInternalState,
+} from './yacht';
 import type {
+  AirHockeyRules,
+  BattleshipRules,
+  BlackjackRules,
+  CarromRules,
   ChessRules,
   ChinchiroRules,
   Connect4Rules,
+  Crazy8Rules,
   DaifugoRules,
+  DotsAndBoxesRules,
   DoubtRules,
   GameId,
   GameRulesMap,
   GomokuRules,
+  HitAndBlowRules,
   HoldemRules,
   IgoRules,
+  IndianPokerRules,
+  LiarsDiceRules,
+  MancalaRules,
   MemoryRules,
   OldMaidRules,
   PlayerInfo,
@@ -138,6 +224,7 @@ import type {
   ShogiRules,
   SpeedRules,
   WerewolfRules,
+  YachtRules,
 } from '../types/game';
 
 export interface ScoreBoardGameInternalState {
@@ -155,15 +242,26 @@ export type AnyInternalState =
   | MemoryInternalState
   | PokerInternalState
   | HoldemInternalState
+  | Crazy8InternalState
+  | BlackjackInternalState
+  | IndianPokerInternalState
   | ReversiInternalState
   | GomokuInternalState
   | Connect4InternalState
   | ShogiInternalState
   | ChessInternalState
   | IgoInternalState
+  | MancalaInternalState
+  | DotsAndBoxesInternalState
+  | BattleshipInternalState
+  | HitAndBlowInternalState
+  | CarromInternalState
+  | AirHockeyInternalState
   | WerewolfInternalState
   | ChinchiroInternalState
-  | RouletteInternalState;
+  | RouletteInternalState
+  | YachtInternalState
+  | LiarsDiceInternalState;
 
 export function initGameEngine(
   gameId: GameId,
@@ -195,6 +293,12 @@ export function initGameEngine(
       return initPoker(players, rules as PokerRules);
     case 'holdem':
       return initHoldem(players, rules as HoldemRules);
+    case 'crazy8':
+      return initCrazy8(players, rules as Crazy8Rules);
+    case 'blackjack':
+      return initBlackjack(players, rules as BlackjackRules);
+    case 'indianpoker':
+      return initIndianPoker(players, rules as IndianPokerRules);
     case 'reversi':
       return initReversi(players, rules as ReversiRules);
     case 'gomoku':
@@ -207,12 +311,28 @@ export function initGameEngine(
       return initChess(players, rules as ChessRules);
     case 'igo':
       return initIgo(players, rules as IgoRules);
+    case 'mancala':
+      return initMancala(players, rules as MancalaRules);
+    case 'dotsandboxes':
+      return initDotsAndBoxes(players, rules as DotsAndBoxesRules);
+    case 'battleship':
+      return initBattleship(players, rules as BattleshipRules);
+    case 'hitandblow':
+      return initHitAndBlow(players, rules as HitAndBlowRules);
+    case 'carrom':
+      return initCarrom(players, rules as CarromRules);
+    case 'airhockey':
+      return initAirHockey(players, rules as AirHockeyRules);
     case 'werewolf':
       return initWerewolf(players, rules as WerewolfRules);
     case 'chinchiro':
       return initChinchiro(players, rules as ChinchiroRules);
     case 'roulette':
       return initRoulette(players, rules as RouletteRules);
+    case 'yacht':
+      return initYacht(players, rules as YachtRules);
+    case 'liarsdice':
+      return initLiarsDice(players, rules as LiarsDiceRules);
   }
 }
 
@@ -241,6 +361,12 @@ export function applyGameAction(
       return applyPokerAction(state as PokerInternalState, playerId, action);
     case 'holdem':
       return applyHoldemAction(state as HoldemInternalState, playerId, action);
+    case 'crazy8':
+      return applyCrazy8Action(state as Crazy8InternalState, playerId, action);
+    case 'blackjack':
+      return applyBlackjackAction(state as BlackjackInternalState, playerId, action);
+    case 'indianpoker':
+      return applyIndianPokerAction(state as IndianPokerInternalState, playerId, action);
     case 'reversi':
       return applyReversiAction(state as ReversiInternalState, playerId, action);
     case 'gomoku':
@@ -253,12 +379,28 @@ export function applyGameAction(
       return applyChessAction(state as ChessInternalState, playerId, action);
     case 'igo':
       return applyIgoAction(state as IgoInternalState, playerId, action);
+    case 'mancala':
+      return applyMancalaAction(state as MancalaInternalState, playerId, action);
+    case 'dotsandboxes':
+      return applyDotsAndBoxesAction(state as DotsAndBoxesInternalState, playerId, action);
+    case 'battleship':
+      return applyBattleshipAction(state as BattleshipInternalState, playerId, action);
+    case 'hitandblow':
+      return applyHitAndBlowAction(state as HitAndBlowInternalState, playerId, action);
+    case 'carrom':
+      return applyCarromAction(state as CarromInternalState, playerId, action);
+    case 'airhockey':
+      return applyAirHockeyAction(state as AirHockeyInternalState, playerId, action);
     case 'werewolf':
       return applyWerewolfAction(state as WerewolfInternalState, playerId, action);
     case 'chinchiro':
       return applyChinchiroAction(state as ChinchiroInternalState, playerId, action);
     case 'roulette':
       return applyRouletteAction(state as RouletteInternalState, playerId, action);
+    case 'yacht':
+      return applyYachtAction(state as YachtInternalState, playerId, action);
+    case 'liarsdice':
+      return applyLiarsDiceAction(state as LiarsDiceInternalState, playerId, action);
   }
 }
 
@@ -282,6 +424,12 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizePokerState(state as PokerInternalState, playerId);
     case 'holdem':
       return sanitizeHoldemState(state as HoldemInternalState, playerId);
+    case 'crazy8':
+      return sanitizeCrazy8State(state as Crazy8InternalState, playerId);
+    case 'blackjack':
+      return sanitizeBlackjackState(state as BlackjackInternalState, playerId);
+    case 'indianpoker':
+      return sanitizeIndianPokerState(state as IndianPokerInternalState, playerId);
     case 'reversi':
       return sanitizeReversiState(state as ReversiInternalState, playerId);
     case 'gomoku':
@@ -294,12 +442,28 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizeChessState(state as ChessInternalState, playerId);
     case 'igo':
       return sanitizeIgoState(state as IgoInternalState, playerId);
+    case 'mancala':
+      return sanitizeMancalaState(state as MancalaInternalState, playerId);
+    case 'dotsandboxes':
+      return sanitizeDotsAndBoxesState(state as DotsAndBoxesInternalState, playerId);
+    case 'battleship':
+      return sanitizeBattleshipState(state as BattleshipInternalState, playerId);
+    case 'hitandblow':
+      return sanitizeHitAndBlowState(state as HitAndBlowInternalState, playerId);
+    case 'carrom':
+      return sanitizeCarromState(state as CarromInternalState, playerId);
+    case 'airhockey':
+      return sanitizeAirHockeyState(state as AirHockeyInternalState, playerId);
     case 'werewolf':
       return sanitizeWerewolfState(state as WerewolfInternalState, playerId);
     case 'chinchiro':
       return sanitizeChinchiroState(state as ChinchiroInternalState, playerId);
     case 'roulette':
       return sanitizeRouletteState(state as RouletteInternalState, playerId);
+    case 'yacht':
+      return sanitizeYachtState(state as YachtInternalState, playerId);
+    case 'liarsdice':
+      return sanitizeLiarsDiceState(state as LiarsDiceInternalState, playerId);
   }
 }
 
@@ -479,6 +643,103 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
       const act = computeRouletteBotAction(s, bot.id);
       if (!act) return null;
       return applyRouletteAction(s, bot.id, act).state;
+    }
+    case 'crazy8': {
+      const s = state as Crazy8InternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeCrazy8BotAction(s);
+      if (!act) return null;
+      return applyCrazy8Action(s, current.id, act).state;
+    }
+    case 'blackjack': {
+      const s = state as BlackjackInternalState;
+      if (s.subPhase === 'roundEnd') return null;
+      if (s.subPhase === 'betting') {
+        const bot = s.players.find((p) => p.isBot && !p.betConfirmed && p.status !== 'out');
+        if (!bot) return null;
+        const act = computeBlackjackBotAction(s, bot.id);
+        if (!act) return null;
+        return applyBlackjackAction(s, bot.id, act).state;
+      }
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeBlackjackBotAction(s, current.id);
+      if (!act) return null;
+      return applyBlackjackAction(s, current.id, act).state;
+    }
+    case 'indianpoker': {
+      const s = state as IndianPokerInternalState;
+      if (s.subPhase === 'showdown') return null;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeIndianPokerBotAction(s);
+      if (!act) return null;
+      return applyIndianPokerAction(s, current.id, act).state;
+    }
+    case 'mancala': {
+      const s = state as MancalaInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeMancalaBotAction(s);
+      if (!act) return null;
+      return applyMancalaAction(s, current.id, act).state;
+    }
+    case 'dotsandboxes': {
+      const s = state as DotsAndBoxesInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeDotsAndBoxesBotAction(s);
+      if (!act) return null;
+      return applyDotsAndBoxesAction(s, current.id, act).state;
+    }
+    case 'battleship': {
+      const s = state as BattleshipInternalState;
+      if (s.subPhase === 'setup') {
+        const bot = s.players.find((p) => p.isBot && !p.setupConfirmed);
+        if (!bot) return null;
+        return applyBattleshipAction(s, bot.id, { type: 'confirmSetup' }).state;
+      }
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeBattleshipBotAction(s);
+      if (!act) return null;
+      return applyBattleshipAction(s, current.id, act).state;
+    }
+    case 'hitandblow': {
+      const s = state as HitAndBlowInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeHitAndBlowBotAction(s);
+      if (!act) return null;
+      return applyHitAndBlowAction(s, current.id, act).state;
+    }
+    case 'carrom': {
+      const s = state as CarromInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeCarromBotAction(s);
+      if (!act) return null;
+      return applyCarromAction(s, current.id, act).state;
+    }
+    case 'airhockey':
+      return null;
+    case 'yacht': {
+      const s = state as YachtInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeYachtBotAction(s);
+      if (!act) return null;
+      return applyYachtAction(s, current.id, act).state;
+    }
+    case 'liarsdice': {
+      const s = state as LiarsDiceInternalState;
+      if (s.subPhase === 'reveal') return null;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeLiarsDiceBotAction(s);
+      if (!act) return null;
+      return applyLiarsDiceAction(s, current.id, act).state;
     }
   }
 }

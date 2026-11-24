@@ -1,21 +1,30 @@
 import React from 'react';
 import {
+  Anchor,
+  Binary,
   Brain,
   Circle,
   CircleDot,
   ClipboardList,
+  Coins,
   Columns3,
+  Crosshair,
   Crown,
   Dices,
   Eye,
+  Flame,
   Gem,
   Grid3X3,
   Hash,
+  Layers,
+  LayoutGrid,
   Moon,
+  Orbit,
   Shield,
   Spade,
   Swords,
   Target,
+  Trophy,
   Zap,
 } from 'lucide-react';
 
@@ -36,7 +45,16 @@ export type GameIconKey =
   | 'circle'
   | 'moon'
   | 'dice'
-  | 'target';
+  | 'target'
+  | 'layers'
+  | 'coins'
+  | 'flame'
+  | 'orbit'
+  | 'layoutGrid'
+  | 'anchor'
+  | 'binary'
+  | 'crosshair'
+  | 'trophy';
 
 interface GameIconProps {
   name: GameIconKey;
@@ -80,5 +98,23 @@ export const GameIcon: React.FC<GameIconProps> = ({ name, size = 18, className }
       return <Dices size={size} className={className} />;
     case 'target':
       return <Target size={size} className={className} />;
+    case 'layers':
+      return <Layers size={size} className={className} />;
+    case 'coins':
+      return <Coins size={size} className={className} />;
+    case 'flame':
+      return <Flame size={size} className={className} />;
+    case 'orbit':
+      return <Orbit size={size} className={className} />;
+    case 'layoutGrid':
+      return <LayoutGrid size={size} className={className} />;
+    case 'anchor':
+      return <Anchor size={size} className={className} />;
+    case 'binary':
+      return <Binary size={size} className={className} />;
+    case 'crosshair':
+      return <Crosshair size={size} className={className} />;
+    case 'trophy':
+      return <Trophy size={size} className={className} />;
   }
 };

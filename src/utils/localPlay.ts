@@ -1,7 +1,11 @@
+import type { BattleshipInternalState } from '../games/battleship';
+import type { BlackjackInternalState } from '../games/blackjack';
 import type { DaifugoInternalState } from '../games/daifugo';
 import type { DoubtInternalState } from '../games/doubt';
 import type { AnyInternalState } from '../games/engineDispatcher';
 import type { HoldemInternalState } from '../games/holdem';
+import type { IndianPokerInternalState } from '../games/indianPoker';
+import type { LiarsDiceInternalState } from '../games/liarsDice';
 import type { PokerInternalState } from '../games/poker';
 import { GAME_REGISTRY } from '../games/registry';
 import type { RouletteInternalState } from '../games/roulette';
@@ -176,6 +180,92 @@ export function resolveHostLocalView(
       activeLocalPlayer: null,
       needsHandoff: false,
     };
+  }
+
+  // ブラックジャック: ベット中は未確定ローカルプレイヤーを順に、ラウンド終了は共通画面
+  if (gameId === 'blackjack') {
+    const bjState = game as BlackjackInternalState;
+    if (bjState.subPhase === 'betting') {
+      const nextLocal = lobby.players.find((lp) => {
+        if (!isLocallyControlled(lobby, lp.id, hostId)) return false;
+        const bp = bjState.players.find((p) => p.id === lp.id);
+        return bp && !bp.betConfirmed && bp.status !== 'out';
+      });
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: false,
+        };
+      }
+      return {
+        viewPlayerId: hostId,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+    if (bjState.subPhase === 'roundEnd') {
+      return {
+        viewPlayerId: hostId,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+  }
+
+  // 海戦ゲーム: 配置フェーズは未確定ローカルプレイヤーをカバー付きで順に回す
+  if (gameId === 'battleship') {
+    const bsState = game as BattleshipInternalState;
+    if (bsState.subPhase === 'setup') {
+      const nextLocal = lobby.players.find((lp) => {
+        if (!isLocallyControlled(lobby, lp.id, hostId)) return false;
+        const bp = bsState.players.find((p) => p.id === lp.id);
+        return bp && !bp.setupConfirmed;
+      });
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+  }
+
+  // インディアンポーカー: ショーダウンは全員公開
+  if (gameId === 'indianpoker') {
+    const ipState = game as IndianPokerInternalState;
+    if (ipState.subPhase === 'showdown') {
+      return {
+        viewPlayerId: hostId,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+  }
+
+  // ライアーズダイス: 公開フェーズは全員公開
+  if (gameId === 'liarsdice') {
+    const ldState = game as LiarsDiceInternalState;
+    if (ldState.subPhase === 'reveal') {
+      return {
+        viewPlayerId: hostId,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
   }
 
   // ポーカー / ホールデム: ショーダウンは全員公開（渡し画面不要）

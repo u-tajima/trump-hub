@@ -10,15 +10,26 @@ export type GameId =
   | 'memory'
   | 'poker'
   | 'holdem'
+  | 'crazy8'
+  | 'blackjack'
+  | 'indianpoker'
   | 'reversi'
   | 'gomoku'
   | 'connect4'
   | 'shogi'
   | 'chess'
   | 'igo'
+  | 'mancala'
+  | 'dotsandboxes'
+  | 'battleship'
+  | 'hitandblow'
+  | 'carrom'
+  | 'airhockey'
   | 'werewolf'
   | 'chinchiro'
-  | 'roulette';
+  | 'roulette'
+  | 'yacht'
+  | 'liarsdice';
 
 export interface ScoreBoardRoomRules {
   startScore: number;                 // 初期持ち点（基準点、任意入力可）
@@ -142,6 +153,63 @@ export interface RouletteRules {
   minBet: number;            // 最小ベット単位（任意入力可）
 }
 
+export interface CarromRules {
+  piecesPerSide: 5 | 9;      // 各色のパック数（5個クイック / 9個本格）
+  queenBonus: number;        // クイーン（赤）のボーナス点
+}
+
+export interface AirHockeyRules {
+  winScore: number;          // 先取勝利点（例: 5 / 7 / 10）
+  puckSpeed: 'normal' | 'fast'; // パックのスピード設定
+}
+
+export interface Crazy8Rules {
+  drawTwoEnabled: boolean;   // 2で次の人に+2枚ドロー
+  skipJackEnabled: boolean;  // Jで次の人をスキップ
+  reverseQueenEnabled: boolean; // Qで順番リバース
+}
+
+export interface BlackjackRules {
+  rounds: number;            // ラウンド数（0 = 上限なし）
+  startChips: number;        // 初期チップ
+  minBet: number;            // 最小ベット額
+  dealerHitsSoft17: boolean; // ディーラーがソフト17でヒットするか
+}
+
+export interface IndianPokerRules {
+  rounds: number;            // ラウンド数（0 = 上限なし）
+  startChips: number;        // 初期チップ
+  ante: number;              // 参加費
+}
+
+export interface MancalaRules {
+  initialStones: 3 | 4;      // 各穴の初期石数（3個クイック / 4個標準）
+  captureRule: boolean;      // 空穴着地で向かい側の石を横取り
+}
+
+export interface DotsAndBoxesRules {
+  gridSize: 3 | 4 | 5;       // ボックスの縦横数（3x3 / 4x4 / 5x5）
+}
+
+export interface BattleshipRules {
+  boardSize: 8 | 10;         // 盤面サイズ（8x8クイック / 10x10標準）
+  extraTurnOnHit: boolean;   // 命中時に連続攻撃できるか
+}
+
+export interface HitAndBlowRules {
+  digits: 3 | 4;             // 桁数（3桁 / 4桁）
+  maxAttempts: number;       // 最大試行回数（ソロ時・引き分け上限）
+}
+
+export interface YachtRules {
+  bonusThreshold: number;    // 上段ボーナス達成ライン（標準63点）
+}
+
+export interface LiarsDiceRules {
+  startDice: 3 | 5;          // 初期サイコロ数（3個クイック / 5個標準）
+  onesWild: boolean;         // 1の目をワイルド扱いするか
+}
+
 export type GameRulesMap = {
   scoreboard: ScoreBoardRoomRules;
   daifugo: DaifugoRules;
@@ -152,15 +220,26 @@ export type GameRulesMap = {
   memory: MemoryRules;
   poker: PokerRules;
   holdem: HoldemRules;
+  crazy8: Crazy8Rules;
+  blackjack: BlackjackRules;
+  indianpoker: IndianPokerRules;
   reversi: ReversiRules;
   gomoku: GomokuRules;
   connect4: Connect4Rules;
   shogi: ShogiRules;
   chess: ChessRules;
   igo: IgoRules;
+  mancala: MancalaRules;
+  dotsandboxes: DotsAndBoxesRules;
+  battleship: BattleshipRules;
+  hitandblow: HitAndBlowRules;
+  carrom: CarromRules;
+  airhockey: AirHockeyRules;
   werewolf: WerewolfRules;
   chinchiro: ChinchiroRules;
   roulette: RouletteRules;
+  yacht: YachtRules;
+  liarsdice: LiarsDiceRules;
 };
 
 export interface PlayerInfo {

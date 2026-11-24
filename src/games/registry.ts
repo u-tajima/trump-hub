@@ -13,7 +13,7 @@ export interface RuleFieldDef<K extends string = string> {
   unit?: string;
 }
 
-export type GameCategory = 'tool' | 'card' | 'board' | 'party' | 'dice';
+export type GameCategory = 'tool' | 'card' | 'board' | 'action' | 'party' | 'dice';
 export type LocalPlayMode = 'none' | 'direct' | 'passAndPlay';
 
 export interface GameMeta<T extends GameId = GameId> {
@@ -888,6 +888,438 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
           { value: 50, label: '50' },
           { value: 100, label: '100' },
         ],
+      },
+    ],
+  },
+  crazy8: {
+    id: 'crazy8',
+    category: 'card',
+    name: 'クレイジーエイト',
+    subtitle: '同じマークか数字をつなぐ王道カード戦',
+    icon: 'layers',
+    minPlayers: 2,
+    maxPlayers: 6,
+    localPlayMode: 'passAndPlay',
+    description:
+      '場札と同じスートか同じ数字を出して手札をなくそう！8はいつでも出せてスートを変更可能。2ドロー・Jスキップ・Qリバースにも対応。',
+    defaultRules: {
+      drawTwoEnabled: true,
+      skipJackEnabled: true,
+      reverseQueenEnabled: true,
+    },
+    ruleFields: [
+      { key: 'drawTwoEnabled', label: '2でドロー+2', description: '2を出すと次の人が2枚ドロー（重ね出し累積OK）', type: 'boolean' },
+      { key: 'skipJackEnabled', label: 'Jでスキップ', description: 'Jを出すと次のプレイヤーを飛ばす', type: 'boolean' },
+      { key: 'reverseQueenEnabled', label: 'Qでリバース', description: 'Qを出すと手番の進行方向を反転する', type: 'boolean' },
+    ],
+  },
+  blackjack: {
+    id: 'blackjack',
+    category: 'card',
+    name: 'ブラックジャック',
+    subtitle: '21を目指す本格カジノカードバトル',
+    icon: 'coins',
+    minPlayers: 1,
+    maxPlayers: 6,
+    localPlayMode: 'direct',
+    description:
+      'ディーラー自動進行！ヒット・スタンド・ダブルダウンを駆使して21に近づけよう。ナチュラルBJは1.5倍配当。',
+    defaultRules: {
+      rounds: 10,
+      startChips: 1000,
+      minBet: 20,
+      dealerHitsSoft17: false,
+    },
+    ruleFields: [
+      {
+        key: 'rounds',
+        label: 'ラウンド数',
+        description: '何ハンド遊んだら終了するか（0は上限なし）',
+        type: 'number',
+        min: 1,
+        max: 999,
+        step: 1,
+        unit: 'ハンド',
+        options: [
+          { value: 5, label: '5ハンド' },
+          { value: 10, label: '10ハンド' },
+          { value: 20, label: '20ハンド' },
+          { value: 0, label: '上限なし' },
+        ],
+      },
+      {
+        key: 'startChips',
+        label: '初期チップ',
+        description: '開始時の持ちチップ',
+        type: 'number',
+        min: 100,
+        max: 1000000,
+        step: 100,
+        options: [
+          { value: 500, label: '500' },
+          { value: 1000, label: '1,000' },
+          { value: 3000, label: '3,000' },
+        ],
+      },
+      {
+        key: 'minBet',
+        label: '最小ベット',
+        description: '1ハンドの最小賭け額',
+        type: 'number',
+        min: 10,
+        max: 10000,
+        step: 10,
+        options: [
+          { value: 10, label: '10' },
+          { value: 20, label: '20' },
+          { value: 50, label: '50' },
+        ],
+      },
+      {
+        key: 'dealerHitsSoft17',
+        label: 'ディーラー・ソフト17ヒット',
+        description: 'ONにするとディーラーはAを含む17でさらに1枚引く',
+        type: 'boolean',
+      },
+    ],
+  },
+  indianpoker: {
+    id: 'indianpoker',
+    category: 'card',
+    name: 'インディアンポーカー',
+    subtitle: '自分の札だけ見えない究極の心理戦',
+    icon: 'flame',
+    minPlayers: 2,
+    maxPlayers: 6,
+    localPlayMode: 'passAndPlay',
+    description:
+      '自分のカードは見えず、他全員のカードだけが見える！相手の表情やベットから自分の強さを読んで勝負しよう。',
+    defaultRules: {
+      rounds: 8,
+      startChips: 1000,
+      ante: 20,
+    },
+    ruleFields: [
+      {
+        key: 'rounds',
+        label: 'ラウンド数',
+        description: '何ハンド遊んだら終了するか（0は上限なし）',
+        type: 'number',
+        min: 1,
+        max: 999,
+        step: 1,
+        unit: 'ハンド',
+        options: [
+          { value: 5, label: '5ハンド' },
+          { value: 8, label: '8ハンド' },
+          { value: 15, label: '15ハンド' },
+          { value: 0, label: '上限なし' },
+        ],
+      },
+      {
+        key: 'startChips',
+        label: '初期チップ',
+        description: '開始時の持ちチップ',
+        type: 'number',
+        min: 100,
+        max: 1000000,
+        step: 100,
+        options: [
+          { value: 500, label: '500' },
+          { value: 1000, label: '1,000' },
+          { value: 3000, label: '3,000' },
+        ],
+      },
+      {
+        key: 'ante',
+        label: 'アンティ（参加費）',
+        description: '毎ハンドの強制参加チップ',
+        type: 'number',
+        min: 5,
+        max: 10000,
+        step: 5,
+        options: [
+          { value: 10, label: '10' },
+          { value: 20, label: '20' },
+          { value: 50, label: '50' },
+        ],
+      },
+    ],
+  },
+  mancala: {
+    id: 'mancala',
+    category: 'board',
+    name: 'マンカラ',
+    subtitle: '石をまいてゴールに集める古代頭脳戦',
+    icon: 'orbit',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '世界最古級の石まきボードゲーム！最後の石が自分のゴールに入れば連続ターン、空穴着地で向かい側の石を横取り！',
+    defaultRules: {
+      initialStones: 4,
+      captureRule: true,
+    },
+    ruleFields: [
+      {
+        key: 'initialStones',
+        label: '初期石数（1穴あたり）',
+        description: '3個はサクッと短時間、4個は標準ルール',
+        type: 'select',
+        options: [
+          { value: 3, label: '3個（クイック）' },
+          { value: 4, label: '4個（標準）' },
+        ],
+      },
+      {
+        key: 'captureRule',
+        label: '向かい側横取り（キャプチャ）',
+        description: '最後の石が自分の空穴に入ったら向かいの石を全獲得',
+        type: 'boolean',
+      },
+    ],
+  },
+  dotsandboxes: {
+    id: 'dotsandboxes',
+    category: 'board',
+    name: 'ドット＆ボックス',
+    subtitle: '点を結んで四角を奪い合う陣取り戦',
+    icon: 'layoutGrid',
+    minPlayers: 2,
+    maxPlayers: 4,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '隣り合う点を線でつなぎ、四角を完成させたら陣地獲得＆もう1手！終盤の連鎖コンボが熱い定番紙ペンゲーム。',
+    defaultRules: {
+      gridSize: 4,
+    },
+    ruleFields: [
+      {
+        key: 'gridSize',
+        label: '盤面サイズ',
+        description: '完成させるボックスの縦横数',
+        type: 'select',
+        options: [
+          { value: 3, label: '3×3（クイック）' },
+          { value: 4, label: '4×4（標準）' },
+          { value: 5, label: '5×5（ロング）' },
+        ],
+      },
+    ],
+  },
+  battleship: {
+    id: 'battleship',
+    category: 'board',
+    name: '海戦ゲーム',
+    subtitle: '艦隊を隠してレーダー砲撃で撃沈せよ',
+    icon: 'anchor',
+    minPlayers: 2,
+    maxPlayers: 2,
+    localPlayMode: 'passAndPlay',
+    description:
+      '自分の艦隊を隠して配置し、相手の海域へ交互に砲撃！命中・撃沈のヒントから敵艦隊を全滅させよう。',
+    defaultRules: {
+      boardSize: 8,
+      extraTurnOnHit: true,
+    },
+    ruleFields: [
+      {
+        key: 'boardSize',
+        label: '海域サイズ',
+        description: '8×8はスマホでサクッと遊べます',
+        type: 'select',
+        options: [
+          { value: 8, label: '8×8（艦4隻・推奨）' },
+          { value: 10, label: '10×10（艦5隻・本格）' },
+        ],
+      },
+      {
+        key: 'extraTurnOnHit',
+        label: '命中時に連続攻撃',
+        description: 'ONにすると敵艦に当てたとき続けてもう1発撃てる',
+        type: 'boolean',
+      },
+    ],
+  },
+  hitandblow: {
+    id: 'hitandblow',
+    category: 'board',
+    name: 'ヒット＆ブロー',
+    subtitle: '数字と位置を推理する論理バトル',
+    icon: 'binary',
+    minPlayers: 1,
+    maxPlayers: 2,
+    localPlayMode: 'direct',
+    description:
+      '重複なしの秘密の数字を推理しよう！位置も一致でHIT、数字だけ一致でBLOW。1人挑戦から2人交互の早当て対戦まで対応。',
+    defaultRules: {
+      digits: 4,
+      maxAttempts: 10,
+    },
+    ruleFields: [
+      {
+        key: 'digits',
+        label: '桁数',
+        description: '推理する数字の桁数',
+        type: 'select',
+        options: [
+          { value: 3, label: '3桁（サクサク）' },
+          { value: 4, label: '4桁（標準）' },
+        ],
+      },
+      {
+        key: 'maxAttempts',
+        label: '最大試行回数',
+        description: '上限手数以内に当てられなければ終了',
+        type: 'select',
+        options: [
+          { value: 8, label: '8回' },
+          { value: 10, label: '10回（標準）' },
+          { value: 15, label: '15回' },
+        ],
+      },
+    ],
+  },
+  carrom: {
+    id: 'carrom',
+    category: 'action',
+    name: 'カロム',
+    subtitle: 'ストライカーを弾く伝統おはじきビリヤード',
+    icon: 'crosshair',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '引っ張って弾く本格2D物理カロム！自分の色のパックと赤クイーンを四隅のポケットへ落とそう。1台2人対戦やCPU戦に対応。',
+    defaultRules: {
+      piecesPerSide: 5,
+      queenBonus: 3,
+    },
+    ruleFields: [
+      {
+        key: 'piecesPerSide',
+        label: '各色のパック数',
+        description: '5個は短時間決着、9個は公式スタイル',
+        type: 'select',
+        options: [
+          { value: 5, label: '5個ずつ（クイック）' },
+          { value: 9, label: '9個ずつ（本格）' },
+        ],
+      },
+      {
+        key: 'queenBonus',
+        label: '赤クイーン獲得ボーナス',
+        description: 'クイーンをカバー成立で獲得したときの加点',
+        type: 'select',
+        options: [
+          { value: 3, label: '3点（標準）' },
+          { value: 5, label: '5点' },
+        ],
+      },
+    ],
+  },
+  airhockey: {
+    id: 'airhockey',
+    category: 'action',
+    name: '対面エアホッケー',
+    subtitle: '1台向かい合い＆CPU戦対応の60fps物理対戦',
+    icon: 'zap',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      'マルチタッチ完全対応！スマホ1台を挟んで2人で同時にパックを打ち合えるほか、CPU戦も遊べる爽快リアルタイムアクション。',
+    defaultRules: {
+      winScore: 7,
+      puckSpeed: 'normal',
+    },
+    ruleFields: [
+      {
+        key: 'winScore',
+        label: '勝利ポイント',
+        description: '先にこの点数に到達したプレイヤーが勝利',
+        type: 'select',
+        options: [
+          { value: 5, label: '5点先取' },
+          { value: 7, label: '7点先取（標準）' },
+          { value: 10, label: '10点先取' },
+        ],
+      },
+      {
+        key: 'puckSpeed',
+        label: 'パックスピード',
+        description: 'パックの最大速度と反発力',
+        type: 'select',
+        options: [
+          { value: 'normal', label: '標準' },
+          { value: 'fast', label: 'ハイスピード' },
+        ],
+      },
+    ],
+  },
+  yacht: {
+    id: 'yacht',
+    category: 'dice',
+    name: 'ヨット',
+    subtitle: '5個のサイコロで12役を埋める王道ダイス戦',
+    icon: 'trophy',
+    minPlayers: 1,
+    maxPlayers: 6,
+    localPlayMode: 'direct',
+    description:
+      'サイコロ5個を最大3回振り直してフルハウスやストレート、ヨット（5ゾロ）を狙おう！上段63点以上で+35点ボーナス。',
+    defaultRules: {
+      bonusThreshold: 63,
+    },
+    ruleFields: [
+      {
+        key: 'bonusThreshold',
+        label: '上段ボーナス基準点',
+        description: '1〜6の合計がこの点数以上で+35点ボーナス',
+        type: 'select',
+        options: [
+          { value: 63, label: '63点（標準）' },
+          { value: 55, label: '55点（やさしめ）' },
+        ],
+      },
+    ],
+  },
+  liarsdice: {
+    id: 'liarsdice',
+    category: 'dice',
+    name: 'ライアーズダイス',
+    subtitle: '出目を隠して個数を騙し合うブラフダイス',
+    icon: 'dice',
+    minPlayers: 2,
+    maxPlayers: 6,
+    localPlayMode: 'passAndPlay',
+    description:
+      'カップの中の出目を隠したまま「場全体に○の目が△個以上」と宣言し合おう！ウソだと思ったらダウトで一斉オープン！',
+    defaultRules: {
+      startDice: 5,
+      onesWild: true,
+    },
+    ruleFields: [
+      {
+        key: 'startDice',
+        label: '初期サイコロ数',
+        description: '各自が最初に持つサイコロの数',
+        type: 'select',
+        options: [
+          { value: 3, label: '3個（クイック）' },
+          { value: 5, label: '5個（標準）' },
+        ],
+      },
+      {
+        key: 'onesWild',
+        label: '1の目をワイルド扱い',
+        description: 'ONにすると1の目はすべての出目としてカウントされる',
+        type: 'boolean',
       },
     ],
   },
