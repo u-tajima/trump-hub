@@ -18,10 +18,12 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({
   const [topSelectedId, setTopSelectedId] = useState<string | null>(null);
   const [lastSelectedSide, setLastSelectedSide] = useState<'bottom' | 'top'>('bottom');
 
-  const activeSelectedId = state.me.fieldHand.some((c) => c.id === selectedCardId)
+  const activeSelectedId = state.me.fieldHand.some((c) => c !== null && c.id === selectedCardId)
     ? selectedCardId
     : null;
-  const activeTopSelectedId = state.opponent.fieldHand.some((c) => c.id === topSelectedId)
+  const activeTopSelectedId = state.opponent.fieldHand.some(
+    (c) => c !== null && c.id === topSelectedId
+  )
     ? topSelectedId
     : null;
 
@@ -49,8 +51,9 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({
 
   const handleLocalPileClick = (pileIndex: 0 | 1) => {
     if (state.phase !== 'playing') return;
-    const bottomCard = state.me.fieldHand.find((c) => c.id === activeSelectedId) ?? null;
-    const topCard = state.opponent.fieldHand.find((c) => c.id === activeTopSelectedId) ?? null;
+    const bottomCard = state.me.fieldHand.find((c) => c !== null && c.id === activeSelectedId) ?? null;
+    const topCard =
+      state.opponent.fieldHand.find((c) => c !== null && c.id === activeTopSelectedId) ?? null;
     if (!bottomCard && !topCard) return;
 
     const pileCard = state.centerPiles[pileIndex];
@@ -99,25 +102,29 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({
             <span className="speed-local-deck">山札 {player.drawPileCount}枚</span>
           </div>
           <div className="speed-local-hand">
-            {player.fieldHand.map((card) => (
-              <PlayingCard
-                key={card.id}
-                card={card}
-                size="md"
-                animateIn
-                selected={selId === card.id}
-                onClick={
-                  state.phase === 'playing'
-                    ? () => handleLocalCardClick(side, card.id)
-                    : undefined
-                }
-              />
-            ))}
+            {player.fieldHand.map((card, slotIdx) =>
+              card ? (
+                <PlayingCard
+                  key={`slot-${slotIdx}-${card.id}`}
+                  card={card}
+                  size="md"
+                  animateIn
+                  selected={selId === card.id}
+                  onClick={
+                    state.phase === 'playing'
+                      ? () => handleLocalCardClick(side, card.id)
+                      : undefined
+                  }
+                />
+              ) : (
+                <div key={`slot-${slotIdx}-empty`} className="speed-empty-slot speed-empty-slot--md" />
+              )
+            )}
           </div>
           {state.phase === 'playing' && (
             <div className="speed-local-controls">
               {!state.rules.autoRefill &&
-                player.fieldHand.length < 4 &&
+                player.fieldHand.some((c) => c === null) &&
                 player.drawPileCount > 0 && (
                   <button
                     type="button"
@@ -223,19 +230,25 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({
             <span>山札: {state.me.drawPileCount}枚</span>
           </div>
           <div className="speed-field-hand">
-            {state.me.fieldHand.map((card) => (
-              <PlayingCard
-                key={card.id}
-                card={card}
-                size="lg"
-                animateIn
-                selected={activeSelectedId === card.id}
-                onClick={() => handleFieldCardClick(card.id)}
-              />
-            ))}
+            {state.me.fieldHand.map((card, slotIdx) =>
+              card ? (
+                <PlayingCard
+                  key={`slot-${slotIdx}-${card.id}`}
+                  card={card}
+                  size="lg"
+                  animateIn
+                  selected={activeSelectedId === card.id}
+                  onClick={() => handleFieldCardClick(card.id)}
+                />
+              ) : (
+                <div key={`slot-${slotIdx}-empty`} className="speed-empty-slot speed-empty-slot--lg" />
+              )
+            )}
           </div>
           <div className="action-bar">
-            {!state.rules.autoRefill && state.me.fieldHand.length < 4 && state.me.drawPileCount > 0 && (
+            {!state.rules.autoRefill &&
+              state.me.fieldHand.some((c) => c === null) &&
+              state.me.drawPileCount > 0 && (
               <button
                 type="button"
                 className="secondary-btn"

@@ -104,3 +104,20 @@
   text-align: center;
   min-height: 16px;
 }
+
+.speed-empty-slot {
+  border-radius: 9px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.18);
+  flex-shrink: 0;
+}
+
+.speed-empty-slot--md {
+  width: 58px;
+  height: 84px;
+}
+
+.speed-empty-slot--lg {
+  width: 68px;
+  height: 98px;
+}

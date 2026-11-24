@@ -676,11 +676,24 @@ describe('Perfect Information Local Pass-and-Play', () => {
     rState = applyRouletteAction(rState, 'host-1', { type: 'confirmBets' }).state;
     expect(resolveHostLocalView(rouletteLobby, rState, 'host-1').viewPlayerId).toBe('local-2');
 
-    // 4. スピード: direct モード対応＆sanitizeSpeedState が両者の場札を返すこと
+    // 4. スピード: direct モード対応＆sanitizeSpeedState が両者の場札を返すこと＆出した枠に補充されること
     expect(GAME_REGISTRY.speed.localPlayMode).toBe('direct');
     const speedPlayers = players.slice(0, 2);
     const speedState = initSpeed(speedPlayers, GAME_REGISTRY.speed.defaultRules);
-    const speedView = sanitizeSpeedState(speedState, 'host-1');
+    speedState.centerPiles = [c('heart', 7), c('club', 10)];
+    speedState.players[0].fieldHand = [c('spade', 2), c('spade', 8), c('diamond', 3), c('club', 4)];
+    speedState.players[0].drawPile = [c('heart', 12)];
+    const afterPlay = applySpeedAction(speedState, 'host-1', {
+      type: 'play',
+      payload: { cardId: 'spade-8', pileIndex: 0 },
+    }).state;
+    // スロット1に出したあと左詰めされず、スロット0/2/3は動かずスロット1に新カードが入る
+    expect(afterPlay.players[0].fieldHand[0]?.id).toBe('spade-2');
+    expect(afterPlay.players[0].fieldHand[1]?.id).toBe('heart-12');
+    expect(afterPlay.players[0].fieldHand[2]?.id).toBe('diamond-3');
+    expect(afterPlay.players[0].fieldHand[3]?.id).toBe('club-4');
+
+    const speedView = sanitizeSpeedState(afterPlay, 'host-1');
     expect(speedView.me.fieldHand.length).toBe(4);
     expect(speedView.opponent.fieldHand.length).toBe(4);
   });

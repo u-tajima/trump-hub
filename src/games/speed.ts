@@ -6,9 +6,9 @@ export interface SpeedPlayerState {
   id: string;
   name: string;
   isBot: boolean;
-  fieldHand: Card[]; // 最大4枚見えている手札
-  drawPile: Card[];  // 自分の山札
-  readyFlip: boolean; // 「せーの！」待ちフラグ
+  fieldHand: (Card | null)[]; // 4枠固定の見えている場札（空き枠はnull）
+  drawPile: Card[];           // 自分の山札
+  readyFlip: boolean;         // 「せーの！」待ちフラグ
 }
 
 export interface SpeedInternalState {
@@ -26,7 +26,7 @@ export interface SpeedClientState {
   me: {
     id: string;
     name: string;
-    fieldHand: Card[];
+    fieldHand: (Card | null)[];
     drawPileCount: number;
     readyFlip: boolean;
   };
@@ -34,7 +34,7 @@ export interface SpeedClientState {
     id: string;
     name: string;
     isBot: boolean;
-    fieldHand: Card[];
+    fieldHand: (Card | null)[];
     fieldHandCount: number;
     drawPileCount: number;
     readyFlip: boolean;
@@ -92,12 +92,21 @@ export function canPlaceOnSpeedPile(card: Card, pileCard: Card, rules: SpeedRule
   return false;
 }
 
+function getActiveCards(fieldHand: (Card | null)[]): Card[] {
+  return fieldHand.filter((c): c is Card => c !== null);
+}
+
+function normalizeSlots(fieldHand: (Card | null)[]): (Card | null)[] {
+  return Array.from({ length: 4 }, (_, i) => fieldHand[i] ?? null);
+}
+
 function refillHand(p: SpeedPlayerState): SpeedPlayerState {
-  const fieldHand = [...p.fieldHand];
+  const fieldHand = normalizeSlots(p.fieldHand);
   const drawPile = [...p.drawPile];
-  while (fieldHand.length < 4 && drawPile.length > 0) {
-    const next = drawPile.shift()!;
-    fieldHand.push(next);
+  for (let i = 0; i < 4 && drawPile.length > 0; i++) {
+    if (fieldHand[i] === null) {
+      fieldHand[i] = drawPile.shift()!;
+    }
   }
   return { ...p, fieldHand, drawPile };
 }
@@ -124,16 +133,17 @@ export function applySpeedAction(
   if (action.type === 'play') {
     const { cardId, pileIndex } = (action.payload as { cardId: string; pileIndex: 0 | 1 }) ?? {};
     const me = players[pIdx];
-    const cardIdx = me.fieldHand.findIndex((c) => c.id === cardId);
+    const cardIdx = me.fieldHand.findIndex((c) => c !== null && c.id === cardId);
     if (cardIdx < 0) return { state, error: 'カードが手元にありません' };
 
-    const card = me.fieldHand[cardIdx];
+    const card = me.fieldHand[cardIdx]!;
     const targetPile = state.centerPiles[pileIndex];
     if (!canPlaceOnSpeedPile(card, targetPile, state.rules)) {
       return { state, error: 'その台札には出せません' };
     }
 
-    me.fieldHand.splice(cardIdx, 1);
+    // 左詰めせず、出した枠を空にする（自動補充ONならその空き枠へ新しいカードを置く）
+    me.fieldHand[cardIdx] = null;
     if (state.rules.autoRefill) {
       players[pIdx] = refillHand(me);
     }
@@ -144,7 +154,7 @@ export function applySpeedAction(
     centerPiles[pileIndex] = card;
 
     // 勝利判定
-    if (players[pIdx].fieldHand.length === 0 && players[pIdx].drawPile.length === 0) {
+    if (getActiveCards(players[pIdx].fieldHand).length === 0 && players[pIdx].drawPile.length === 0) {
       return {
         state: {
           ...state,
@@ -174,7 +184,7 @@ export function applySpeedAction(
     const otherIdx = pIdx === 0 ? 1 : 0;
     const botCanRefill =
       !state.rules.autoRefill &&
-      players[otherIdx].fieldHand.length < 4 &&
+      getActiveCards(players[otherIdx].fieldHand).length < 4 &&
       players[otherIdx].drawPile.length > 0;
     if (
       players[otherIdx].isBot &&
@@ -187,9 +197,9 @@ export function applySpeedAction(
     if (players[0].readyFlip && players[1].readyFlip) {
       const centerPiles: [Card, Card] = [...state.centerPiles] as [Card, Card];
       const activeIds = new Set<string>([
-        ...players[0].fieldHand.map((c) => c.id),
+        ...getActiveCards(players[0].fieldHand).map((c) => c.id),
         ...players[0].drawPile.map((c) => c.id),
-        ...players[1].fieldHand.map((c) => c.id),
+        ...getActiveCards(players[1].fieldHand).map((c) => c.id),
         ...players[1].drawPile.map((c) => c.id),
         centerPiles[0].id,
         centerPiles[1].id,
@@ -199,8 +209,12 @@ export function applySpeedAction(
       for (let i = 0; i < 2; i++) {
         if (players[i].drawPile.length > 0) {
           centerPiles[i] = players[i].drawPile.shift()!;
-        } else if (players[i].fieldHand.length > 1) {
-          centerPiles[i] = players[i].fieldHand.shift()!;
+        } else if (getActiveCards(players[i].fieldHand).length > 1) {
+          const firstIdx = players[i].fieldHand.findIndex((c) => c !== null);
+          if (firstIdx >= 0) {
+            centerPiles[i] = players[i].fieldHand[firstIdx]!;
+            players[i].fieldHand[firstIdx] = null;
+          }
         } else if (buriedPool.length > 0) {
           centerPiles[i] = buriedPool.shift()!;
         }
@@ -229,7 +243,7 @@ export function applySpeedAction(
 }
 
 function hasAnyPlayableCard(p: SpeedPlayerState, centerPiles: [Card, Card], rules: SpeedRules): boolean {
-  return p.fieldHand.some(
+  return getActiveCards(p.fieldHand).some(
     (c) => canPlaceOnSpeedPile(c, centerPiles[0], rules) || canPlaceOnSpeedPile(c, centerPiles[1], rules)
   );
 }
@@ -252,15 +266,16 @@ export function computeSpeedBotAction(state: SpeedInternalState, botId: string):
   const bot = state.players.find((p) => p.id === botId);
   if (!bot) return null;
 
+  const activeHand = getActiveCards(bot.fieldHand);
   const rankCounts = new Map<number, number>();
-  for (const c of bot.fieldHand) {
+  for (const c of activeHand) {
     rankCounts.set(c.rank, (rankCounts.get(c.rank) ?? 0) + 1);
   }
 
   let bestMove: { cardId: string; pileIndex: 0 | 1; score: number } | null = null;
 
-  for (const c of bot.fieldHand) {
-    const remaining = bot.fieldHand.filter((h) => h.id !== c.id);
+  for (const c of activeHand) {
+    const remaining = activeHand.filter((h) => h.id !== c.id);
     for (const pileIndex of [0, 1] as const) {
       if (!canPlaceOnSpeedPile(c, state.centerPiles[pileIndex], state.rules)) continue;
 
@@ -291,7 +306,7 @@ export function computeSpeedBotAction(state: SpeedInternalState, botId: string):
     return { type: 'play', payload: { cardId: bestMove.cardId, pileIndex: bestMove.pileIndex } };
   }
 
-  if (!state.rules.autoRefill && bot.fieldHand.length < 4 && bot.drawPile.length > 0) {
+  if (!state.rules.autoRefill && activeHand.length < 4 && bot.drawPile.length > 0) {
     return { type: 'refill' };
   }
 
@@ -313,7 +328,7 @@ export function sanitizeSpeedState(state: SpeedInternalState, playerId: string):
     me: {
       id: me.id,
       name: me.name,
-      fieldHand: me.fieldHand,
+      fieldHand: normalizeSlots(me.fieldHand),
       drawPileCount: me.drawPile.length,
       readyFlip: me.readyFlip,
     },
@@ -321,8 +336,8 @@ export function sanitizeSpeedState(state: SpeedInternalState, playerId: string):
       id: opp.id,
       name: opp.name,
       isBot: opp.isBot,
-      fieldHand: opp.fieldHand,
-      fieldHandCount: opp.fieldHand.length,
+      fieldHand: normalizeSlots(opp.fieldHand),
+      fieldHandCount: getActiveCards(opp.fieldHand).length,
       drawPileCount: opp.drawPile.length,
       readyFlip: opp.readyFlip,
     },
