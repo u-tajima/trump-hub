@@ -317,7 +317,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'zap',
     minPlayers: 2,
     maxPlayers: 2,
-    localPlayMode: 'none',
+    localPlayMode: 'direct',
     description: 'ターンなし！2人同時進行で台札の±1のカードを素早く出し切ろう（2人専用）。',
     defaultRules: {
       akConnect: true,

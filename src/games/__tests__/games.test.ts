@@ -14,7 +14,7 @@ import { GAME_REGISTRY } from '../registry';
 import { applyReversiAction, computeReversiBotAction, initReversi } from '../reversi';
 import { applyRouletteAction, EUROPEAN_WHEEL_ORDER, getRouletteColor, initRoulette } from '../roulette';
 import { applySevensAction, canPlaceNormalCard, computeSevensBotAction, initSevens } from '../sevens';
-import { applySpeedAction, canPlaceOnSpeedPile, computeSpeedBotAction, initSpeed } from '../speed';
+import { applySpeedAction, canPlaceOnSpeedPile, computeSpeedBotAction, initSpeed, sanitizeSpeedState } from '../speed';
 import {
   applyScoreBoardOp,
   createEmptyScoreBoard,
@@ -675,5 +675,13 @@ describe('Perfect Information Local Pass-and-Play', () => {
     expect(resolveHostLocalView(rouletteLobby, rState, 'host-1').viewPlayerId).toBe('host-1');
     rState = applyRouletteAction(rState, 'host-1', { type: 'confirmBets' }).state;
     expect(resolveHostLocalView(rouletteLobby, rState, 'host-1').viewPlayerId).toBe('local-2');
+
+    // 4. スピード: direct モード対応＆sanitizeSpeedState が両者の場札を返すこと
+    expect(GAME_REGISTRY.speed.localPlayMode).toBe('direct');
+    const speedPlayers = players.slice(0, 2);
+    const speedState = initSpeed(speedPlayers, GAME_REGISTRY.speed.defaultRules);
+    const speedView = sanitizeSpeedState(speedState, 'host-1');
+    expect(speedView.me.fieldHand.length).toBe(4);
+    expect(speedView.opponent.fieldHand.length).toBe(4);
   });
 });

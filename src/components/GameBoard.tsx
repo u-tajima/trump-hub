@@ -144,7 +144,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           </div>
         ) : (
           <>
-            {isLocalPassAndPlay && activeLocalPlayerName && phase === 'playing' && (
+            {isLocalPassAndPlay && activeLocalPlayerName && phase === 'playing' && gameId !== 'speed' && (
               <div className="local-turn-bar">
                 <Users size={14} />
                 操作中: {activeLocalPlayerName}
@@ -168,7 +168,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <SevensBoard state={gameState as SevensClientState} onAction={onAction} />
             )}
             {gameId === 'speed' && (
-              <SpeedBoard state={gameState as SpeedClientState} onAction={onAction} />
+              <SpeedBoard
+                state={gameState as SpeedClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
             )}
             {gameId === 'oldmaid' && (
               <OldMaidBoard state={gameState as OldMaidClientState} onAction={onAction} />

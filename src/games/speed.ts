@@ -34,6 +34,7 @@ export interface SpeedClientState {
     id: string;
     name: string;
     isBot: boolean;
+    fieldHand: Card[];
     fieldHandCount: number;
     drawPileCount: number;
     readyFlip: boolean;
@@ -320,6 +321,7 @@ export function sanitizeSpeedState(state: SpeedInternalState, playerId: string):
       id: opp.id,
       name: opp.name,
       isBot: opp.isBot,
+      fieldHand: opp.fieldHand,
       fieldHandCount: opp.fieldHand.length,
       drawPileCount: opp.drawPile.length,
       readyFlip: opp.readyFlip,
