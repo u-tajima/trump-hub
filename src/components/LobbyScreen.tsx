@@ -131,10 +131,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                   ローカル追加
                 </button>
               )}
-              <button type="button" className="chip-btn accent" onClick={onAddBot}>
-                <Bot size={15} />
-                CPU追加
-              </button>
+              {meta.allowBots !== false && (
+                <button type="button" className="chip-btn accent" onClick={onAddBot}>
+                  <Bot size={15} />
+                  CPU追加
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -217,7 +219,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           {!canStart && (
             <div className="warn-text">
               {lobby.players.length < meta.minPlayers
-                ? meta.localPlayMode !== 'none'
+                ? meta.allowBots === false
+                  ? `あと ${meta.minPlayers - lobby.players.length} 人（招待またはローカル追加）必要です`
+                  : meta.localPlayMode !== 'none'
                   ? `あと ${meta.minPlayers - lobby.players.length} 人（ローカル追加またはCPU）必要です`
                   : `あと ${meta.minPlayers - lobby.players.length} 人（またはCPU）必要です`
                 : `最大 ${meta.maxPlayers} 人までプレイできます`}

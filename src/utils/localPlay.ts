@@ -5,6 +5,7 @@ import type { HoldemInternalState } from '../games/holdem';
 import type { PokerInternalState } from '../games/poker';
 import { GAME_REGISTRY } from '../games/registry';
 import type { RouletteInternalState } from '../games/roulette';
+import type { WerewolfInternalState } from '../games/werewolf';
 import type { LobbyState, PlayerInfo } from '../types/game';
 
 export const SPECTATOR_VIEW_ID = '__spectator__';
@@ -57,6 +58,83 @@ export function resolveHostLocalView(
   };
 
   const gameId = lobby.config.gameId;
+
+  // 人狼ゲーム: 個別確認/投票/夜行動は未完了のローカルプレイヤーを順にカバー付きで回し、昼・朝・処刑は共通画面
+  if (gameId === 'werewolf') {
+    const wState = game as WerewolfInternalState;
+    if (wState.subPhase === 'roleReveal') {
+      const nextLocal = lobby.players.find((lp) => {
+        if (!isLocallyControlled(lobby, lp.id, hostId)) return false;
+        const wp = wState.players.find((p) => p.id === lp.id);
+        return wp && !wp.ready;
+      });
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+
+    if (wState.subPhase === 'voting') {
+      const nextLocal = lobby.players.find((lp) => {
+        if (!isLocallyControlled(lobby, lp.id, hostId)) return false;
+        const wp = wState.players.find((p) => p.id === lp.id);
+        return wp && wp.alive && !wState.votes[wp.id];
+      });
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+
+    if (wState.subPhase === 'night') {
+      const nextLocal = lobby.players.find((lp) => {
+        if (!isLocallyControlled(lobby, lp.id, hostId)) return false;
+        const wp = wState.players.find((p) => p.id === lp.id);
+        return wp && wp.alive && !wState.nightDoneIds.includes(wp.id);
+      });
+      if (nextLocal) {
+        return {
+          viewPlayerId: nextLocal.id,
+          actionPlayerId: nextLocal.id,
+          activeLocalPlayer: nextLocal,
+          needsHandoff: true,
+        };
+      }
+      return {
+        viewPlayerId: SPECTATOR_VIEW_ID,
+        actionPlayerId: hostId,
+        activeLocalPlayer: null,
+        needsHandoff: false,
+      };
+    }
+
+    return {
+      viewPlayerId: SPECTATOR_VIEW_ID,
+      actionPlayerId: hostId,
+      activeLocalPlayer: null,
+      needsHandoff: false,
+    };
+  }
 
   // ルーレット: 未確定のローカルプレイヤーから順にベット、投球はスピナーがローカルならその人
   if (gameId === 'roulette') {

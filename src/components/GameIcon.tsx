@@ -11,6 +11,7 @@ import {
   Gem,
   Grid3X3,
   Hash,
+  Moon,
   Shield,
   Spade,
   Swords,
@@ -33,6 +34,7 @@ export type GameIconKey =
   | 'swords'
   | 'shield'
   | 'circle'
+  | 'moon'
   | 'dice'
   | 'target';
 
@@ -72,6 +74,8 @@ export const GameIcon: React.FC<GameIconProps> = ({ name, size = 18, className }
       return <Shield size={size} className={className} />;
     case 'circle':
       return <Circle size={size} className={className} />;
+    case 'moon':
+      return <Moon size={size} className={className} />;
     case 'dice':
       return <Dices size={size} className={className} />;
     case 'target':

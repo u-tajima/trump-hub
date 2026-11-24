@@ -16,6 +16,7 @@ export type GameId =
   | 'shogi'
   | 'chess'
   | 'igo'
+  | 'werewolf'
   | 'chinchiro'
   | 'roulette';
 
@@ -116,6 +117,19 @@ export interface IgoRules {
   superko: boolean;             // スーパーコウ（同形反復）禁止
 }
 
+export interface WerewolfRules {
+  werewolfCount: number;        // 人狼の数
+  seerCount: number;            // 占い師の数
+  mediumCount: number;          // 霊媒師の数
+  bodyguardCount: number;       // 騎士（狩人）の数
+  madmanCount: number;          // 狂人の数
+  foxCount: number;             // 妖狐の数
+  discussionSec: number;        // 昼の議論時間（秒、0 = 上限なし）
+  firstNightFortune: 'randomWhite' | 'free' | 'none'; // 初日占いルール
+  consecutiveGuard: boolean;    // 騎士の連続護衛を許可するか
+  tieBreak: 'runoff' | 'random' | 'noExecution';      // 同票時の処理
+}
+
 export interface ChinchiroRules {
   rounds: number;            // ラウンド数（0 = 上限なし、任意入力可）
   startPoints: number;       // 初期持ち点（任意入力可）
@@ -144,6 +158,7 @@ export type GameRulesMap = {
   shogi: ShogiRules;
   chess: ChessRules;
   igo: IgoRules;
+  werewolf: WerewolfRules;
   chinchiro: ChinchiroRules;
   roulette: RouletteRules;
 };
