@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Coins, Minus, Plus, Shield, Trophy } from 'lucide-react';
 import type { BlackjackClientState, BlackjackResult } from '../../games/blackjack';
 import { PlayingCard } from '../PlayingCard';
@@ -37,14 +37,20 @@ export const BlackjackBoard: React.FC<BlackjackBoardProps> = ({ state, onAction 
   const step = Math.max(1, state.rules.minBet);
 
   const [betAmount, setBetAmount] = useState<number>(minBet);
+  const prevMyIdRef = useRef<string>(state.myId);
 
   useEffect(() => {
+    if (prevMyIdRef.current !== state.myId) {
+      prevMyIdRef.current = state.myId;
+      setBetAmount(minBet);
+      return;
+    }
     setBetAmount((prev) => {
       if (myChips <= 0) return 0;
       if (prev < minBet || prev > myChips) return minBet;
       return prev;
     });
-  }, [minBet, myChips, state.round, state.subPhase]);
+  }, [state.myId, minBet, myChips, state.round, state.subPhase]);
 
   const clampBet = (v: number) => Math.max(minBet, Math.min(myChips, v));
   const doubleBet = clampBet(minBet * 2);
@@ -204,11 +210,23 @@ export const BlackjackBoard: React.FC<BlackjackBoardProps> = ({ state, onAction 
                   {isMe ? ' (あなた)' : ''}
                 </strong>
                 {badge ? (
-                  <span
-                    className="flag-badge"
-                    style={{ background: badge.bg, color: badge.color, fontSize: 10, padding: '2px 7px' }}
-                  >
-                    {badge.label}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    {p.hand.length > 0 && (
+                      <span
+                        className={`flag-badge ${
+                          p.eval.isBust ? 'danger' : p.eval.isBlackjack ? 'warn' : 'info'
+                        }`}
+                        style={{ fontSize: 10, padding: '2px 6px' }}
+                      >
+                        {p.eval.isBlackjack ? '21' : p.eval.total}
+                      </span>
+                    )}
+                    <span
+                      className="flag-badge"
+                      style={{ background: badge.bg, color: badge.color, fontSize: 10, padding: '2px 7px' }}
+                    >
+                      {badge.label}
+                    </span>
                   </span>
                 ) : p.hand.length > 0 ? (
                   <span
@@ -238,14 +256,36 @@ export const BlackjackBoard: React.FC<BlackjackBoardProps> = ({ state, onAction 
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
+                  alignItems: 'center',
                   fontSize: 11,
                   color: 'var(--text-muted)',
+                  gap: 6,
                 }}
               >
                 <span>チップ: {p.chips}</span>
-                <span style={{ color: p.bet > 0 ? '#fde68a' : undefined }}>
-                  BET: {p.bet}
-                </span>
+                {badge ? (
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      color:
+                        p.lastNet > 0
+                          ? '#6ee7b7'
+                          : p.lastNet < 0
+                          ? '#fca5a5'
+                          : '#cbd5e1',
+                    }}
+                  >
+                    {p.lastNet > 0
+                      ? `+${p.lastNet}`
+                      : p.lastNet < 0
+                      ? `${p.lastNet}`
+                      : '±0'}
+                  </span>
+                ) : (
+                  <span style={{ color: p.bet > 0 ? '#fde68a' : undefined }}>
+                    BET: {p.bet}
+                  </span>
+                )}
               </div>
 
               {p.hand.length > 0 && (

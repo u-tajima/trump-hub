@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Coins, Eye, EyeOff, Minus, Plus, Trophy } from 'lucide-react';
 import type { IndianPokerClientState } from '../../games/indianPoker';
 import { formatCardShort } from '../../types/card';
@@ -23,16 +23,26 @@ export const IndianPokerBoard: React.FC<IndianPokerBoardProps> = ({ state, onAct
   const toCall = me ? Math.max(0, state.highestBet - me.currentBet) : 0;
   const maxRaise = Math.max(0, (me?.chips ?? 0) - toCall);
   const minRaise = Math.min(maxRaise, ante);
+  const hasOpponentWithChips = opponents.some(
+    (p) => !p.folded && !p.eliminated && p.chips > 0
+  );
+  const canRaise = maxRaise > 0 && hasOpponentWithChips;
 
   const [raiseAmount, setRaiseAmount] = useState<number>(minRaise);
+  const prevMyIdRef = useRef<string>(state.myId);
 
   useEffect(() => {
+    if (prevMyIdRef.current !== state.myId) {
+      prevMyIdRef.current = state.myId;
+      setRaiseAmount(minRaise);
+      return;
+    }
     setRaiseAmount((prev) => {
       if (maxRaise <= 0) return 0;
       if (prev < minRaise || prev > maxRaise) return minRaise;
       return prev;
     });
-  }, [minRaise, maxRaise, state.round, state.subPhase]);
+  }, [state.myId, minRaise, maxRaise, state.round, state.subPhase]);
 
   const clampRaise = (v: number) => Math.max(minRaise, Math.min(maxRaise, v));
   const raise1x = clampRaise(ante);
@@ -258,7 +268,7 @@ export const IndianPokerBoard: React.FC<IndianPokerBoardProps> = ({ state, onAct
             <span>{toCall > 0 ? `コール必要額: ${toCall}` : 'チェック可能'}</span>
           </div>
 
-          {isMyTurn && maxRaise > 0 && (
+          {isMyTurn && canRaise && (
             <div className="bet-adjuster">
               <div className="bet-adjuster-top">
                 <span>{toCall === 0 ? 'ベット額（アンティ単位）' : '上乗せレイズ額'}</span>
@@ -361,8 +371,8 @@ export const IndianPokerBoard: React.FC<IndianPokerBoardProps> = ({ state, onAct
             </button>
             <button
               type="button"
-              className={isAllIn ? 'danger-btn' : 'primary-btn'}
-              disabled={!isMyTurn || maxRaise <= 0}
+              className={isAllIn && canRaise ? 'danger-btn' : 'primary-btn'}
+              disabled={!isMyTurn || !canRaise}
               onClick={() => onAction({ type: 'raise', payload: { amount: raiseAmount } })}
             >
               {isAllIn

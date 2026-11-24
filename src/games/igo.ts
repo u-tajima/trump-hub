@@ -134,21 +134,36 @@ function getGroupAndLiberties(board: IgoCell[][], startRow: number, startCol: nu
 }
 
 export function initIgo(playersInfo: PlayerInfo[], rules: IgoRules): IgoInternalState {
+  const p1Info = playersInfo[0] ?? {
+    id: 'p1',
+    name: '黒（先手）',
+    isHost: true,
+    isBot: false,
+    connected: true,
+  };
+  const p2Info = playersInfo[1] ?? {
+    id: 'p2',
+    name: '白（後手）',
+    isHost: false,
+    isBot: true,
+    connected: true,
+  };
+
   const n = rules.boardSize;
   const board: IgoCell[][] = Array.from({ length: n }, () => Array<IgoCell>(n).fill(0));
   const players: [IgoPlayerState, IgoPlayerState] = [
     {
-      id: playersInfo[0].id,
-      name: playersInfo[0].name,
-      isBot: playersInfo[0].isBot,
+      id: p1Info.id,
+      name: p1Info.name,
+      isBot: p1Info.isBot,
       color: 1,
       captures: 0,
       scoringAgreed: false,
     },
     {
-      id: playersInfo[1].id,
-      name: playersInfo[1].name,
-      isBot: playersInfo[1].isBot,
+      id: p2Info.id,
+      name: p2Info.name,
+      isBot: p2Info.isBot,
       color: 2,
       captures: 0,
       scoringAgreed: false,

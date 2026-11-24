@@ -128,6 +128,7 @@ export const ShogiBoard: React.FC<ShogiBoardProps> = ({
   }, [isMyTurn, selection, state.legalMoves]);
 
   const handleCellClick = (row: number, col: number) => {
+    if (pendingPromotion) return;
     if (!isMyTurn) return;
 
     const coordKey = `${row},${col}`;
@@ -525,7 +526,11 @@ export const ShogiBoard: React.FC<ShogiBoardProps> = ({
           aria-label="投了確認"
         >
           <div className="shogi-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="shogi-modal-title">投了しますか？</div>
+            <div className="shogi-modal-title">
+              {isLocalPassAndPlay
+                ? `${currentPlayer.name}（${currentPlayer.side === 1 ? '先手' : '後手'}）が投了しますか？`
+                : '投了しますか？'}
+            </div>
             <div className="shogi-confirm-actions">
               <button
                 type="button"

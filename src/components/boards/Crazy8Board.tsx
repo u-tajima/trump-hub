@@ -51,6 +51,12 @@ export const Crazy8Board: React.FC<Crazy8BoardProps> = ({ state, onAction }) => 
     if (!card) return;
 
     if (card.rank === 8) {
+      if (state.myHand.length === 1) {
+        onAction({ type: 'play', payload: { cardId } });
+        setPendingEightId(null);
+        setSelectedCardId(null);
+        return;
+      }
       setSelectedCardId(cardId);
       setPendingEightId(cardId);
       return;
@@ -67,11 +73,12 @@ export const Crazy8Board: React.FC<Crazy8BoardProps> = ({ state, onAction }) => 
 
   const handlePlaySelected = () => {
     if (!isMyTurn || !activeSelectedCard) return;
-    if (activeSelectedCard.rank === 8) {
+    if (activeSelectedCard.rank === 8 && state.myHand.length > 1) {
       setPendingEightId(activeSelectedCard.id);
       return;
     }
     onAction({ type: 'play', payload: { cardId: activeSelectedCard.id } });
+    setPendingEightId(null);
     setSelectedCardId(null);
   };
 
@@ -194,7 +201,7 @@ export const Crazy8Board: React.FC<Crazy8BoardProps> = ({ state, onAction }) => 
         </div>
       </div>
 
-      {isMyTurn && activePendingEight && (
+      {isMyTurn && activePendingEight && state.myHand.length > 1 && (
         <div
           className="card-panel"
           style={{
@@ -304,7 +311,7 @@ export const Crazy8Board: React.FC<Crazy8BoardProps> = ({ state, onAction }) => 
               onClick={handlePlaySelected}
             >
               {activeSelectedCard
-                ? activeSelectedCard.rank === 8
+                ? activeSelectedCard.rank === 8 && state.myHand.length > 1
                   ? `${formatCardShort(activeSelectedCard)} でスート選択`
                   : `${formatCardShort(activeSelectedCard)} を出す`
                 : playableIds.size > 0

@@ -297,6 +297,7 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
   // 物理シミュレーション状態（60fpsループ専用）
   const simRef = useRef<{
     puck: PuckBody;
+    guestTargetPuck: PuckBody & { hasSnapshot: boolean };
     mallets: [MalletBody, MalletBody];
     trail: { x: number; y: number }[];
     sparks: Spark[];
@@ -310,6 +311,7 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
     lastGoalSeqSeen: number;
   }>({
     puck: { x: TABLE_W / 2, y: TABLE_H / 2, vx: 0, vy: 0 },
+    guestTargetPuck: { x: TABLE_W / 2, y: TABLE_H / 2, vx: 0, vy: 0, hasSnapshot: false },
     mallets: [
       { x: TABLE_W / 2, y: TABLE_H - 150, vx: 0, vy: 0, targetX: TABLE_W / 2, targetY: TABLE_H - 150 },
       { x: TABLE_W / 2, y: 150, vx: 0, vy: 0, targetX: TABLE_W / 2, targetY: 150 },
@@ -351,6 +353,7 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
     if (state.scores[0] === 0 && state.scores[1] === 0 && state.lastGoalSeq === 0) {
       const sim = simRef.current;
       sim.puck = { x: TABLE_W / 2, y: TABLE_H / 2, vx: 0, vy: 0 };
+      sim.guestTargetPuck = { x: TABLE_W / 2, y: TABLE_H / 2, vx: 0, vy: 0, hasSnapshot: false };
       sim.mallets[0] = {
         x: TABLE_W / 2,
         y: TABLE_H - 150,
@@ -375,6 +378,17 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
     }
   }, [state.scores, state.lastGoalSeq]);
 
+  // プレイ中以外はポインタ追跡と視覚エフェクトをクリア
+  useEffect(() => {
+    if (state.phase !== 'playing') {
+      pointersRef.current.clear();
+      const sim = simRef.current;
+      sim.goalFlashAlpha = 0;
+      sim.sparks = [];
+      sim.ripples = [];
+    }
+  }, [state.phase]);
+
   // オンライン同期スナップショット受信反映
   useEffect(() => {
     const snap = state.syncSnapshot;
@@ -382,8 +396,19 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
     const sim = simRef.current;
 
     if (isOnlineGuest) {
-      sim.puck.x = snap.puckX;
-      sim.puck.y = snap.puckY;
+      const jumpDist = Math.hypot(snap.puckX - sim.puck.x, snap.puckY - sim.puck.y);
+      const shouldSnapDirectly = !sim.guestTargetPuck.hasSnapshot || jumpDist > 180;
+      sim.guestTargetPuck = {
+        x: snap.puckX,
+        y: snap.puckY,
+        vx: snap.puckVx,
+        vy: snap.puckVy,
+        hasSnapshot: true,
+      };
+      if (shouldSnapDirectly) {
+        sim.puck.x = snap.puckX;
+        sim.puck.y = snap.puckY;
+      }
       sim.puck.vx = snap.puckVx;
       sim.puck.vy = snap.puckVy;
       sim.mallets[0].targetX = snap.mallet0X;
@@ -520,62 +545,94 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
         } else {
           const puck = sim.puck;
           let scoredBy: 0 | 1 | null = null;
+          const minX = WALL_PAD + PUCK_R;
+          const maxX = TABLE_W - WALL_PAD - PUCK_R;
+          const minY = WALL_PAD + PUCK_R;
+          const maxY = TABLE_H - WALL_PAD - PUCK_R;
+          const goalMinX = GOAL_LEFT + PUCK_R;
+          const goalMaxX = GOAL_RIGHT - PUCK_R;
 
-          for (let sub = 0; sub < SUBSTEPS; sub++) {
-            puck.x += puck.vx / SUBSTEPS;
-            puck.y += puck.vy / SUBSTEPS;
+          const resolvePuckWallsAndGoal = (prevY: number, emitEffects: boolean): 0 | 1 | null => {
+            const inGoalEntranceX =
+              puck.x > GOAL_LEFT + PUCK_R * 0.4 && puck.x < GOAL_RIGHT - PUCK_R * 0.4;
+            const wasInTopMouth = prevY < minY;
+            const wasInBottomMouth = prevY > maxY;
+            const inTopMouth = puck.y < minY && (wasInTopMouth || inGoalEntranceX);
+            const inBottomMouth = puck.y > maxY && (wasInBottomMouth || inGoalEntranceX);
+
+            if (inTopMouth || inBottomMouth) {
+              // ゴール開口部内ではポスト内壁でX方向を反射させ、テーブル内へテレポートさせない
+              if (puck.x < goalMinX) {
+                puck.x = goalMinX;
+                if (puck.vx < 0) {
+                  puck.vx = -puck.vx * 0.92;
+                  if (emitEffects) {
+                    spawnHitEffects(puck.x - PUCK_R, puck.y, inTopMouth ? '#fb7185' : '#22d3ee', 5);
+                  }
+                }
+              } else if (puck.x > goalMaxX) {
+                puck.x = goalMaxX;
+                if (puck.vx > 0) {
+                  puck.vx = -puck.vx * 0.92;
+                  if (emitEffects) {
+                    spawnHitEffects(puck.x + PUCK_R, puck.y, inTopMouth ? '#fb7185' : '#22d3ee', 5);
+                  }
+                }
+              }
+
+              if (inTopMouth && puck.y < -PUCK_R) {
+                return 0; // 下側プレイヤー(0)が上ゴールに得点
+              }
+              if (inBottomMouth && puck.y > TABLE_H + PUCK_R) {
+                return 1; // 上側プレイヤー(1)が下ゴールに得点
+              }
+              return null;
+            }
 
             // 左右壁反射
-            const minX = WALL_PAD + PUCK_R;
-            const maxX = TABLE_W - WALL_PAD - PUCK_R;
             if (puck.x < minX) {
               puck.x = minX;
               if (puck.vx < 0) {
                 puck.vx = -puck.vx * 0.92;
-                spawnHitEffects(puck.x - PUCK_R, puck.y, '#38bdf8', 5);
+                if (emitEffects) spawnHitEffects(puck.x - PUCK_R, puck.y, '#38bdf8', 5);
               }
             } else if (puck.x > maxX) {
               puck.x = maxX;
               if (puck.vx > 0) {
                 puck.vx = -puck.vx * 0.92;
-                spawnHitEffects(puck.x + PUCK_R, puck.y, '#38bdf8', 5);
+                if (emitEffects) spawnHitEffects(puck.x + PUCK_R, puck.y, '#38bdf8', 5);
               }
             }
 
-            // 上下壁 & ゴール判定
-            const inGoalX = puck.x > GOAL_LEFT + PUCK_R * 0.4 && puck.x < GOAL_RIGHT - PUCK_R * 0.4;
-            const minY = WALL_PAD + PUCK_R;
-            const maxY = TABLE_H - WALL_PAD - PUCK_R;
-
+            // 上下壁反射（ゴール開口部外）
             if (puck.y < minY) {
-              if (inGoalX) {
-                if (puck.y < -PUCK_R) {
-                  scoredBy = 0; // 下側プレイヤー(0)が上ゴールに得点
-                  break;
-                }
-              } else {
-                puck.y = minY;
-                if (puck.vy < 0) {
-                  puck.vy = -puck.vy * 0.92;
-                  spawnHitEffects(puck.x, puck.y - PUCK_R, '#fb7185', 5);
-                }
+              puck.y = minY;
+              if (puck.vy < 0) {
+                puck.vy = -puck.vy * 0.92;
+                if (emitEffects) spawnHitEffects(puck.x, puck.y - PUCK_R, '#fb7185', 5);
               }
             } else if (puck.y > maxY) {
-              if (inGoalX) {
-                if (puck.y > TABLE_H + PUCK_R) {
-                  scoredBy = 1; // 上側プレイヤー(1)が下ゴールに得点
-                  break;
-                }
-              } else {
-                puck.y = maxY;
-                if (puck.vy > 0) {
-                  puck.vy = -puck.vy * 0.92;
-                  spawnHitEffects(puck.x, puck.y + PUCK_R, '#22d3ee', 5);
-                }
+              puck.y = maxY;
+              if (puck.vy > 0) {
+                puck.vy = -puck.vy * 0.92;
+                if (emitEffects) spawnHitEffects(puck.x, puck.y + PUCK_R, '#22d3ee', 5);
               }
             }
 
+            return null;
+          };
+
+          for (let sub = 0; sub < SUBSTEPS; sub++) {
+            const prevY = puck.y;
+            puck.x += puck.vx / SUBSTEPS;
+            puck.y += puck.vy / SUBSTEPS;
+
+            scoredBy = resolvePuckWallsAndGoal(prevY, true);
+            if (scoredBy !== null) break;
+
             // マレット vs パック衝突
+            let collidedWithMallet = false;
+            const prePushY = puck.y;
             for (let mIdx = 0; mIdx < 2; mIdx++) {
               const m = sim.mallets[mIdx];
               const dx = puck.x - m.x;
@@ -584,6 +641,7 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
               const distSq = dx * dx + dy * dy;
 
               if (distSq < minDist * minDist && distSq > 0.0001) {
+                collidedWithMallet = true;
                 const dist = Math.sqrt(distSq);
                 const nx = dx / dist;
                 const ny = dy / dist;
@@ -619,6 +677,12 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
                 const hitColor = mIdx === 0 ? '#22d3ee' : '#fb7185';
                 spawnHitEffects(m.x + nx * MALLET_R, m.y + ny * MALLET_R, hitColor, 10);
               }
+            }
+
+            // マレット衝突押し出し後の壁クランプ＆ゴール判定
+            if (collidedWithMallet) {
+              scoredBy = resolvePuckWallsAndGoal(prePushY, false);
+              if (scoredBy !== null) break;
             }
           }
 
@@ -656,11 +720,55 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
             const rally = sim.rallyCount;
             sim.rallyCount = 0;
 
+            // ホスト側の useEffect によるゴール演出二重発火を防止
+            sim.lastGoalSeqSeen = curState.lastGoalSeq + 1;
+
             dispatchAction(
               { type: 'goal', payload: { scorerIndex: scoredBy, rallyCount: rally } },
               curLocal ? curState.players[scoredBy].id : undefined
             );
           }
+        }
+      } else if (curState.phase === 'playing' && curGuest) {
+        // オンラインゲスト: 60fpsデッドレコニング＋スナップショットへの滑らか補間
+        if (sim.goalPauseFrames > 0) {
+          sim.goalPauseFrames -= 1;
+        } else if (sim.guestTargetPuck.hasSnapshot) {
+          const gt = sim.guestTargetPuck;
+          const minX = WALL_PAD + PUCK_R;
+          const maxX = TABLE_W - WALL_PAD - PUCK_R;
+          const minY = WALL_PAD + PUCK_R;
+          const maxY = TABLE_H - WALL_PAD - PUCK_R;
+
+          gt.x += gt.vx;
+          gt.y += gt.vy;
+          gt.vx *= friction;
+          gt.vy *= friction;
+
+          if (gt.x < minX) {
+            gt.x = minX;
+            if (gt.vx < 0) gt.vx = -gt.vx * 0.92;
+          } else if (gt.x > maxX) {
+            gt.x = maxX;
+            if (gt.vx > 0) gt.vx = -gt.vx * 0.92;
+          }
+          const inGoalX = gt.x > GOAL_LEFT + PUCK_R * 0.4 && gt.x < GOAL_RIGHT - PUCK_R * 0.4;
+          if (!inGoalX) {
+            if (gt.y < minY) {
+              gt.y = minY;
+              if (gt.vy < 0) gt.vy = -gt.vy * 0.92;
+            } else if (gt.y > maxY) {
+              gt.y = maxY;
+              if (gt.vy > 0) gt.vy = -gt.vy * 0.92;
+            }
+          }
+
+          sim.puck.x += sim.puck.vx;
+          sim.puck.y += sim.puck.vy;
+          sim.puck.x += (gt.x - sim.puck.x) * 0.32;
+          sim.puck.y += (gt.y - sim.puck.y) * 0.32;
+          sim.puck.vx *= friction;
+          sim.puck.vy *= friction;
         }
       }
 
@@ -824,7 +932,6 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (state.phase !== 'playing') return;
-    e.currentTarget.setPointerCapture(e.pointerId);
     const pt = toTableCoords(e.clientX, e.clientY);
 
     let side: 'bottom' | 'top';
@@ -836,6 +943,12 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
       side = 'bottom';
     }
 
+    // 同一サイドにつきアクティブな指は1本のみ追跡（2本目の指は無視）
+    for (const activeSide of pointersRef.current.values()) {
+      if (activeSide === side) return;
+    }
+
+    e.currentTarget.setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, side);
     updateMalletFromPointer(side, pt.x, pt.y);
   };
@@ -855,19 +968,21 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
   const bottomPlayer = rotatedView ? state.players[1] : state.players[0];
   const topScore = rotatedView ? state.scores[0] : state.scores[1];
   const bottomScore = rotatedView ? state.scores[1] : state.scores[0];
+  const topColorClass = rotatedView ? 'bottom' : 'top';
+  const bottomColorClass = rotatedView ? 'top' : 'bottom';
 
   const winnerName = state.players.find((p) => p.id === state.winnerId)?.name ?? '';
 
   return (
     <div className="airhockey-arena">
-      <div className={`airhockey-bar top ${isLocalPassAndPlay ? 'flipped' : ''}`}>
+      <div className={`airhockey-bar ${topColorClass} ${isLocalPassAndPlay ? 'flipped' : ''}`}>
         <div className="airhockey-bar-left">
-          <span className="airhockey-dot top" />
+          <span className={`airhockey-dot ${topColorClass}`} />
           <span className="airhockey-name">{topPlayer.name}</span>
         </div>
         <div className="airhockey-bar-right">
           <span className="airhockey-target-tag">{state.rules.winScore}点先取</span>
-          <span className="airhockey-score top">{topScore}</span>
+          <span className={`airhockey-score ${topColorClass}`}>{topScore}</span>
         </div>
       </div>
 
@@ -881,6 +996,7 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
+          onLostPointerCapture={handlePointerUp}
         />
 
         {state.phase === 'playing' && (
@@ -907,16 +1023,16 @@ export const AirHockeyBoard: React.FC<AirHockeyBoardProps> = ({
         )}
       </div>
 
-      <div className="airhockey-bar bottom">
+      <div className={`airhockey-bar ${bottomColorClass}`}>
         <div className="airhockey-bar-left">
-          <span className="airhockey-dot bottom" />
+          <span className={`airhockey-dot ${bottomColorClass}`} />
           <span className="airhockey-name">{bottomPlayer.name}</span>
         </div>
         <div className="airhockey-bar-right">
           <span className="airhockey-target-tag">
             {state.rules.puckSpeed === 'fast' ? 'ハイスピード' : '標準速度'}
           </span>
-          <span className="airhockey-score bottom">{bottomScore}</span>
+          <span className={`airhockey-score ${bottomColorClass}`}>{bottomScore}</span>
         </div>
       </div>
     </div>

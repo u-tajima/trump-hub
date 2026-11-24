@@ -499,10 +499,17 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
     rotatedView,
   };
 
-  // 新しいショットが届いたら60fps物理再生を開始
+  // 新しいショットが届いたら60fps物理再生を開始（リスタート時はアニメ状態をリセット）
   useEffect(() => {
     const shot = state.lastShot;
-    if (!shot || shot.shotId === lastPlayedShotIdRef.current) return;
+    if (!shot) {
+      lastPlayedShotIdRef.current = 0;
+      animRef.current.active = false;
+      setIsAnimating(false);
+      setToastText(null);
+      return;
+    }
+    if (shot.shotId === lastPlayedShotIdRef.current) return;
     lastPlayedShotIdRef.current = shot.shotId;
 
     animRef.current = {

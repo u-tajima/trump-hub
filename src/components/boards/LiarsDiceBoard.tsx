@@ -115,7 +115,7 @@ function computeDefaultBid(currentBid: LiarsDiceBid | null, totalDice: number, o
 
 export const LiarsDiceBoard: React.FC<LiarsDiceBoardProps> = ({ state, onAction }) => {
   const current = state.players[state.turnIndex];
-  const me = state.players.find((p) => p.id === state.myId) ?? state.players[0];
+  const me = state.players.find((p) => p.id === state.myId) ?? null;
   const isMyTurn =
     state.phase === 'playing' &&
     state.subPhase === 'bidding' &&
@@ -142,8 +142,12 @@ export const LiarsDiceBoard: React.FC<LiarsDiceBoardProps> = ({ state, onAction 
     totalDice
   );
 
-  const minQty = state.currentBid ? state.currentBid.quantity : 1;
   const maxQty = Math.max(1, totalDice);
+  const minQty = state.currentBid
+    ? state.currentBid.face >= 6
+      ? Math.min(maxQty, state.currentBid.quantity + 1)
+      : state.currentBid.quantity
+    : 1;
 
   const handleSelectFace = (face: number) => {
     setDraftFace(face);

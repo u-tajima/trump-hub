@@ -103,7 +103,8 @@ function canPlaceShip(
   length: number,
   horizontal: boolean
 ): boolean {
-  if (row < 0 || col < 0) return false;
+  if (!Number.isInteger(row) || !Number.isInteger(col)) return false;
+  if (row < 0 || col < 0 || row >= boardSize || col >= boardSize) return false;
   if (horizontal && col + length > boardSize) return false;
   if (!horizontal && row + length > boardSize) return false;
 

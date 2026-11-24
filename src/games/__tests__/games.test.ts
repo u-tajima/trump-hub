@@ -1064,4 +1064,79 @@ describe('11 new games engines (Action, Card, Board, Dice)', () => {
     state = applyLiarsDiceAction(state, 'p2', { type: 'challenge' }).state;
     expect(state.subPhase).toBe('reveal');
   });
+
+  it('Regression checks from full audit: Werewolf balance/mask, IndianPoker spectator/sidepot, Battleship/Dots bounds, Carrom bot delay', () => {
+    // 1. Werewolf: 5人(人狼2・妖狐1)設定でも開始時点で aliveWolves < aliveHumans が成立
+    const wPlayers = makePlayers(5);
+    const wState = initWerewolf(wPlayers, {
+      ...GAME_REGISTRY.werewolf.defaultRules,
+      werewolfCount: 2,
+      foxCount: 1,
+      seerCount: 1,
+      bodyguardCount: 0,
+      mediumCount: 0,
+      madmanCount: 0,
+    });
+    const wolves = wState.players.filter((p) => p.role === 'werewolf').length;
+    const humans = wState.players.filter((p) => p.role !== 'werewolf' && p.role !== 'fox').length;
+    expect(wolves).toBeLessThan(humans);
+    // 進行中の呪殺死因がマスクされること
+    wState.players[4].alive = false;
+    wState.players[4].deathCause = 'cursed';
+    const wView = sanitizeWerewolfState(wState, 'p1');
+    expect(wView.players[4].deathCause).toBe('attacked');
+    // 非ホストによる進行操作は拒否されること
+    wState.subPhase = 'discussion';
+    const nonHostAttempt = applyWerewolfAction(wState, 'p2', { type: 'startVoting' });
+    expect(nonHostAttempt.error).toBeDefined();
+
+    // 2. IndianPoker: __spectator__ 視点で全員のカードが null になること
+    const ipPlayers = makePlayers(2);
+    const ipState = initIndianPoker(ipPlayers, { rounds: 5, startChips: 1000, ante: 20 });
+    const specView = sanitizeIndianPokerState(ipState, SPECTATOR_VIEW_ID);
+    expect(specView.players.every((p) => p.card === null)).toBe(true);
+    // サイドポット/超過ベット返還: 小額スタック(100)が勝っても相手の未カバー分(900)は返還される
+    ipState.players[0].chips = 80;
+    ipState.players[0].currentBet = 0;
+    ipState.players[0].totalCommitted = 20;
+    ipState.players[0].card = c('spade', 1); // A (最強)
+    ipState.players[1].chips = 980;
+    ipState.players[1].currentBet = 0;
+    ipState.players[1].totalCommitted = 20;
+    ipState.players[1].card = c('club', 2); // 2 (最弱)
+    ipState.pot = 40;
+    ipState.turnIndex = 1;
+    let ipAfter = applyIndianPokerAction(ipState, 'p2', { type: 'raise', payload: { amount: 500 } }).state;
+    ipAfter = applyIndianPokerAction(ipAfter, 'p1', { type: 'call' }).state;
+    expect(ipAfter.subPhase).toBe('showdown');
+    expect(ipAfter.players[0].chips).toBe(200); // 100 + 100
+    expect(ipAfter.players[1].chips).toBe(900); // 1000 - 100 (超過分420返還)
+
+    // 3. Battleship: 盤面外・非整数座標配置を拒否
+    const bsState = initBattleship(makePlayers(2), { boardSize: 8, extraTurnOnHit: true });
+    const outRes = applyBattleshipAction(bsState, 'p1', {
+      type: 'placeShip',
+      payload: { shipId: bsState.players[0].ships[0].id, row: 99, col: 0, horizontal: true },
+    });
+    expect(outRes.error).toBeDefined();
+    const floatRes = applyBattleshipAction(bsState, 'p1', {
+      type: 'placeShip',
+      payload: { shipId: bsState.players[0].ships[0].id, row: 1.5, col: 0, horizontal: true },
+    });
+    expect(floatRes.error).toBeDefined();
+
+    // 4. DotsAndBoxes: 非整数座標を拒否
+    const dbState = initDotsAndBoxes(makePlayers(2), { gridSize: 3 });
+    const dbBad = applyDotsAndBoxesAction(dbState, 'p1', {
+      type: 'drawLine',
+      payload: { kind: 'h', row: Number.NaN, col: 0 },
+    });
+    expect(dbBad.error).toBeDefined();
+
+    // 5. Carrom: ショット後に nextBotActionAt が設定される
+    const crState = initCarrom(makePlayers(2), { piecesPerSide: 5, queenBonus: 3 });
+    const crAct = computeCarromBotAction(crState)!;
+    const crAfter = applyCarromAction(crState, 'p1', crAct).state;
+    expect(crAfter.nextBotActionAt).toBeGreaterThan(Date.now() - 100);
+  });
 });

@@ -219,12 +219,23 @@ export function buildWerewolfRoleDeck(
     villager: 0,
   };
 
-  // 人狼は最低1人、最大で floor((N-1)/2) まで（開始即人狼勝利を防ぐ）
-  const maxWolves = Math.max(1, Math.floor((playerCount - 1) / 2));
+  // 開始時点で必ず aliveWolves < aliveHumans（妖狐は人間数から除外）を満たすよう調整
+  // 条件: 2 * werewolf + fox <= playerCount - 1
+  const maxFox = Math.max(0, playerCount - 3);
+  counts.fox = Math.max(0, Math.min(maxFox, Math.trunc(rules.foxCount || 0)));
+
+  const maxWolves = Math.max(1, Math.floor((playerCount - counts.fox - 1) / 2));
   counts.werewolf = Math.max(1, Math.min(maxWolves, Math.trunc(rules.werewolfCount || 1)));
 
-  let remaining = playerCount - counts.werewolf;
-  const assign = (role: Exclude<WerewolfRole, 'werewolf' | 'villager'>, requested: number) => {
+  while (counts.fox > 0 && playerCount - counts.fox - counts.werewolf <= counts.werewolf) {
+    counts.fox -= 1;
+  }
+
+  let remaining = Math.max(0, playerCount - counts.werewolf - counts.fox);
+  const assign = (
+    role: Exclude<WerewolfRole, 'werewolf' | 'fox' | 'villager'>,
+    requested: number
+  ) => {
     const n = Math.max(0, Math.min(remaining, Math.trunc(requested || 0)));
     counts[role] = n;
     remaining -= n;
@@ -234,7 +245,6 @@ export function buildWerewolfRoleDeck(
   assign('bodyguard', rules.bodyguardCount);
   assign('medium', rules.mediumCount);
   assign('madman', rules.madmanCount);
-  assign('fox', rules.foxCount);
   counts.villager = Math.max(0, remaining);
 
   const deck: WerewolfRole[] = [];
@@ -702,6 +712,9 @@ export function applyWerewolfAction(
   // 2. 朝の結果発表フェーズ
   if (state.subPhase === 'morning') {
     if (action.type === 'startDiscussion' || action.type === 'advancePhase') {
+      if (!actor.isHost) {
+        return { state, error: 'ホストのみ進行できます' };
+      }
       return { state: enterDiscussion(state) };
     }
     return { state, error: '朝の結果発表中です' };
@@ -722,6 +735,9 @@ export function applyWerewolfAction(
     }
 
     if (action.type === 'startVoting' || action.type === 'advancePhase') {
+      if (!actor.isHost) {
+        return { state, error: 'ホストのみ進行できます' };
+      }
       const log = `${state.day}日目の投票：追放するプレイヤーを選んでください`;
       return {
         state: {
@@ -785,6 +801,9 @@ export function applyWerewolfAction(
   // 5. 処刑結果発表フェーズ
   if (state.subPhase === 'execution') {
     if (action.type === 'startNight' || action.type === 'advancePhase') {
+      if (!actor.isHost) {
+        return { state, error: 'ホストのみ進行できます' };
+      }
       return { state: enterNight(state, true) };
     }
     return { state, error: '処刑結果の確認中です' };
@@ -925,7 +944,7 @@ export function sanitizeWerewolfState(
       name: p.name,
       isHost: p.isHost,
       alive: p.alive,
-      deathCause: p.deathCause,
+      deathCause: !isFinished && p.deathCause === 'cursed' ? 'attacked' : p.deathCause,
       deathDay: p.deathDay,
       ready: p.ready,
       hasVoted: Boolean(state.votes[p.id]),

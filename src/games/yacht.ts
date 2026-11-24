@@ -309,13 +309,25 @@ export function applyYachtAction(
 
     if (allDone) {
       const ranked = [...nextPlayers].sort((a, b) => b.total - a.total);
+      let finishLog: string;
+      if (nextPlayers.length === 1) {
+        finishLog = `ゲーム終了！スコア: ${ranked[0].total}点`;
+      } else {
+        const topScore = ranked[0].total;
+        const winners = ranked.filter((p) => p.total === topScore);
+        if (winners.length > 1) {
+          finishLog = `全12ラウンド終了！ 同点優勝: ${winners.map((w) => w.name).join('・')} (${topScore}点)`;
+        } else {
+          finishLog = `全12ラウンド終了！ 優勝: ${winners[0].name} (${topScore}点)`;
+        }
+      }
       return {
         state: {
           ...state,
           players: nextPlayers,
           lastScored,
           phase: 'finished',
-          lastLog: `全12ラウンド終了！ 優勝: ${ranked[0].name} (${ranked[0].total}点)`,
+          lastLog: finishLog,
         },
       };
     }

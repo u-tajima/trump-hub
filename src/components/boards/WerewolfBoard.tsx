@@ -114,6 +114,10 @@ export const WerewolfBoard: React.FC<WerewolfBoardProps> = ({
       ),
     [state.players, state.myId, state.fellowWolfIds]
   );
+  const aliveFellowWolves = useMemo(
+    () => fellowWolves.filter((w) => w.alive),
+    [fellowWolves]
+  );
 
   // 投票対象候補
   const voteCandidates = useMemo(() => {
@@ -416,7 +420,11 @@ export const WerewolfBoard: React.FC<WerewolfBoardProps> = ({
             </span>
           </div>
 
-          {!state.myAlive ? (
+          {state.myRole === null ? (
+            <div className="ww-wait-box">
+              他のプレイヤーの投票完了を待っています（{votedCount}/{alivePlayers.length}人）
+            </div>
+          ) : !state.myAlive ? (
             <div className="ww-wait-box">
               あなたは脱落しているため投票に参加できません（生存者の投票待ち…）
             </div>
@@ -530,7 +538,11 @@ export const WerewolfBoard: React.FC<WerewolfBoardProps> = ({
             </div>
           )}
 
-          {!state.myAlive ? (
+          {state.myRole === null ? (
+            <div className="ww-wait-box">
+              他のプレイヤーの夜行動完了を待っています（{nightDoneCount}/{alivePlayers.length}人）
+            </div>
+          ) : !state.myAlive ? (
             <div className="ww-wait-box">
               あなたは脱落しているため観戦中です（生存者の夜行動を待っています…）
             </div>
@@ -572,10 +584,10 @@ export const WerewolfBoard: React.FC<WerewolfBoardProps> = ({
                   : '今夜護衛するプレイヤーを1人選んでください。'}
               </p>
 
-              {state.myRole === 'werewolf' && fellowWolves.length > 0 && (
+              {state.myRole === 'werewolf' && aliveFellowWolves.length > 0 && (
                 <div className="ww-secret-note">
                   仲間人狼の選択:{' '}
-                  {fellowWolves
+                  {aliveFellowWolves
                     .map((w) => {
                       const tid = state.wolfAttackVotes[w.id];
                       const tName = state.players.find((p) => p.id === tid)?.name;

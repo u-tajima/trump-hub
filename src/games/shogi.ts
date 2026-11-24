@@ -1044,17 +1044,95 @@ function evaluatePosition(
   return score;
 }
 
-function scoreMoveForOrdering(board: (ShogiPiece | null)[][], move: ShogiMove): number {
+function scoreMoveForOrdering(
+  board: (ShogiPiece | null)[][],
+  move: ShogiMove,
+  side: 1 | 2,
+  oppKing: { r: number; c: number } | null,
+  myKing: { r: number; c: number } | null
+): number {
   if (move.kind === 'move') {
+    const mover = board[move.fromRow][move.fromCol];
     const target = board[move.toRow][move.toCol];
-    let s = 0;
+    let s = 140;
+
     if (target) {
-      s += (target.promoted ? PROMOTED_VALUE[target.type] : BOARD_VALUE[target.type]) * 2;
+      const targetVal = target.promoted ? PROMOTED_VALUE[target.type] : BOARD_VALUE[target.type];
+      const moverVal = mover
+        ? mover.type === 'K'
+          ? 200
+          : mover.promoted
+            ? PROMOTED_VALUE[mover.type]
+            : BOARD_VALUE[mover.type]
+        : 100;
+      s += 860 + targetVal * 2 - moverVal * 0.1;
     }
-    if (move.promote) s += 350;
+
+    if (move.promote) {
+      s += 450;
+    }
+
+    if (mover) {
+      const moverVal =
+        mover.type === 'K'
+          ? 250
+          : mover.promoted
+            ? PROMOTED_VALUE[mover.type]
+            : BOARD_VALUE[mover.type];
+      s += Math.min(moverVal * 0.08, 90);
+    }
+
+    const forwardDelta = side === 1 ? move.fromRow - move.toRow : move.toRow - move.fromRow;
+    s += Math.max(-25, Math.min(60, forwardDelta * 20));
+    s += (4 - Math.abs(4 - move.toCol)) * 6;
+
+    if (oppKing) {
+      const distOpp = Math.max(Math.abs(move.toRow - oppKing.r), Math.abs(move.toCol - oppKing.c));
+      if (distOpp <= 2) {
+        s += (3 - distOpp) * 55;
+      }
+    }
+
     return s;
   }
-  return HAND_VALUE[move.pieceType] * 0.4;
+
+  // Drop move: keep base score modest so board moves are not crowded out,
+  // while prioritizing tactical drops near either king or along major lines.
+  let s = 40 + HAND_VALUE[move.pieceType] * 0.06;
+
+  if (oppKing) {
+    const dr = Math.abs(move.toRow - oppKing.r);
+    const dc = Math.abs(move.toCol - oppKing.c);
+    const distOpp = Math.max(dr, dc);
+    if (distOpp === 1) {
+      s += 190;
+    } else if (distOpp === 2) {
+      s += 95;
+    } else if (
+      (move.pieceType === 'R' && (dr === 0 || dc === 0)) ||
+      (move.pieceType === 'B' && dr === dc) ||
+      (move.pieceType === 'L' &&
+        dc === 0 &&
+        ((side === 1 && move.toRow > oppKing.r) || (side === 2 && move.toRow < oppKing.r)))
+    ) {
+      s += 60;
+    }
+  }
+
+  if (myKing) {
+    const distMy = Math.max(Math.abs(move.toRow - myKing.r), Math.abs(move.toCol - myKing.c));
+    if (distMy === 1) {
+      s += 120;
+    } else if (distMy === 2) {
+      s += 55;
+    }
+  }
+
+  if (inPromoZone(side, move.toRow)) {
+    s += 35;
+  }
+
+  return s;
 }
 
 function applyMoveInPlace(
@@ -1132,7 +1210,13 @@ export function computeShogiBotAction(
   const oppHand = botSide === 1 ? hand2 : hand1;
 
   // Order root moves for faster alpha-beta pruning
-  legalMoves.sort((a, b) => scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
+  const rootOppKing = findKing(board, oppSide);
+  const rootMyKing = findKing(board, botSide);
+  legalMoves.sort(
+    (a, b) =>
+      scoreMoveForOrdering(board, b, botSide, rootOppKing, rootMyKing) -
+      scoreMoveForOrdering(board, a, botSide, rootOppKing, rootMyKing)
+  );
 
   // Count existing occurrences of positions for repetition avoidance
   const keyCounts = new Map<string, number>();
@@ -1208,7 +1292,13 @@ export function computeShogiBotAction(
     }
 
     // Order opponent replies (captures/promotions first) for quick beta cutoff
-    oppMoves.sort((a, b) => scoreMoveForOrdering(board, b) - scoreMoveForOrdering(board, a));
+    const replyBotKing = findKing(board, botSide);
+    const replyOppKing = findKing(board, oppSide);
+    oppMoves.sort(
+      (a, b) =>
+        scoreMoveForOrdering(board, b, oppSide, replyBotKing, replyOppKing) -
+        scoreMoveForOrdering(board, a, oppSide, replyBotKing, replyOppKing)
+    );
     const replyLimit = Math.min(oppMoves.length, 32);
 
     let minScore = Infinity;

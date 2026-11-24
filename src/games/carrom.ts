@@ -70,6 +70,7 @@ export interface CarromInternalState {
   queenOwnerId: string | null;
   shotSeq: number;
   lastShot: CarromShotRecord | null;
+  nextBotActionAt: number;
   winnerId: string | 'draw' | null;
   phase: 'playing' | 'finished';
   lastLog: string;
@@ -271,11 +272,21 @@ function resolveCircleCollision(
   const minDist = ra + rb;
   const distSq = dx * dx + dy * dy;
 
-  if (distSq >= minDist * minDist || distSq === 0) return null;
+  if (distSq >= minDist * minDist) return null;
 
-  const dist = Math.sqrt(distSq);
-  const nx = dx / dist;
-  const ny = dy / dist;
+  let dist: number;
+  let nx: number;
+  let ny: number;
+  if (distSq === 0) {
+    // 完全重複時は微小オフセット方向へ分離
+    dist = 0;
+    nx = 1;
+    ny = 0;
+  } else {
+    dist = Math.sqrt(distSq);
+    nx = dx / dist;
+    ny = dy / dist;
+  }
 
   // めり込み補正
   const overlap = minDist - dist;
@@ -408,6 +419,15 @@ export function simulateCarromStep(
         if (hit && hit.intensity > 0.08) collisions.push(hit);
       }
     }
+
+    // 衝突押し出し後の壁クランプ
+    for (const p of pieces) {
+      if (p.pocketed) continue;
+      resolveWallBounce(p, CARROM_PIECE_RADIUS);
+    }
+    if (!striker.pocketed) {
+      resolveWallBounce(striker, CARROM_STRIKER_RADIUS);
+    }
   }
 
   // 摩擦減速
@@ -457,6 +477,7 @@ export function initCarrom(playersInfo: PlayerInfo[], rules: CarromRules): Carro
     queenOwnerId: null,
     shotSeq: 0,
     lastShot: null,
+    nextBotActionAt: 0,
     winnerId: null,
     phase: 'playing',
     lastLog: `${players[0].name} (白) のブレイクショット！`,
@@ -633,6 +654,27 @@ export function applyCarromAction(
     }
   }
 
+  // クイーン未獲得（盤上またはカバー待ち）のまま同手でクイーンを落とさずに自色最後のパックを落とした場合、
+  // 公式ルールに準じて自色パック1個を中央付近へ返却する（ペナルティ）
+  let lastPiecePenalty = false;
+  const queenOnBoardBeforeCheck = !queenPiece.pocketed || queenPendingBy !== null;
+  const ownLeftAfterShot = simPieces.filter((p) => p.color === ownColor && !p.pocketed).length;
+  if (queenOnBoardBeforeCheck && !queenPocketedThisTurn && ownLeftAfterShot === 0) {
+    const returnPiece =
+      simPieces.find((p) => p.color === ownColor && pocketedSet.has(p.id) && p.pocketed) ??
+      simPieces.find((p) => p.color === ownColor && p.pocketed);
+    if (returnPiece) {
+      const spot = findFreeCenterSpot(simPieces);
+      returnPiece.pocketed = false;
+      returnPiece.x = spot.x;
+      returnPiece.y = spot.y;
+      returnPiece.vx = 0;
+      returnPiece.vy = 0;
+      lastPiecePenalty = true;
+      events.push('クイーン未獲得で最終パック落下・1個返却');
+    }
+  }
+
   const nextPlayers = recomputePlayerScores(
     state.players,
     simPieces,
@@ -665,7 +707,10 @@ export function applyCarromAction(
 
   // 継続ターン判定
   const keepTurn =
-    phase === 'playing' && !strikerPocketed && (ownPocketed > 0 || queenPocketedThisTurn);
+    phase === 'playing' &&
+    !strikerPocketed &&
+    !lastPiecePenalty &&
+    (ownPocketed > 0 || queenPocketedThisTurn);
   const nextTurnIndex: 0 | 1 = keepTurn ? shooterIndex : shooterIndex === 0 ? 1 : 0;
 
   const summary =
@@ -710,6 +755,7 @@ export function applyCarromAction(
       queenOwnerId,
       shotSeq,
       lastShot,
+      nextBotActionAt: Date.now() + Math.ceil((steps / 60) * 1000) + 550,
       winnerId,
       phase,
       lastLog,

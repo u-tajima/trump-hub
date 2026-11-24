@@ -12,6 +12,7 @@ export interface IndianPokerPlayerState {
   chips: number;
   card: Card | null;
   currentBet: number;
+  totalCommitted: number;
   folded: boolean;
   eliminated: boolean;
   actedThisRound: boolean;
@@ -93,40 +94,69 @@ function nextActiveIndex(
 
 function resolveShowdown(state: IndianPokerInternalState): IndianPokerInternalState {
   const active = state.players.filter((p) => !p.folded && !p.eliminated);
-  let winner = active[0];
 
-  if (active.length > 1) {
-    for (const p of active) {
+  const pickBest = (candidates: IndianPokerPlayerState[]): IndianPokerPlayerState | undefined => {
+    let best = candidates[0];
+    for (const p of candidates) {
       if (
         p.card &&
-        (!winner?.card || indianPokerCardScore(p.card) > indianPokerCardScore(winner.card))
+        (!best?.card || indianPokerCardScore(p.card) > indianPokerCardScore(best.card))
       ) {
-        winner = p;
+        best = p;
       }
     }
+    return best;
+  };
+
+  const mainWinner = pickBest(active);
+  const payouts = new Map<string, number>();
+
+  const levels = Array.from(
+    new Set(state.players.filter((p) => p.totalCommitted > 0).map((p) => p.totalCommitted))
+  ).sort((a, b) => a - b);
+
+  let prevLevel = 0;
+  for (const level of levels) {
+    const delta = level - prevLevel;
+    const contributors = state.players.filter((p) => p.totalCommitted >= level);
+    const layerPot = delta * contributors.length;
+    const eligible = contributors.filter((p) => !p.folded && !p.eliminated);
+    const contenders = eligible.length > 0 ? eligible : active;
+    const layerWinner = pickBest(contenders);
+    if (layerWinner && layerPot > 0) {
+      payouts.set(layerWinner.id, (payouts.get(layerWinner.id) ?? 0) + layerPot);
+    }
+    prevLevel = level;
   }
 
-  const players = state.players.map((p) =>
-    winner && p.id === winner.id ? { ...p, chips: p.chips + state.pot } : { ...p }
-  );
+  const players = state.players.map((p) => {
+    const won = payouts.get(p.id) ?? 0;
+    return won > 0 ? { ...p, chips: p.chips + won } : { ...p };
+  });
 
   const survivors = players.filter((p) => p.chips > 0);
   const isFinalRound = state.rules.rounds > 0 && state.round >= state.rules.rounds;
   const finished = isFinalRound || survivors.length <= 1;
 
-  const winCardText = winner?.card ? ` (${formatCardShort(winner.card)})` : '';
+  const winCardText = mainWinner?.card ? ` (${formatCardShort(mainWinner.card)})` : '';
+  const payoutEntries = state.players
+    .filter((p) => (payouts.get(p.id) ?? 0) > 0)
+    .map((p) => `${p.name} +${payouts.get(p.id)}`);
+
   const log =
-    active.length === 1 && winner
-      ? `${winner.name} が全員フォールドでポット ${state.pot} を獲得！`
-      : winner
-      ? `ショーダウン！${winner.name}${winCardText} が最強でポット ${state.pot} を獲得！`
+    active.length === 1 && mainWinner
+      ? `${mainWinner.name} が全員フォールドでポット ${state.pot} を獲得！`
+      : mainWinner && payoutEntries.length > 1
+      ? `ショーダウン！${mainWinner.name}${winCardText} が最強（精算: ${payoutEntries.join(' / ')}）`
+      : mainWinner
+      ? `ショーダウン！${mainWinner.name}${winCardText} が最強でポット ${state.pot} を獲得！`
       : 'ショーダウン終了';
 
   return {
     ...state,
     players,
     subPhase: 'showdown',
-    roundWinnerId: winner?.id ?? null,
+    roundWinnerId: mainWinner?.id ?? null,
     phase: finished ? 'finished' : 'playing',
     lastLog: log,
   };
@@ -148,6 +178,7 @@ function startNewRound(
         ...p,
         card: null,
         currentBet: 0,
+        totalCommitted: 0,
         folded: true,
         eliminated: true,
         actedThisRound: true,
@@ -161,6 +192,7 @@ function startNewRound(
       chips: p.chips - antePaid,
       card,
       currentBet: 0,
+      totalCommitted: antePaid,
       folded: false,
       eliminated: false,
       actedThisRound: false,
@@ -205,6 +237,7 @@ export function initIndianPoker(
     chips: rules.startChips,
     card: null,
     currentBet: 0,
+    totalCommitted: 0,
     folded: false,
     eliminated: false,
     actedThisRound: false,
@@ -283,16 +316,27 @@ export function applyIndianPokerAction(
     const paid = Math.min(me.chips, toCall);
     me.chips -= paid;
     me.currentBet += paid;
+    me.totalCommitted += paid;
     me.actedThisRound = true;
     pot += paid;
     log = toCall === 0 ? `${me.name} がチェックしました` : `${me.name} がコール (${paid})`;
   } else if (action.type === 'raise') {
-    const rawAdd = (action.payload as { amount?: number })?.amount ?? state.rules.ante;
+    const hasOpponentWithChips = players.some(
+      (p, idx) => idx !== state.turnIndex && !p.folded && !p.eliminated && p.chips > 0
+    );
+    if (!hasOpponentWithChips) {
+      return { state, error: '相手全員がオールインのため追加レイズできません' };
+    }
+    const rawAdd = Number((action.payload as { amount?: number })?.amount ?? state.rules.ante);
+    if (!Number.isFinite(rawAdd)) {
+      return { state, error: '不正なベット額です' };
+    }
     const add = Math.max(1, Math.floor(rawAdd));
     const totalPay = Math.min(me.chips, toCall + add);
     const actualAdd = Math.max(0, totalPay - toCall);
     me.chips -= totalPay;
     me.currentBet += totalPay;
+    me.totalCommitted += totalPay;
     me.actedThisRound = true;
     pot += totalPay;
 
@@ -331,6 +375,7 @@ export function sanitizeIndianPokerState(
   playerId: string
 ): IndianPokerClientState {
   const revealAll = state.subPhase === 'showdown' || state.phase === 'finished';
+  const isParticipant = state.players.some((p) => p.id === playerId);
 
   return {
     rules: state.rules,
@@ -340,8 +385,8 @@ export function sanitizeIndianPokerState(
       name: p.name,
       isBot: p.isBot,
       chips: p.chips,
-      // インディアンポーカーの核心：betting中は自分のカードのみ null で隠し、他全員のカードは表向き公開！
-      card: revealAll ? p.card : p.id === playerId ? null : p.card,
+      // インディアンポーカーの核心：betting中は自分のカードのみ null で隠し、非参加者には全員分を隠す
+      card: revealAll ? p.card : !isParticipant || p.id === playerId ? null : p.card,
       currentBet: p.currentBet,
       folded: p.folded,
       eliminated: p.eliminated,
@@ -389,15 +434,20 @@ export function computeIndianPokerBotAction(
   const maxOppRank = Math.floor(maxOppScore / 10); // 2..14
   const estimatedWinProb = Math.max(0.05, Math.min(0.95, (14 - maxOppRank) / 13));
   const maxRaise = Math.max(0, bot.chips - toCall);
+  const canRaise =
+    maxRaise >= ante &&
+    state.players.some(
+      (p, idx) => idx !== state.turnIndex && !p.folded && !p.eliminated && p.chips > 0
+    );
 
   if (toCall === 0) {
     // 相手全員が弱いカード（7以下）なら強気にベット
-    if (estimatedWinProb >= 0.55 && maxRaise >= ante && Math.random() < 0.72) {
+    if (estimatedWinProb >= 0.55 && canRaise && Math.random() < 0.72) {
       const mult = estimatedWinProb >= 0.75 ? 2 : 1;
       return { type: 'raise', payload: { amount: Math.min(maxRaise, ante * mult) } };
     }
     // 時々ブラフベット
-    if (estimatedWinProb < 0.25 && maxRaise >= ante && Math.random() < 0.14) {
+    if (estimatedWinProb < 0.25 && canRaise && Math.random() < 0.14) {
       return { type: 'raise', payload: { amount: Math.min(maxRaise, ante) } };
     }
     return { type: 'check' };
@@ -409,7 +459,7 @@ export function computeIndianPokerBotAction(
   // 相手のカードが極端に弱い（2〜5）ならリレイズ
   if (
     estimatedWinProb >= 0.72 &&
-    maxRaise >= ante &&
+    canRaise &&
     state.highestBet < ante * 4 &&
     Math.random() < 0.45
   ) {

@@ -129,9 +129,12 @@ export const YachtBoard: React.FC<YachtBoardProps> = ({ state, onAction }) => {
   useEffect(() => {
     if (state.rollSeq !== prevRollSeqRef.current) {
       prevRollSeqRef.current = state.rollSeq;
-      setAnimatingRoll(true);
-      const timer = window.setTimeout(() => setAnimatingRoll(false), 380);
-      return () => window.clearTimeout(timer);
+      if (state.rollSeq > 0) {
+        setAnimatingRoll(true);
+        const timer = window.setTimeout(() => setAnimatingRoll(false), 380);
+        return () => window.clearTimeout(timer);
+      }
+      setAnimatingRoll(false);
     }
   }, [state.rollSeq]);
 
@@ -631,21 +634,30 @@ export const YachtBoard: React.FC<YachtBoardProps> = ({ state, onAction }) => {
       ) : (
         <div className="result-card">
           <h3 className="title-with-icon" style={{ justifyContent: 'center' }}>
-            <Trophy size={18} color="#f59e0b" /> 最終ランキング
+            <Trophy size={18} color="#f59e0b" />
+            {state.players.length === 1 ? '最終スコア' : '最終ランキング'}
           </h3>
           <ul className="result-list">
-            {[...state.players]
-              .sort((a, b) => b.total - a.total)
-              .map((p, idx) => (
-                <li key={p.id}>
-                  <span>
-                    {idx + 1}位 <strong>{p.name}</strong>
-                  </span>
-                  <strong style={{ color: 'var(--accent-gold)' }}>
-                    {p.total}点{p.bonus > 0 ? ' (B+35)' : ''}
-                  </strong>
-                </li>
-              ))}
+            {(() => {
+              const ranked = [...state.players].sort((a, b) => b.total - a.total);
+              let currentRank = 1;
+              return ranked.map((p, idx) => {
+                if (idx > 0 && p.total < ranked[idx - 1].total) {
+                  currentRank = idx + 1;
+                }
+                return (
+                  <li key={p.id}>
+                    <span>
+                      {state.players.length > 1 ? `${currentRank}位 ` : ''}
+                      <strong>{p.name}</strong>
+                    </span>
+                    <strong style={{ color: 'var(--accent-gold)' }}>
+                      {p.total}点{p.bonus > 0 ? ' (B+35)' : ''}
+                    </strong>
+                  </li>
+                );
+              });
+            })()}
           </ul>
         </div>
       )}

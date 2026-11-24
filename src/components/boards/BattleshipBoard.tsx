@@ -105,7 +105,8 @@ export const BattleshipBoard: React.FC<BattleshipBoardProps> = ({
           const active =
             state.phase === 'playing' &&
             ((state.subPhase === 'battle' && current.id === p.id) ||
-              (state.subPhase === 'setup' && !p.setupConfirmed));
+              (state.subPhase === 'setup' &&
+                (isLocalPassAndPlay ? p.id === state.myId : !p.setupConfirmed)));
           return (
             <div
               key={p.id}

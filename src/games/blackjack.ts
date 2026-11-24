@@ -181,7 +181,7 @@ function resolveDealerAndSettle(state: BlackjackInternalState): BlackjackInterna
   const dealerHand = [...state.dealerHand];
 
   const hasNonBustPlayer = state.players.some(
-    (p) => p.bet > 0 && p.status !== 'bust' && p.status !== 'out'
+    (p) => p.bet > 0 && p.status !== 'bust' && p.status !== 'out' && p.status !== 'blackjack'
   );
 
   // 全員バーストしていない場合、ディーラーが規定ルールで引く

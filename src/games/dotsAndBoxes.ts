@@ -120,7 +120,13 @@ export function applyDotsAndBoxesAction(
 
   const { kind, row, col } = (action.payload as Partial<DotsLineMove>) ?? {};
   const n = state.rules.gridSize;
-  if ((kind !== 'h' && kind !== 'v') || typeof row !== 'number' || typeof col !== 'number') {
+  if (
+    (kind !== 'h' && kind !== 'v') ||
+    typeof row !== 'number' ||
+    typeof col !== 'number' ||
+    !Number.isInteger(row) ||
+    !Number.isInteger(col)
+  ) {
     return { state, error: '不正な座標です' };
   }
 

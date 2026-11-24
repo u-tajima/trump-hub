@@ -716,6 +716,7 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
     }
     case 'carrom': {
       const s = state as CarromInternalState;
+      if (Date.now() < s.nextBotActionAt) return null;
       const current = s.players[s.turnIndex];
       if (!current?.isBot) return null;
       const act = computeCarromBotAction(s);
