@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   HAND_PIECE_ORDER,
   type ShogiClientState,
@@ -84,6 +84,8 @@ export const ShogiBoard: React.FC<ShogiBoardProps> = ({
   const [selection, setSelection] = useState<Selection>(null);
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
   const [confirmResign, setConfirmResign] = useState(false);
+  const lastPointerDownAtRef = useRef(0);
+  const dragOriginRef = useRef<{ row: number; col: number } | null>(null);
 
   const currentPlayer = state.players[state.turnIndex];
   const isMyTurn = state.phase === 'playing' && currentPlayer.id === state.myId;
@@ -201,6 +203,73 @@ export const ShogiBoard: React.FC<ShogiBoardProps> = ({
     }
   };
 
+  const handleCellPointerDown = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    row: number,
+    col: number
+  ) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    lastPointerDownAtRef.current = Date.now();
+    const coordKey = `${row},${col}`;
+    const isTarget = targetMovesByCoord.has(coordKey);
+    const cell = state.board[row][col];
+    const willSelectOwn =
+      isMyTurn &&
+      !isTarget &&
+      cell !== null &&
+      cell.owner === currentPlayer.side &&
+      !(selection?.kind === 'board' && selection.row === row && selection.col === col);
+    dragOriginRef.current = willSelectOwn ? { row, col } : null;
+    handleCellClick(row, col);
+  };
+
+  const handleGridPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const origin = dragOriginRef.current;
+    dragOriginRef.current = null;
+    if (!origin || !isMyTurn) return;
+    const el = document
+      .elementFromPoint(e.clientX, e.clientY)
+      ?.closest<HTMLElement>('[data-shogi-cell]');
+    const raw = el?.dataset.shogiCell;
+    if (!raw) return;
+    const [rStr, cStr] = raw.split(',');
+    const toRow = Number(rStr);
+    const toCol = Number(cStr);
+    if (Number.isNaN(toRow) || Number.isNaN(toCol)) return;
+    if (toRow === origin.row && toCol === origin.col) return;
+    if (targetMovesByCoord.has(`${toRow},${toCol}`)) {
+      handleCellClick(toRow, toCol);
+    }
+  };
+
+  const handleCellClickFallback = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    row: number,
+    col: number
+  ) => {
+    if (e.detail !== 0 || Date.now() - lastPointerDownAtRef.current < 500) return;
+    handleCellClick(row, col);
+  };
+
+  const handleHandPointerDown = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    player: ShogiPlayerState,
+    pieceType: ShogiHandPieceType
+  ) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    lastPointerDownAtRef.current = Date.now();
+    handleHandClick(player, pieceType);
+  };
+
+  const handleHandClickFallback = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    player: ShogiPlayerState,
+    pieceType: ShogiHandPieceType
+  ) => {
+    if (e.detail !== 0 || Date.now() - lastPointerDownAtRef.current < 500) return;
+    handleHandClick(player, pieceType);
+  };
+
   const handlePromotionChoice = (promote: boolean) => {
     if (!pendingPromotion) return;
     onAction({
@@ -253,7 +322,8 @@ export const ShogiBoard: React.FC<ShogiBoardProps> = ({
                 key={pt}
                 type="button"
                 disabled={!canSelectHand || count === 0}
-                onClick={() => handleHandClick(player, pt)}
+                onPointerDown={(e) => handleHandPointerDown(e, player, pt)}
+                onClick={(e) => handleHandClickFallback(e, player, pt)}
                 className={`shogi-hand-btn ${count === 0 ? 'empty' : ''} ${
                   isSelected ? 'selected' : ''
                 }`}
@@ -303,7 +373,15 @@ export const ShogiBoard: React.FC<ShogiBoardProps> = ({
 
         <div className="shogi-board-middle">
           <div className="shogi-grid-wrap">
-            <div className="shogi-grid" role="grid" aria-label="将棋盤">
+            <div
+              className="shogi-grid"
+              role="grid"
+              aria-label="将棋盤"
+              onPointerUp={handleGridPointerUp}
+              onPointerCancel={() => {
+                dragOriginRef.current = null;
+              }}
+            >
               {rowOrder.map((r) =>
                 colOrder.map((c) => {
                   const piece = state.board[r][c];
@@ -325,7 +403,9 @@ export const ShogiBoard: React.FC<ShogiBoardProps> = ({
                     <button
                       key={`${r}-${c}`}
                       type="button"
-                      onClick={() => handleCellClick(r, c)}
+                      data-shogi-cell={`${r},${c}`}
+                      onPointerDown={(e) => handleCellPointerDown(e, r, c)}
+                      onClick={(e) => handleCellClickFallback(e, r, c)}
                       className={`shogi-cell ${isSelected ? 'selected' : ''} ${
                         isTarget ? 'legal-target' : ''
                       } ${isLastTo ? 'last-to' : ''} ${isLastFrom ? 'last-from' : ''} ${

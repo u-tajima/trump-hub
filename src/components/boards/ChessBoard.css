@@ -256,6 +256,7 @@
   grid-template-rows: repeat(8, minmax(0, 1fr));
   border-radius: 7px;
   overflow: hidden;
+  touch-action: none;
 }
 
 .chess-square {
@@ -267,7 +268,7 @@
   align-items: center;
   justify-content: center;
   cursor: default;
-  touch-action: manipulation;
+  touch-action: none;
   outline: none;
 }
 

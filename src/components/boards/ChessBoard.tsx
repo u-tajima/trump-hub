@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type {
   ChessClientState,
   ChessColor,
@@ -251,6 +251,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     toCol: number;
   } | null>(null);
   const [resignConfirmKey, setResignConfirmKey] = useState<string | null>(null);
+  const lastPointerDownAtRef = useRef(0);
+  const dragOriginRef = useRef<{ row: number; col: number } | null>(null);
 
   const selected = selectedState && selectedState.turnKey === turnKey ? selectedState : null;
   const pendingPromotion = promoState && promoState.turnKey === turnKey ? promoState : null;
@@ -353,6 +355,56 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     setSelectedState(null);
   };
 
+  const handleSquarePointerDown = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    row: number,
+    col: number
+  ) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    lastPointerDownAtRef.current = Date.now();
+    const targetMoves = targetMoveMap.get(`${row}-${col}`);
+    const isTarget = Boolean(selected && targetMoves && targetMoves.length > 0);
+    const piece = state.board[row][col];
+    const willSelectOwn =
+      isMyTurn &&
+      !pendingPromotion &&
+      !isTarget &&
+      piece !== null &&
+      piece.color === myColor &&
+      !(selected && selected.row === row && selected.col === col);
+    dragOriginRef.current = willSelectOwn ? { row, col } : null;
+    handleSquareClick(row, col);
+  };
+
+  const handleGridPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const origin = dragOriginRef.current;
+    dragOriginRef.current = null;
+    if (!origin || !isMyTurn || pendingPromotion) return;
+    const el = document
+      .elementFromPoint(e.clientX, e.clientY)
+      ?.closest<HTMLElement>('[data-chess-square]');
+    const raw = el?.dataset.chessSquare;
+    if (!raw) return;
+    const [rStr, cStr] = raw.split(',');
+    const toRow = Number(rStr);
+    const toCol = Number(cStr);
+    if (Number.isNaN(toRow) || Number.isNaN(toCol)) return;
+    if (toRow === origin.row && toCol === origin.col) return;
+    const targetMoves = targetMoveMap.get(`${toRow}-${toCol}`);
+    if (targetMoves && targetMoves.length > 0) {
+      handleSquareClick(toRow, toCol);
+    }
+  };
+
+  const handleSquareClickFallback = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    row: number,
+    col: number
+  ) => {
+    if (e.detail !== 0 || Date.now() - lastPointerDownAtRef.current < 500) return;
+    handleSquareClick(row, col);
+  };
+
   const handlePromotionSelect = (promo: 'q' | 'r' | 'b' | 'n') => {
     if (!pendingPromotion) return;
     const movePayload = {
@@ -439,7 +491,15 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
       />
 
       <div className="chess-board-frame">
-        <div className="chess-board-grid" role="grid" aria-label="チェス盤">
+        <div
+          className="chess-board-grid"
+          role="grid"
+          aria-label="チェス盤"
+          onPointerUp={handleGridPointerUp}
+          onPointerCancel={() => {
+            dragOriginRef.current = null;
+          }}
+        >
           {displayRows.map((row, visualRowIdx) =>
             displayCols.map((col, visualColIdx) => {
               const piece = state.board[row][col];
@@ -479,8 +539,10 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 <button
                   key={`${row}-${col}`}
                   type="button"
+                  data-chess-square={`${row},${col}`}
                   className={squareClasses}
-                  onClick={() => handleSquareClick(row, col)}
+                  onPointerDown={(e) => handleSquarePointerDown(e, row, col)}
+                  onClick={(e) => handleSquareClickFallback(e, row, col)}
                   aria-label={`${FILES[col]}${8 - row}`}
                 >
                   {showRankLabel && (
