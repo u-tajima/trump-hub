@@ -13,7 +13,7 @@ export interface RuleFieldDef<K extends string = string> {
   unit?: string;
 }
 
-export type GameCategory = 'tool' | 'card' | 'board' | 'dice';
+export type GameCategory = 'tool' | 'card' | 'board' | 'party' | 'dice';
 export type LocalPlayMode = 'none' | 'direct' | 'passAndPlay';
 
 export interface GameMeta<T extends GameId = GameId> {
@@ -25,6 +25,7 @@ export interface GameMeta<T extends GameId = GameId> {
   minPlayers: number;
   maxPlayers: number;
   isPerfectInfo?: boolean;
+  allowBots?: boolean;
   localPlayMode: LocalPlayMode;
   description: string;
   defaultRules: GameRulesMap[T];
@@ -632,6 +633,146 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
         label: 'スーパーコウ禁止',
         description: '単純コウだけでなく過去の盤面への同形反復すべてを禁止する',
         type: 'boolean',
+      },
+    ],
+  },
+  werewolf: {
+    id: 'werewolf',
+    category: 'party',
+    name: '人狼ゲーム',
+    subtitle: 'GM自動進行！正体隠匿＆議論バトル',
+    icon: 'moon',
+    minPlayers: 4,
+    maxPlayers: 12,
+    allowBots: false,
+    localPlayMode: 'passAndPlay',
+    description:
+      'GM（進行役）不要で役職配布・議論タイマー・投票・夜アクション・勝敗判定を自動進行！オンライン各自スマホでも、1台回しでも遊べます（人間プレイヤー専用）。',
+    defaultRules: {
+      werewolfCount: 1,
+      seerCount: 1,
+      mediumCount: 0,
+      bodyguardCount: 1,
+      madmanCount: 0,
+      foxCount: 0,
+      discussionSec: 180,
+      firstNightFortune: 'randomWhite',
+      consecutiveGuard: false,
+      tieBreak: 'runoff',
+    },
+    ruleFields: [
+      {
+        key: 'werewolfCount',
+        label: '人狼の人数',
+        description: '残りの人数は自動的に村人になります（参加人数に応じて自動調整）',
+        type: 'number',
+        min: 1,
+        max: 4,
+        step: 1,
+        unit: '人',
+        options: [
+          { value: 1, label: '1人' },
+          { value: 2, label: '2人' },
+          { value: 3, label: '3人' },
+        ],
+      },
+      {
+        key: 'seerCount',
+        label: '占い師',
+        description: '毎晩1人が人狼か人間かを占える（妖狐は呪殺）',
+        type: 'select',
+        options: [
+          { value: 0, label: '0人' },
+          { value: 1, label: '1人' },
+          { value: 2, label: '2人' },
+        ],
+      },
+      {
+        key: 'bodyguardCount',
+        label: '騎士（狩人）',
+        description: '毎晩1人を人狼の襲撃から護衛できる',
+        type: 'select',
+        options: [
+          { value: 0, label: '0人' },
+          { value: 1, label: '1人' },
+          { value: 2, label: '2人' },
+        ],
+      },
+      {
+        key: 'mediumCount',
+        label: '霊媒師',
+        description: '昼に追放されたプレイヤーが人狼だったかを知る',
+        type: 'select',
+        options: [
+          { value: 0, label: '0人' },
+          { value: 1, label: '1人' },
+          { value: 2, label: '2人' },
+        ],
+      },
+      {
+        key: 'madmanCount',
+        label: '狂人',
+        description: '人狼陣営の人間（占い・霊媒では人間判定）',
+        type: 'select',
+        options: [
+          { value: 0, label: '0人' },
+          { value: 1, label: '1人' },
+          { value: 2, label: '2人' },
+        ],
+      },
+      {
+        key: 'foxCount',
+        label: '妖狐（第三陣営）',
+        description: '襲撃無効・占いで呪殺。決着時に生存していれば単独勝利',
+        type: 'select',
+        options: [
+          { value: 0, label: '0人' },
+          { value: 1, label: '1人' },
+        ],
+      },
+      {
+        key: 'discussionSec',
+        label: '昼の議論時間',
+        description: '議論タイマーの基準時間（議論中に1分延長も可能）',
+        type: 'number',
+        min: 30,
+        max: 1800,
+        step: 30,
+        unit: '秒',
+        options: [
+          { value: 60, label: '1分' },
+          { value: 180, label: '3分' },
+          { value: 300, label: '5分' },
+          { value: 0, label: '上限なし' },
+        ],
+      },
+      {
+        key: 'firstNightFortune',
+        label: '初日占い',
+        description: '1日目の占い師の扱い',
+        type: 'select',
+        options: [
+          { value: 'randomWhite', label: '初日ランダム白通知' },
+          { value: 'free', label: '初日から自由占い' },
+          { value: 'none', label: '初日占いなし' },
+        ],
+      },
+      {
+        key: 'consecutiveGuard',
+        label: '連続護衛あり',
+        description: 'ONにすると騎士が同じ人を2夜連続で護衛できる',
+        type: 'boolean',
+      },
+      {
+        key: 'tieBreak',
+        label: '投票が同票のとき',
+        description: '最多得票が複数人になった場合の処理',
+        type: 'select',
+        options: [
+          { value: 'runoff', label: '決選投票を行う' },
+          { value: 'random', label: '同票からランダム追放' },
+          { value: 'noExecution', label: '処刑なし' },
+        ],
       },
     ],
   },

@@ -110,6 +110,12 @@ import {
   sanitizeSpeedState,
   type SpeedInternalState,
 } from './speed';
+import {
+  applyWerewolfAction,
+  initWerewolf,
+  sanitizeWerewolfState,
+  type WerewolfInternalState,
+} from './werewolf';
 import type {
   ChessRules,
   ChinchiroRules,
@@ -131,6 +137,7 @@ import type {
   SevensRules,
   ShogiRules,
   SpeedRules,
+  WerewolfRules,
 } from '../types/game';
 
 export interface ScoreBoardGameInternalState {
@@ -154,6 +161,7 @@ export type AnyInternalState =
   | ShogiInternalState
   | ChessInternalState
   | IgoInternalState
+  | WerewolfInternalState
   | ChinchiroInternalState
   | RouletteInternalState;
 
@@ -199,6 +207,8 @@ export function initGameEngine(
       return initChess(players, rules as ChessRules);
     case 'igo':
       return initIgo(players, rules as IgoRules);
+    case 'werewolf':
+      return initWerewolf(players, rules as WerewolfRules);
     case 'chinchiro':
       return initChinchiro(players, rules as ChinchiroRules);
     case 'roulette':
@@ -243,6 +253,8 @@ export function applyGameAction(
       return applyChessAction(state as ChessInternalState, playerId, action);
     case 'igo':
       return applyIgoAction(state as IgoInternalState, playerId, action);
+    case 'werewolf':
+      return applyWerewolfAction(state as WerewolfInternalState, playerId, action);
     case 'chinchiro':
       return applyChinchiroAction(state as ChinchiroInternalState, playerId, action);
     case 'roulette':
@@ -282,6 +294,8 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizeChessState(state as ChessInternalState, playerId);
     case 'igo':
       return sanitizeIgoState(state as IgoInternalState, playerId);
+    case 'werewolf':
+      return sanitizeWerewolfState(state as WerewolfInternalState, playerId);
     case 'chinchiro':
       return sanitizeChinchiroState(state as ChinchiroInternalState, playerId);
     case 'roulette':
@@ -440,6 +454,8 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
       if (!act) return null;
       return applyIgoAction(s, current.id, act).state;
     }
+    case 'werewolf':
+      return null;
     case 'chinchiro': {
       const s = state as ChinchiroInternalState;
       const current = s.players[s.turnIndex];

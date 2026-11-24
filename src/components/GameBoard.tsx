@@ -17,6 +17,7 @@ import { GAME_REGISTRY } from '../games/registry';
 import type { SevensClientState } from '../games/sevens';
 import type { ShogiClientState } from '../games/shogi';
 import type { SpeedClientState } from '../games/speed';
+import type { WerewolfClientState } from '../games/werewolf';
 import type { GameId, GameRulesMap, ScoreBoardRoomRules } from '../types/game';
 import type { ScoreBoardOp, ScoreBoardState } from '../utils/scoreBoard';
 import { GameIcon } from './GameIcon';
@@ -38,6 +39,7 @@ import { ScoreRoomBoard } from './boards/ScoreRoomBoard';
 import { SevensBoard } from './boards/SevensBoard';
 import { ShogiBoard } from './boards/ShogiBoard';
 import { SpeedBoard } from './boards/SpeedBoard';
+import { WerewolfBoard } from './boards/WerewolfBoard';
 import './PassAndPlayOverlay.css';
 
 interface GameBoardProps {
@@ -137,7 +139,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             <div className="handoff-eyebrow">端末を渡してください</div>
             <h2 className="handoff-player-name">{handoffPlayer.name} の番</h2>
             <p className="handoff-hint">
-              手札が見えないよう画面を隠しています。{handoffPlayer.name} に端末を渡してからボタンを押してください。
+              {gameId === 'werewolf'
+                ? `役職や操作が見えないよう画面を隠しています。${handoffPlayer.name} に端末を渡してからボタンを押してください。`
+                : `手札が見えないよう画面を隠しています。${handoffPlayer.name} に端末を渡してからボタンを押してください。`}
             </p>
             <button
               type="button"
@@ -145,7 +149,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               onClick={onConfirmHandoff}
             >
               <Eye size={18} />
-              {handoffPlayer.name} の手札を見る
+              {gameId === 'werewolf'
+                ? `${handoffPlayer.name} の画面を開く`
+                : `${handoffPlayer.name} の手札を見る`}
             </button>
           </div>
         ) : (
@@ -238,6 +244,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             {gameId === 'igo' && (
               <IgoBoard
                 state={gameState as IgoClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'werewolf' && (
+              <WerewolfBoard
+                state={gameState as WerewolfClientState}
+                isHost={isHost}
                 onAction={onAction}
                 isLocalPassAndPlay={isLocalPassAndPlay}
               />

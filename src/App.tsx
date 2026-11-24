@@ -324,6 +324,7 @@ export function App() {
     const cur = lobbyRef.current;
     if (!cur || role !== 'host') return;
     const meta = GAME_REGISTRY[cur.config.gameId];
+    if (meta.allowBots === false) return;
     if (cur.players.length >= meta.maxPlayers) return;
     const botCount = cur.players.filter((p) => p.isBot).length + 1;
     const bot: PlayerInfo = {
@@ -370,8 +371,12 @@ export function App() {
     if (!cur || role !== 'host') return;
     const nextMeta = GAME_REGISTRY[gameId];
     let nextPlayers = cur.players;
-    if (nextMeta.localPlayMode === 'none' && cur.players.some((p) => p.isLocal)) {
-      nextPlayers = cur.players.filter((p) => !p.isLocal);
+    if (nextMeta.allowBots === false && nextPlayers.some((p) => p.isBot)) {
+      nextPlayers = nextPlayers.filter((p) => !p.isBot);
+      showToast('このゲームはCPU非対応のためCPUを外しました');
+    }
+    if (nextMeta.localPlayMode === 'none' && nextPlayers.some((p) => p.isLocal)) {
+      nextPlayers = nextPlayers.filter((p) => !p.isLocal);
       showToast('このゲームはローカル複数人非対応のためローカルメンバーを外しました');
     } else if (nextPlayers.length > nextMeta.maxPlayers && nextPlayers.some((p) => p.isLocal)) {
       const trimmed = [...nextPlayers];

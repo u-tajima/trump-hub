@@ -18,6 +18,7 @@ import { applyRouletteAction, EUROPEAN_WHEEL_ORDER, getRouletteColor, initRoulet
 import { applySevensAction, canPlaceNormalCard, computeSevensBotAction, initSevens } from '../sevens';
 import { applyShogiAction, computeShogiBotAction, getShogiLegalMoves, initShogi } from '../shogi';
 import { applySpeedAction, canPlaceOnSpeedPile, computeSpeedBotAction, initSpeed, sanitizeSpeedState } from '../speed';
+import { applyWerewolfAction, initWerewolf, sanitizeWerewolfState } from '../werewolf';
 import {
   applyScoreBoardOp,
   createEmptyScoreBoard,
@@ -810,5 +811,83 @@ describe('Shogi, Chess, and Igo official rules', () => {
     const botState = initIgo(players, { boardSize: 9, komi: 6.5, superko: true });
     botState.players[0].isBot = true;
     expect(computeIgoBotAction(botState)).not.toBeNull();
+  });
+});
+
+describe('Werewolf auto-moderator engine', () => {
+  it('runs role reveal, discussion, voting (with runoff), night actions (guard/curse/attack), and victory detection', () => {
+    expect(GAME_REGISTRY.werewolf.allowBots).toBe(false);
+    const players = makePlayers(5);
+    const rules = {
+      ...GAME_REGISTRY.werewolf.defaultRules,
+      werewolfCount: 1,
+      seerCount: 1,
+      bodyguardCount: 1,
+      mediumCount: 0,
+      madmanCount: 0,
+      foxCount: 1,
+      firstNightFortune: 'none' as const,
+      tieBreak: 'runoff' as const,
+    };
+
+    let state = initWerewolf(players, rules);
+    // テストを確定的にするため役職を固定配置: p1=人狼, p2=占い師, p3=騎士, p4=妖狐, p5=村人
+    state.players[0].role = 'werewolf';
+    state.players[1].role = 'seer';
+    state.players[2].role = 'bodyguard';
+    state.players[3].role = 'fox';
+    state.players[4].role = 'villager';
+
+    // 秘密情報の隔離確認: 村人(p5)には人狼(p1)の役職が見えない
+    const p5View = sanitizeWerewolfState(state, 'p5');
+    expect(p5View.myRole).toBe('villager');
+    expect(p5View.players.find((p) => p.id === 'p1')?.role).toBeUndefined();
+
+    // 1. 全員が役職確認 → 1日目の昼（discussion）へ
+    for (const p of players) {
+      state = applyWerewolfAction(state, p.id, { type: 'confirmRole' }).state;
+    }
+    expect(state.subPhase).toBe('discussion');
+
+    // 2. ホストが投票開始 → p5(村人)を最多得票で追放
+    state = applyWerewolfAction(state, 'p1', { type: 'startVoting' }).state;
+    expect(state.subPhase).toBe('voting');
+    state = applyWerewolfAction(state, 'p1', { type: 'castVote', payload: { targetId: 'p5' } }).state;
+    state = applyWerewolfAction(state, 'p2', { type: 'castVote', payload: { targetId: 'p5' } }).state;
+    state = applyWerewolfAction(state, 'p3', { type: 'castVote', payload: { targetId: 'p5' } }).state;
+    state = applyWerewolfAction(state, 'p4', { type: 'castVote', payload: { targetId: 'p1' } }).state;
+    state = applyWerewolfAction(state, 'p5', { type: 'castVote', payload: { targetId: 'p1' } }).state;
+    expect(state.subPhase).toBe('execution');
+    expect(state.lastExecution?.executedId).toBe('p5');
+    expect(state.players[4].alive).toBe(false);
+
+    // 3. 2日目の夜へ: p1(人狼)はp2(占い師)を襲撃、p3(騎士)がp2を護衛成功、p2(占い師)はp4(妖狐)を占って呪殺！
+    state = applyWerewolfAction(state, 'p1', { type: 'startNight' }).state;
+    expect(state.subPhase).toBe('night');
+    expect(state.day).toBe(2);
+
+    state = applyWerewolfAction(state, 'p1', { type: 'nightAction', payload: { targetId: 'p2' } }).state;
+    state = applyWerewolfAction(state, 'p3', { type: 'nightAction', payload: { targetId: 'p2' } }).state;
+    // 占い師は1回目で占い結果取得、2回目で夜完了
+    state = applyWerewolfAction(state, 'p2', { type: 'nightAction', payload: { targetId: 'p4' } }).state;
+    expect(state.players[1].seerLogs[0]?.isWolf).toBe(false); // 妖狐は白判定
+    state = applyWerewolfAction(state, 'p2', { type: 'nightAction' }).state;
+    state = applyWerewolfAction(state, 'p4', { type: 'nightAction' }).state;
+
+    // 護衛成功でp2は生存、p4(妖狐)は呪殺されて脱落、p1(人狼) vs p2/p3(人間2) → ゲーム続行で朝へ
+    expect(state.subPhase).toBe('morning');
+    expect(state.phase).toBe('playing');
+    expect(state.players[1].alive).toBe(true);
+    expect(state.players[3].alive).toBe(false);
+    expect(state.players[3].deathCause).toBe('cursed');
+
+    // 4. 2日目の昼→投票で人狼(p1)を追放 → 村人陣営の勝利！
+    state = applyWerewolfAction(state, 'p1', { type: 'startDiscussion' }).state;
+    state = applyWerewolfAction(state, 'p1', { type: 'startVoting' }).state;
+    state = applyWerewolfAction(state, 'p1', { type: 'castVote', payload: { targetId: 'p2' } }).state;
+    state = applyWerewolfAction(state, 'p2', { type: 'castVote', payload: { targetId: 'p1' } }).state;
+    state = applyWerewolfAction(state, 'p3', { type: 'castVote', payload: { targetId: 'p1' } }).state;
+    expect(state.phase).toBe('finished');
+    expect(state.winnerTeam).toBe('village');
   });
 });
