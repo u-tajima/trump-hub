@@ -5,14 +5,16 @@ import {
   DoorOpen,
   PlusCircle,
   Sparkles,
+  Star,
   Target,
-  Users,
   Wrench,
 } from 'lucide-react';
-import { GAME_LIST, GAME_REGISTRY, type GameCategory } from '../games/registry';
+import { GAME_REGISTRY } from '../games/registry';
 import type { GameId, GameRulesMap, ScoreBoardRoomRules } from '../types/game';
+import { useFavoriteGames } from '../utils/favorites';
 import { normalizeRoomCode } from '../utils/roomCode';
 import { GameIcon } from './GameIcon';
+import { GamePicker } from './GamePicker';
 import { RuleConfigurator } from './RuleConfigurator';
 
 export type ToolChoiceId = 'dice' | 'roulette' | 'scoreboard';
@@ -80,10 +82,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [tab, setTab] = useState<'join' | 'create' | 'tools'>(
     initialRoomCode ? 'join' : 'create'
   );
-  const [categoryFilter, setCategoryFilter] = useState<'all' | Exclude<GameCategory, 'tool'>>('all');
   const [roomInput, setRoomInput] = useState<string>(initialRoomCode ?? '');
   const [selectedGame, setSelectedGame] = useState<GameId>('daifugo');
   const [selectedTool, setSelectedTool] = useState<ToolChoiceId>('scoreboard');
+  const { favorites, toggleFavorite, isFavorite } = useFavoriteGames();
   const [rulesByGame, setRulesByGame] = useState<GameRulesMap>(() => ({
     scoreboard: { ...GAME_REGISTRY.scoreboard.defaultRules },
     daifugo: { ...GAME_REGISTRY.daifugo.defaultRules },
@@ -117,13 +119,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }));
   const [showRules, setShowRules] = useState(false);
   const [showScoreToolRules, setShowScoreToolRules] = useState(false);
-
-  // 「部屋をつくる」には対戦ゲームのみを表示（得点管理専用部屋は「ツール」タブから起動）
-  const roomGames = GAME_LIST.filter((g) => g.id !== 'scoreboard');
-  const visibleGames =
-    categoryFilter === 'all'
-      ? roomGames
-      : roomGames.filter((g) => g.category === categoryFilter);
 
   const selectedMeta = GAME_REGISTRY[selectedGame];
   const selectedToolMeta =
@@ -301,63 +296,39 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
       ) : (
         <div className="create-panel">
-          <div className="game-pills" style={{ marginBottom: 8 }}>
-            {(
-              [
-                { id: 'all', label: `すべて (${roomGames.length})` },
-                { id: 'card', label: `カード (${roomGames.filter((g) => g.category === 'card').length})` },
-                { id: 'board', label: `ボード (${roomGames.filter((g) => g.category === 'board').length})` },
-                { id: 'action', label: `アクション (${roomGames.filter((g) => g.category === 'action').length})` },
-                { id: 'party', label: `パーティ (${roomGames.filter((g) => g.category === 'party').length})` },
-                { id: 'dice', label: `ダイス・ルーレット (${roomGames.filter((g) => g.category === 'dice').length})` },
-              ] as const
-            ).map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                className={`game-pill ${categoryFilter === cat.id ? 'active' : ''}`}
-                onClick={() => setCategoryFilter(cat.id)}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="game-grid">
-            {visibleGames.map((game) => {
-              const active = game.id === selectedGame;
-              return (
-                <button
-                  key={game.id}
-                  type="button"
-                  className={`game-select-card ${active ? 'active' : ''}`}
-                  onClick={() => setSelectedGame(game.id)}
-                >
-                  <div className="game-card-top">
-                    <span className="game-icon">
-                      <GameIcon name={game.icon} size={20} />
-                    </span>
-                    <span className="game-players">
-                      <Users size={13} />
-                      {game.minPlayers === game.maxPlayers
-                        ? `${game.minPlayers}人`
-                        : `${game.minPlayers}〜${game.maxPlayers}人`}
-                    </span>
-                  </div>
-                  <div className="game-name">{game.name}</div>
-                  <div className="game-sub">{game.subtitle}</div>
-                </button>
-              );
-            })}
-          </div>
+          <GamePicker
+            selectedGame={selectedGame}
+            onSelect={setSelectedGame}
+            favorites={favorites}
+            onToggleFavorite={toggleFavorite}
+          />
 
           <section className="card-panel selected-game-detail">
             <div className="detail-header">
-              <div>
-                <h2 className="panel-title title-with-icon">
-                  <GameIcon name={selectedMeta.icon} size={18} />
-                  {selectedMeta.name}
-                </h2>
+              <div style={{ flex: 1 }}>
+                <div className="panel-header-row" style={{ marginBottom: 4 }}>
+                  <h2 className="panel-title title-with-icon">
+                    <GameIcon name={selectedMeta.icon} size={18} />
+                    {selectedMeta.name}
+                  </h2>
+                  <button
+                    type="button"
+                    className={`chip-btn ${isFavorite(selectedGame) ? 'active' : ''}`}
+                    style={
+                      isFavorite(selectedGame)
+                        ? {
+                            background: 'rgba(250, 204, 21, 0.2)',
+                            borderColor: 'rgba(250, 204, 21, 0.6)',
+                            color: '#fef08a',
+                          }
+                        : undefined
+                    }
+                    onClick={() => toggleFavorite(selectedGame)}
+                  >
+                    <Star size={14} fill={isFavorite(selectedGame) ? 'currentColor' : 'none'} />
+                    {isFavorite(selectedGame) ? 'お気に入り済' : 'お気に入り'}
+                  </button>
+                </div>
                 <p className="panel-desc">{selectedMeta.description}</p>
               </div>
             </div>

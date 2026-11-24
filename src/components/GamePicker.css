@@ -1,0 +1,239 @@
+.game-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-picker-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.game-search-box {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.game-search-icon {
+  position: absolute;
+  left: 11px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.game-search-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.34);
+  border: 1px solid var(--border-subtle);
+  border-radius: 11px;
+  padding: 9px 34px 9px 34px;
+  color: var(--text-main);
+  font-size: 14px;
+  outline: none;
+}
+
+.game-search-input:focus {
+  border-color: var(--accent-gold);
+}
+
+.game-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 13px;
+}
+
+.game-search-clear {
+  position: absolute;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-main);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.game-cat-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.game-cat-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.game-cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.game-cat-pill.active {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.65);
+  color: #fde68a;
+}
+
+.game-cat-pill.fav-tab.active {
+  background: rgba(250, 204, 21, 0.24);
+  border-color: rgba(250, 204, 21, 0.78);
+  color: #fef08a;
+}
+
+.game-cat-count {
+  font-size: 11px;
+  opacity: 0.78;
+}
+
+.game-player-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.game-sub-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.game-sub-chip.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.55);
+  color: #bae6fd;
+}
+
+.game-card-top-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fav-star-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -4px -4px 0;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.36);
+  cursor: pointer;
+  transition: transform 0.12s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.fav-star-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(250, 204, 21, 0.85);
+}
+
+.fav-star-btn.is-fav {
+  color: #facc15;
+}
+
+.fav-star-btn:active {
+  transform: scale(0.9);
+}
+
+.game-select-card.is-mismatch {
+  opacity: 0.62;
+}
+
+.game-grid-compact {
+  max-height: 52dvh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.game-picker-empty {
+  text-align: center;
+  padding: 24px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px dashed var(--border-subtle);
+}
+
+.game-picker-empty-title {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.game-picker-empty-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+/* ロビー内のお気に入りクイック切替バー */
+.lobby-fav-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  margin-top: 8px;
+  scrollbar-width: none;
+}
+
+.lobby-fav-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.lobby-fav-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #facc15;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.lobby-game-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.game-picker-modal-card {
+  width: min(460px, 100%);
+  max-height: 86dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}

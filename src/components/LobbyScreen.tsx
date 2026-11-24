@@ -1,10 +1,28 @@
 import React, { useState } from 'react';
-import { Bot, Check, ClipboardList, Copy, LogOut, Play, QrCode, Share2, SlidersHorizontal, Trash2, User, Users } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  Bot,
+  Check,
+  ClipboardList,
+  Copy,
+  LogOut,
+  Play,
+  QrCode,
+  Share2,
+  SlidersHorizontal,
+  Star,
+  Trash2,
+  User,
+  Users,
+  X,
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { GAME_LIST, GAME_REGISTRY } from '../games/registry';
+import { GAME_REGISTRY } from '../games/registry';
 import type { GameId, GameRulesMap, LobbyState } from '../types/game';
+import { useFavoriteGames } from '../utils/favorites';
 import { buildInviteUrl } from '../utils/roomCode';
 import { GameIcon } from './GameIcon';
+import { GamePicker } from './GamePicker';
 import { RuleConfigurator } from './RuleConfigurator';
 import './LobbyScreen.css';
 
@@ -36,11 +54,16 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [showGamePicker, setShowGamePicker] = useState(false);
+  const { favorites, toggleFavorite, isFavorite } = useFavoriteGames();
 
   const meta = GAME_REGISTRY[lobby.config.gameId];
   const inviteUrl = buildInviteUrl(lobby.config.roomCode);
   const canStart =
     lobby.players.length >= meta.minPlayers && lobby.players.length <= meta.maxPlayers;
+  const quickFavorites = favorites
+    .filter((id) => id !== 'scoreboard')
+    .map((id) => GAME_REGISTRY[id]);
 
   const handleCopy = async () => {
     try {
@@ -77,6 +100,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   const handleGameChange = (newGameId: GameId) => {
     if (!isHost) return;
     onUpdateConfig(newGameId, { ...GAME_REGISTRY[newGameId].defaultRules });
+    setShowGamePicker(false);
   };
 
   return (
@@ -175,23 +199,52 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
       <section className="card-panel">
         <div className="panel-header-row">
-          <h2 className="panel-title title-with-icon">
-            <GameIcon name={meta.icon} size={18} />
-            {meta.name}
-          </h2>
-          <button type="button" className="chip-btn" onClick={() => setShowRules((v) => !v)}>
-            <SlidersHorizontal size={15} />
-            {showRules ? '閉じる' : 'ルール'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <h2 className="panel-title title-with-icon" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <GameIcon name={meta.icon} size={18} />
+              {meta.name}
+            </h2>
+            {lobby.config.gameId !== 'scoreboard' && (
+              <button
+                type="button"
+                className={`fav-star-btn ${isFavorite(lobby.config.gameId) ? 'is-fav' : ''}`}
+                onClick={() => toggleFavorite(lobby.config.gameId)}
+                aria-label={isFavorite(lobby.config.gameId) ? 'お気に入り解除' : 'お気に入り追加'}
+              >
+                <Star size={16} fill={isFavorite(lobby.config.gameId) ? 'currentColor' : 'none'} />
+              </button>
+            )}
+          </div>
+          <div className="lobby-game-actions">
+            {isHost && lobby.config.gameId !== 'scoreboard' && (
+              <button
+                type="button"
+                className="chip-btn accent"
+                onClick={() => setShowGamePicker(true)}
+              >
+                <ArrowLeftRight size={14} />
+                ゲーム変更
+              </button>
+            )}
+            <button type="button" className="chip-btn" onClick={() => setShowRules((v) => !v)}>
+              <SlidersHorizontal size={15} />
+              {showRules ? '閉じる' : 'ルール'}
+            </button>
+          </div>
         </div>
 
-        {isHost && (
-          <div className="game-pills">
-            {GAME_LIST.map((g) => (
+        {isHost && lobby.config.gameId !== 'scoreboard' && quickFavorites.length > 0 && (
+          <div className="lobby-fav-bar">
+            <span className="lobby-fav-label">
+              <Star size={12} fill="currentColor" />
+              お気に入り
+            </span>
+            {quickFavorites.map((g) => (
               <button
                 key={g.id}
                 type="button"
                 className={`game-pill ${g.id === lobby.config.gameId ? 'active' : ''}`}
+                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
                 onClick={() => handleGameChange(g.id)}
               >
                 <GameIcon name={g.icon} size={13} /> {g.name}
@@ -213,6 +266,39 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           </div>
         )}
       </section>
+
+      {showGamePicker && isHost && (
+        <div className="modal-backdrop" onClick={() => setShowGamePicker(false)}>
+          <div
+            className="modal-card game-picker-modal-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="panel-header-row" style={{ marginBottom: 4 }}>
+              <h3 className="panel-title title-with-icon">
+                <ArrowLeftRight size={16} />
+                ゲームを変更する
+              </h3>
+              <button
+                type="button"
+                className="icon-text-btn"
+                style={{ minWidth: 40, minHeight: 36, padding: '6px 8px' }}
+                onClick={() => setShowGamePicker(false)}
+                aria-label="閉じる"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <GamePicker
+              selectedGame={lobby.config.gameId}
+              onSelect={handleGameChange}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+              currentPlayerCount={lobby.players.length}
+              compact
+            />
+          </div>
+        </div>
+      )}
 
       {isHost ? (
         <div className="sticky-bottom-bar">
