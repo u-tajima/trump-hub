@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { canPlaceOnSpeedPile, type SpeedClientState } from '../../games/speed';
-import type { Card } from '../../types/card';
 import { PlayingCard } from '../PlayingCard';
 import './SpeedLocalBoard.css';
 
@@ -17,6 +16,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({
 }) => {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [topSelectedId, setTopSelectedId] = useState<string | null>(null);
+  const [lastSelectedSide, setLastSelectedSide] = useState<'bottom' | 'top'>('bottom');
 
   const activeSelectedId = state.me.fieldHand.some((c) => c.id === selectedCardId)
     ? selectedCardId
@@ -36,44 +36,44 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({
     setSelectedCardId(null);
   };
 
-  // 向かい合わせローカル対戦用: 片方の台札にしか出せないなら1タップ即出し、両方OKなら選択して台札タップ
-  const handleLocalCardClick = (side: 'bottom' | 'top', card: Card) => {
+  // 向かい合わせローカル対戦用: カード選択 → 台札タップの2ステップ
+  const handleLocalCardClick = (side: 'bottom' | 'top', cardId: string) => {
     if (state.phase !== 'playing') return;
-    const actorId = side === 'bottom' ? state.me.id : state.opponent.id;
-    const ok0 = canPlaceOnSpeedPile(card, state.centerPiles[0], state.rules);
-    const ok1 = canPlaceOnSpeedPile(card, state.centerPiles[1], state.rules);
-
-    if (ok0 && !ok1) {
-      onAction({ type: 'play', payload: { cardId: card.id, pileIndex: 0 } }, actorId);
-      if (side === 'bottom') setSelectedCardId(null);
-      else setTopSelectedId(null);
-      return;
-    }
-    if (!ok0 && ok1) {
-      onAction({ type: 'play', payload: { cardId: card.id, pileIndex: 1 } }, actorId);
-      if (side === 'bottom') setSelectedCardId(null);
-      else setTopSelectedId(null);
-      return;
-    }
-    if (ok0 && ok1) {
-      if (side === 'bottom') {
-        setSelectedCardId((prev) => (prev === card.id ? null : card.id));
-      } else {
-        setTopSelectedId((prev) => (prev === card.id ? null : card.id));
-      }
+    setLastSelectedSide(side);
+    if (side === 'bottom') {
+      setSelectedCardId((prev) => (prev === cardId ? null : cardId));
+    } else {
+      setTopSelectedId((prev) => (prev === cardId ? null : cardId));
     }
   };
 
   const handleLocalPileClick = (pileIndex: 0 | 1) => {
     if (state.phase !== 'playing') return;
-    const bottomCard = state.me.fieldHand.find((c) => c.id === activeSelectedId);
-    if (bottomCard && canPlaceOnSpeedPile(bottomCard, state.centerPiles[pileIndex], state.rules)) {
+    const bottomCard = state.me.fieldHand.find((c) => c.id === activeSelectedId) ?? null;
+    const topCard = state.opponent.fieldHand.find((c) => c.id === activeTopSelectedId) ?? null;
+    if (!bottomCard && !topCard) return;
+
+    const pileCard = state.centerPiles[pileIndex];
+    const bottomValid = bottomCard !== null && canPlaceOnSpeedPile(bottomCard, pileCard, state.rules);
+    const topValid = topCard !== null && canPlaceOnSpeedPile(topCard, pileCard, state.rules);
+
+    let chosenSide: 'bottom' | 'top';
+    if (bottomValid && !topValid) {
+      chosenSide = 'bottom';
+    } else if (!bottomValid && topValid) {
+      chosenSide = 'top';
+    } else if (bottomCard && !topCard) {
+      chosenSide = 'bottom';
+    } else if (!bottomCard && topCard) {
+      chosenSide = 'top';
+    } else {
+      chosenSide = lastSelectedSide;
+    }
+
+    if (chosenSide === 'bottom' && bottomCard) {
       onAction({ type: 'play', payload: { cardId: bottomCard.id, pileIndex } }, state.me.id);
       setSelectedCardId(null);
-      return;
-    }
-    const topCard = state.opponent.fieldHand.find((c) => c.id === activeTopSelectedId);
-    if (topCard && canPlaceOnSpeedPile(topCard, state.centerPiles[pileIndex], state.rules)) {
+    } else if (chosenSide === 'top' && topCard) {
       onAction({ type: 'play', payload: { cardId: topCard.id, pileIndex } }, state.opponent.id);
       setTopSelectedId(null);
     }
@@ -87,8 +87,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({
         ? state.opponent.name
         : '';
 
-    const bottomCard = state.me.fieldHand.find((c) => c.id === activeSelectedId) ?? null;
-    const topCard = state.opponent.fieldHand.find((c) => c.id === activeTopSelectedId) ?? null;
+    const hasAnySelection = activeSelectedId !== null || activeTopSelectedId !== null;
 
     const renderPlayerZone = (side: 'top' | 'bottom') => {
       const player = side === 'bottom' ? state.me : state.opponent;
@@ -109,7 +108,7 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({
                 selected={selId === card.id}
                 onClick={
                   state.phase === 'playing'
-                    ? () => handleLocalCardClick(side, card)
+                    ? () => handleLocalCardClick(side, card.id)
                     : undefined
                 }
               />
@@ -155,29 +154,23 @@ export const SpeedBoard: React.FC<SpeedBoardProps> = ({
               <div className="speed-local-piles">
                 {([0, 1] as const).map((pileIdx) => {
                   const pileCard = state.centerPiles[pileIdx];
-                  const canDrop =
-                    (bottomCard !== null &&
-                      canPlaceOnSpeedPile(bottomCard, pileCard, state.rules)) ||
-                    (topCard !== null && canPlaceOnSpeedPile(topCard, pileCard, state.rules));
                   return (
                     <div
                       key={pileIdx}
-                      className={`speed-local-pile-wrap ${canDrop ? 'selectable' : ''}`}
+                      className={`speed-local-pile-wrap ${hasAnySelection ? 'selectable' : ''}`}
                     >
                       <PlayingCard
                         card={pileCard}
                         size="lg"
                         animateIn
-                        onClick={canDrop ? () => handleLocalPileClick(pileIdx) : undefined}
+                        onClick={hasAnySelection ? () => handleLocalPileClick(pileIdx) : undefined}
                       />
                     </div>
                   );
                 })}
               </div>
               <div className="speed-local-log">
-                {activeSelectedId || activeTopSelectedId
-                  ? '出す台札をタップ'
-                  : state.lastLog}
+                {hasAnySelection ? '出す台札をタップ' : state.lastLog}
               </div>
             </>
           )}
