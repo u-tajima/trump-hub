@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { ArrowLeft, BookOpen, ClipboardList, Eye, EyeOff, RotateCcw, Users, X } from 'lucide-react';
+import type { ChessClientState } from '../games/chess';
 import type { ChinchiroClientState } from '../games/chinchiro';
 import type { Connect4ClientState } from '../games/connect4';
 import type { DaifugoClientState } from '../games/daifugo';
 import type { DoubtClientState } from '../games/doubt';
 import type { GomokuClientState } from '../games/gomoku';
 import type { HoldemClientState } from '../games/holdem';
+import type { IgoClientState } from '../games/igo';
 import type { MemoryClientState } from '../games/memory';
 import type { OldMaidClientState } from '../games/oldMaid';
 import type { PokerClientState } from '../games/poker';
@@ -13,17 +15,20 @@ import type { ReversiClientState } from '../games/reversi';
 import type { RouletteClientState } from '../games/roulette';
 import { GAME_REGISTRY } from '../games/registry';
 import type { SevensClientState } from '../games/sevens';
+import type { ShogiClientState } from '../games/shogi';
 import type { SpeedClientState } from '../games/speed';
 import type { GameId, GameRulesMap, ScoreBoardRoomRules } from '../types/game';
 import type { ScoreBoardOp, ScoreBoardState } from '../utils/scoreBoard';
 import { GameIcon } from './GameIcon';
 import { RuleConfigurator } from './RuleConfigurator';
+import { ChessBoard } from './boards/ChessBoard';
 import { ChinchiroBoard } from './boards/ChinchiroBoard';
 import { Connect4Board } from './boards/Connect4Board';
 import { DaifugoBoard } from './boards/DaifugoBoard';
 import { DoubtBoard } from './boards/DoubtBoard';
 import { GomokuBoard } from './boards/GomokuBoard';
 import { HoldemBoard } from './boards/HoldemBoard';
+import { IgoBoard } from './boards/IgoBoard';
 import { MemoryBoard } from './boards/MemoryBoard';
 import { OldMaidBoard } from './boards/OldMaidBoard';
 import { PokerBoard } from './boards/PokerBoard';
@@ -31,6 +36,7 @@ import { ReversiBoard } from './boards/ReversiBoard';
 import { RouletteBoard } from './boards/RouletteBoard';
 import { ScoreRoomBoard } from './boards/ScoreRoomBoard';
 import { SevensBoard } from './boards/SevensBoard';
+import { ShogiBoard } from './boards/ShogiBoard';
 import { SpeedBoard } from './boards/SpeedBoard';
 import './PassAndPlayOverlay.css';
 
@@ -211,6 +217,27 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             {gameId === 'connect4' && (
               <Connect4Board
                 state={gameState as Connect4ClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'shogi' && (
+              <ShogiBoard
+                state={gameState as ShogiClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'chess' && (
+              <ChessBoard
+                state={gameState as ChessClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'igo' && (
+              <IgoBoard
+                state={gameState as IgoClientState}
                 onAction={onAction}
                 isLocalPassAndPlay={isLocalPassAndPlay}
               />

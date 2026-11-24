@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Brain,
+  Circle,
   CircleDot,
   ClipboardList,
   Columns3,
@@ -10,7 +11,9 @@ import {
   Gem,
   Grid3X3,
   Hash,
+  Shield,
   Spade,
+  Swords,
   Target,
   Zap,
 } from 'lucide-react';
@@ -27,6 +30,9 @@ export type GameIconKey =
   | 'disc'
   | 'grid'
   | 'columns'
+  | 'swords'
+  | 'shield'
+  | 'circle'
   | 'dice'
   | 'target';
 
@@ -60,6 +66,12 @@ export const GameIcon: React.FC<GameIconProps> = ({ name, size = 18, className }
       return <Grid3X3 size={size} className={className} />;
     case 'columns':
       return <Columns3 size={size} className={className} />;
+    case 'swords':
+      return <Swords size={size} className={className} />;
+    case 'shield':
+      return <Shield size={size} className={className} />;
+    case 'circle':
+      return <Circle size={size} className={className} />;
     case 'dice':
       return <Dices size={size} className={className} />;
     case 'target':

@@ -97,6 +97,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     reversi: { ...GAME_REGISTRY.reversi.defaultRules },
     gomoku: { ...GAME_REGISTRY.gomoku.defaultRules },
     connect4: { ...GAME_REGISTRY.connect4.defaultRules },
+    shogi: { ...GAME_REGISTRY.shogi.defaultRules },
+    chess: { ...GAME_REGISTRY.chess.defaultRules },
+    igo: { ...GAME_REGISTRY.igo.defaultRules },
     chinchiro: { ...GAME_REGISTRY.chinchiro.defaultRules },
     roulette: { ...GAME_REGISTRY.roulette.defaultRules },
   }));
@@ -289,10 +292,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="game-pills" style={{ marginBottom: 8 }}>
             {(
               [
-                { id: 'all', label: 'すべて (13)' },
-                { id: 'card', label: 'カード (8)' },
-                { id: 'board', label: 'ボード (3)' },
-                { id: 'dice', label: 'ダイス・ルーレット (2)' },
+                { id: 'all', label: `すべて (${roomGames.length})` },
+                { id: 'card', label: `カード (${roomGames.filter((g) => g.category === 'card').length})` },
+                { id: 'board', label: `ボード (${roomGames.filter((g) => g.category === 'board').length})` },
+                { id: 'dice', label: `ダイス・ルーレット (${roomGames.filter((g) => g.category === 'dice').length})` },
               ] as const
             ).map((cat) => (
               <button

@@ -1,4 +1,11 @@
 import {
+  applyChessAction,
+  type ChessInternalState,
+  computeChessBotAction,
+  initChess,
+  sanitizeChessState,
+} from './chess';
+import {
   applyChinchiroAction,
   type ChinchiroInternalState,
   computeChinchiroBotAction,
@@ -40,6 +47,13 @@ import {
   initHoldem,
   sanitizeHoldemState,
 } from './holdem';
+import {
+  applyIgoAction,
+  computeIgoBotAction,
+  type IgoInternalState,
+  initIgo,
+  sanitizeIgoState,
+} from './igo';
 import {
   applyMemoryAction,
   computeMemoryBotAction,
@@ -83,6 +97,13 @@ import {
   type SevensInternalState,
 } from './sevens';
 import {
+  applyShogiAction,
+  computeShogiBotAction,
+  initShogi,
+  sanitizeShogiState,
+  type ShogiInternalState,
+} from './shogi';
+import {
   applySpeedAction,
   computeSpeedBotAction,
   initSpeed,
@@ -90,6 +111,7 @@ import {
   type SpeedInternalState,
 } from './speed';
 import type {
+  ChessRules,
   ChinchiroRules,
   Connect4Rules,
   DaifugoRules,
@@ -98,6 +120,7 @@ import type {
   GameRulesMap,
   GomokuRules,
   HoldemRules,
+  IgoRules,
   MemoryRules,
   OldMaidRules,
   PlayerInfo,
@@ -106,6 +129,7 @@ import type {
   RouletteRules,
   ScoreBoardRoomRules,
   SevensRules,
+  ShogiRules,
   SpeedRules,
 } from '../types/game';
 
@@ -127,6 +151,9 @@ export type AnyInternalState =
   | ReversiInternalState
   | GomokuInternalState
   | Connect4InternalState
+  | ShogiInternalState
+  | ChessInternalState
+  | IgoInternalState
   | ChinchiroInternalState
   | RouletteInternalState;
 
@@ -166,6 +193,12 @@ export function initGameEngine(
       return initGomoku(players, rules as GomokuRules);
     case 'connect4':
       return initConnect4(players, rules as Connect4Rules);
+    case 'shogi':
+      return initShogi(players, rules as ShogiRules);
+    case 'chess':
+      return initChess(players, rules as ChessRules);
+    case 'igo':
+      return initIgo(players, rules as IgoRules);
     case 'chinchiro':
       return initChinchiro(players, rules as ChinchiroRules);
     case 'roulette':
@@ -204,6 +237,12 @@ export function applyGameAction(
       return applyGomokuAction(state as GomokuInternalState, playerId, action);
     case 'connect4':
       return applyConnect4Action(state as Connect4InternalState, playerId, action);
+    case 'shogi':
+      return applyShogiAction(state as ShogiInternalState, playerId, action);
+    case 'chess':
+      return applyChessAction(state as ChessInternalState, playerId, action);
+    case 'igo':
+      return applyIgoAction(state as IgoInternalState, playerId, action);
     case 'chinchiro':
       return applyChinchiroAction(state as ChinchiroInternalState, playerId, action);
     case 'roulette':
@@ -237,6 +276,12 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizeGomokuState(state as GomokuInternalState, playerId);
     case 'connect4':
       return sanitizeConnect4State(state as Connect4InternalState, playerId);
+    case 'shogi':
+      return sanitizeShogiState(state as ShogiInternalState, playerId);
+    case 'chess':
+      return sanitizeChessState(state as ChessInternalState, playerId);
+    case 'igo':
+      return sanitizeIgoState(state as IgoInternalState, playerId);
     case 'chinchiro':
       return sanitizeChinchiroState(state as ChinchiroInternalState, playerId);
     case 'roulette':
@@ -363,6 +408,37 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
       const act = computeConnect4BotAction(s);
       if (!act) return null;
       return applyConnect4Action(s, current.id, act).state;
+    }
+    case 'shogi': {
+      const s = state as ShogiInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeShogiBotAction(s);
+      if (!act) return null;
+      return applyShogiAction(s, current.id, act).state;
+    }
+    case 'chess': {
+      const s = state as ChessInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeChessBotAction(s);
+      if (!act) return null;
+      return applyChessAction(s, current.id, act).state;
+    }
+    case 'igo': {
+      const s = state as IgoInternalState;
+      if (s.subPhase === 'scoring') {
+        const bot = s.players.find((p) => p.isBot && !p.scoringAgreed);
+        if (!bot) return null;
+        const act = computeIgoBotAction(s);
+        if (!act) return null;
+        return applyIgoAction(s, bot.id, act).state;
+      }
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeIgoBotAction(s);
+      if (!act) return null;
+      return applyIgoAction(s, current.id, act).state;
     }
     case 'chinchiro': {
       const s = state as ChinchiroInternalState;

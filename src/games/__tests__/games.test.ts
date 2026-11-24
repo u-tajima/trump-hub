@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../../types/card';
 import type { PlayerInfo } from '../../types/game';
+import { applyChessAction, computeChessBotAction, getChessLegalMoves, initChess } from '../chess';
 import { applyChinchiroAction, computeChinchiroBotAction, evaluateChinchiroDice, initChinchiro } from '../chinchiro';
 import { applyConnect4Action, computeConnect4BotAction, initConnect4 } from '../connect4';
 import { applyDaifugoAction, canPlayOnTable, computeDaifugoBotAction, initDaifugo, parsePlay } from '../daifugo';
 import { applyDoubtAction, computeDoubtBotAction, initDoubt } from '../doubt';
 import { applyGomokuAction, computeGomokuBotAction, initGomoku } from '../gomoku';
 import { applyHoldemAction, computeHoldemBotAction, evaluateBestSeven, initHoldem } from '../holdem';
+import { applyIgoAction, canPlaceIgoStone, computeIgoBotAction, initIgo } from '../igo';
 import { applyMemoryAction, computeMemoryBotAction, initMemory } from '../memory';
 import { applyOldMaidAction, initOldMaid } from '../oldMaid';
 import { applyPokerAction, computePokerBotAction, evaluatePokerHand, initPoker } from '../poker';
@@ -14,6 +16,7 @@ import { GAME_REGISTRY } from '../registry';
 import { applyReversiAction, computeReversiBotAction, initReversi } from '../reversi';
 import { applyRouletteAction, EUROPEAN_WHEEL_ORDER, getRouletteColor, initRoulette } from '../roulette';
 import { applySevensAction, canPlaceNormalCard, computeSevensBotAction, initSevens } from '../sevens';
+import { applyShogiAction, computeShogiBotAction, getShogiLegalMoves, initShogi } from '../shogi';
 import { applySpeedAction, canPlaceOnSpeedPile, computeSpeedBotAction, initSpeed, sanitizeSpeedState } from '../speed';
 import {
   applyScoreBoardOp,
@@ -592,12 +595,12 @@ describe('Enhanced CPU AI', () => {
 });
 
 describe('Perfect Information Local Pass-and-Play', () => {
-  it('marks only reversi, gomoku, and connect4 as perfect information games', () => {
+  it('marks reversi, gomoku, connect4, shogi, chess, and igo as perfect information games', () => {
     const perfectIds = Object.values(GAME_REGISTRY)
       .filter((g) => g.isPerfectInfo)
       .map((g) => g.id)
       .sort();
-    expect(perfectIds).toEqual(['connect4', 'gomoku', 'reversi']);
+    expect(perfectIds).toEqual(['chess', 'connect4', 'gomoku', 'igo', 'reversi', 'shogi']);
   });
 
   it('allows host and local player to alternate turns in reversi, gomoku, and connect4', () => {
@@ -696,5 +699,116 @@ describe('Perfect Information Local Pass-and-Play', () => {
     const speedView = sanitizeSpeedState(afterPlay, 'host-1');
     expect(speedView.me.fieldHand.length).toBe(4);
     expect(speedView.opponent.fieldHand.length).toBe(4);
+  });
+});
+
+describe('Shogi, Chess, and Igo official rules', () => {
+  it('Shogi: enforces 30 opening moves, nifu ban, uchifuzume ban, and sennichite draw', () => {
+    const players = makePlayers(2);
+    const state = initShogi(players, GAME_REGISTRY.shogi.defaultRules);
+    expect(getShogiLegalMoves(state).length).toBe(30);
+
+    // 二歩禁止: 先手の歩がある筋(col 0)には歩を打てない
+    state.players[0].hand.P = 1;
+    const nifuAttempt = applyShogiAction(state, 'p1', {
+      type: 'drop',
+      payload: { pieceType: 'P', toRow: 4, toCol: 0 },
+    });
+    expect(nifuAttempt.error).toBeDefined();
+
+    // 打ち歩詰め禁止: 後手玉(0,4)を先手金(2,4)が守り、玉の左右(0,3)(0,5)を後手の香などで塞いだ局面で(1,4)への歩打ちを禁止
+    const uchi = initShogi(players, GAME_REGISTRY.shogi.defaultRules);
+    uchi.board = Array.from({ length: 9 }, () => Array(9).fill(null));
+    uchi.board[0][4] = { type: 'K', owner: 2, promoted: false };
+    uchi.board[0][3] = { type: 'L', owner: 2, promoted: false };
+    uchi.board[0][5] = { type: 'L', owner: 2, promoted: false };
+    uchi.board[1][3] = { type: 'G', owner: 1, promoted: false };
+    uchi.board[1][5] = { type: 'G', owner: 1, promoted: false };
+    uchi.board[2][4] = { type: 'G', owner: 1, promoted: false };
+    uchi.board[8][4] = { type: 'K', owner: 1, promoted: false };
+    uchi.players[0].hand.P = 1;
+    const uchiMoves = getShogiLegalMoves(uchi, 1);
+    expect(uchiMoves.some((m) => m.kind === 'drop' && m.pieceType === 'P' && m.toRow === 1 && m.toCol === 4)).toBe(false);
+
+    // 千日手: 同じ手順（飛車の往復）で同一局面4回出現 → 引き分け
+    let rep = initShogi(players, GAME_REGISTRY.shogi.defaultRules);
+    for (let i = 0; i < 3; i++) {
+      rep = applyShogiAction(rep, 'p1', { type: 'move', payload: { fromRow: 7, fromCol: 7, toRow: 7, toCol: 6, promote: false } }).state;
+      rep = applyShogiAction(rep, 'p2', { type: 'move', payload: { fromRow: 1, fromCol: 1, toRow: 1, toCol: 2, promote: false } }).state;
+      rep = applyShogiAction(rep, 'p1', { type: 'move', payload: { fromRow: 7, fromCol: 6, toRow: 7, toCol: 7, promote: false } }).state;
+      rep = applyShogiAction(rep, 'p2', { type: 'move', payload: { fromRow: 1, fromCol: 2, toRow: 1, toCol: 1, promote: false } }).state;
+    }
+    expect(rep.phase).toBe('finished');
+    expect(rep.winnerId).toBe('draw');
+    expect(rep.finishReason).toBe('sennichite');
+
+    // CPU が合法手を返すこと
+    const botState = initShogi(players, GAME_REGISTRY.shogi.defaultRules);
+    botState.players[0].isBot = true;
+    expect(computeShogiBotAction(botState)).not.toBeNull();
+  });
+
+  it('Chess: enforces 20 opening moves, en passant, castling, threefold repetition, and insufficient material', () => {
+    const players = makePlayers(2);
+    const state = initChess(players, GAME_REGISTRY.chess.defaultRules);
+    expect(getChessLegalMoves(state).length).toBe(20);
+
+    // 同形三復（ナイトの往復で初期局面3回目）
+    let rep = initChess(players, GAME_REGISTRY.chess.defaultRules);
+    for (let i = 0; i < 2; i++) {
+      rep = applyChessAction(rep, 'p1', { type: 'move', payload: { fromRow: 7, fromCol: 6, toRow: 5, toCol: 5 } }).state;
+      rep = applyChessAction(rep, 'p2', { type: 'move', payload: { fromRow: 0, fromCol: 6, toRow: 2, toCol: 5 } }).state;
+      rep = applyChessAction(rep, 'p1', { type: 'move', payload: { fromRow: 5, fromCol: 5, toRow: 7, toCol: 6 } }).state;
+      rep = applyChessAction(rep, 'p2', { type: 'move', payload: { fromRow: 2, fromCol: 5, toRow: 0, toCol: 6 } }).state;
+    }
+    expect(rep.phase).toBe('finished');
+    expect(rep.winnerId).toBe('draw');
+    expect(rep.finishReason).toBe('threefold');
+
+    // アンパッサン成立テスト
+    let ep = initChess(players, GAME_REGISTRY.chess.defaultRules);
+    ep = applyChessAction(ep, 'p1', { type: 'move', payload: { fromRow: 6, fromCol: 4, toRow: 4, toCol: 4 } }).state; // e4
+    ep = applyChessAction(ep, 'p2', { type: 'move', payload: { fromRow: 1, fromCol: 0, toRow: 2, toCol: 0 } }).state; // a6
+    ep = applyChessAction(ep, 'p1', { type: 'move', payload: { fromRow: 4, fromCol: 4, toRow: 3, toCol: 4 } }).state; // e5
+    ep = applyChessAction(ep, 'p2', { type: 'move', payload: { fromRow: 1, fromCol: 3, toRow: 3, toCol: 3 } }).state; // d5
+    const epMoves = getChessLegalMoves(ep);
+    expect(epMoves.some((m) => m.isEnPassant && m.toRow === 2 && m.toCol === 3)).toBe(true);
+
+    // CPU が合法手を返すこと
+    const botState = initChess(players, GAME_REGISTRY.chess.defaultRules);
+    botState.players[0].isBot = true;
+    expect(computeChessBotAction(botState)).not.toBeNull();
+  });
+
+  it('Igo: enforces captures, suicide ban, ko ban, and two-pass scoring with komi', () => {
+    const players = makePlayers(2);
+    const state = initIgo(players, { boardSize: 9, komi: 6.5, superko: true });
+
+    // 単純コウの局面を作る: (0,1)黒, (1,0)黒, (1,2)黒, (0,2)白, (1,3)白, (2,2)白, (1,1)白 → 黒が(0,2)を囲って取る
+    // 代わりにシンプルに: 角(0,0)に白、周囲(0,1)黒・(1,0)黒で打ち上げ＋自殺手禁止を確認
+    state.board[0][0] = 2;
+    state.board[0][1] = 1;
+    const capRes = applyIgoAction(state, 'p1', { type: 'place', payload: { row: 1, col: 0 } });
+    expect(capRes.error).toBeUndefined();
+    expect(capRes.state.board[0][0]).toBe(0);
+    expect(capRes.state.players[0].captures).toBe(1);
+
+    // 自殺手禁止: 白が (0,0) に打つのは呼吸点0なので禁止
+    expect(canPlaceIgoStone(capRes.state, 0, 0, 2).ok).toBe(false);
+
+    // 2連続パス → scoring フェーズ → 終局確定（コミ6.5で白勝ちまたは黒勝ちが正しく判定される）
+    let s = initIgo(players, { boardSize: 9, komi: 6.5, superko: true });
+    s = applyIgoAction(s, 'p1', { type: 'pass' }).state;
+    s = applyIgoAction(s, 'p2', { type: 'pass' }).state;
+    expect(s.subPhase).toBe('scoring');
+    expect(s.scoreSummary?.whiteTotal).toBe(6.5);
+    s = applyIgoAction(s, 'p1', { type: 'confirmScore', payload: { forceAll: true } }).state;
+    expect(s.phase).toBe('finished');
+    expect(s.winnerId).toBe('p2'); // 空盤ならコミ6.5で白勝ち
+
+    // CPU が合法手を返すこと
+    const botState = initIgo(players, { boardSize: 9, komi: 6.5, superko: true });
+    botState.players[0].isBot = true;
+    expect(computeIgoBotAction(botState)).not.toBeNull();
   });
 });

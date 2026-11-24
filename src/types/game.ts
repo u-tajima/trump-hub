@@ -13,6 +13,9 @@ export type GameId =
   | 'reversi'
   | 'gomoku'
   | 'connect4'
+  | 'shogi'
+  | 'chess'
+  | 'igo'
   | 'chinchiro'
   | 'roulette';
 
@@ -97,6 +100,22 @@ export interface Connect4Rules {
   rows: 6 | 7;               // 縦行数
 }
 
+export interface ShogiRules {
+  sennichiteRule: boolean;      // 千日手・連続王手の千日手判定
+  uchifuzumeBan: boolean;       // 打ち歩詰め禁止
+}
+
+export interface ChessRules {
+  fiftyMoveRule: boolean;       // 50手ルール（100ハーフムーブ）引き分け
+  threefoldRepetition: boolean; // 同形三復（千日手）引き分け
+}
+
+export interface IgoRules {
+  boardSize: 9 | 13 | 19;       // 盤面サイズ（9路 / 13路 / 19路）
+  komi: number;                 // コミ（白への加算目数、デフォルト 6.5）
+  superko: boolean;             // スーパーコウ（同形反復）禁止
+}
+
 export interface ChinchiroRules {
   rounds: number;            // ラウンド数（0 = 上限なし、任意入力可）
   startPoints: number;       // 初期持ち点（任意入力可）
@@ -122,6 +141,9 @@ export type GameRulesMap = {
   reversi: ReversiRules;
   gomoku: GomokuRules;
   connect4: Connect4Rules;
+  shogi: ShogiRules;
+  chess: ChessRules;
+  igo: IgoRules;
   chinchiro: ChinchiroRules;
   roulette: RouletteRules;
 };
