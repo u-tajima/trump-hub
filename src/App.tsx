@@ -12,6 +12,7 @@ import {
   sanitizeGameState,
   tickGameEngine,
 } from './games/engineDispatcher';
+import { GAME_REGISTRY } from './games/registry';
 import { GuestPeerSession, HostPeerSession } from './network/peerManager';
 import type { GameId, GameRulesMap, LobbyState, PlayerInfo, ScoreBoardRoomRules } from './types/game';
 import { getRoomCodeFromUrl } from './utils/roomCode';
@@ -32,6 +33,16 @@ function getOrCreatePlayerId(): string {
     sessionStorage.setItem(key, id);
   }
   return id;
+}
+
+function resolveHostActorId(lobby: LobbyState, game: AnyInternalState | null, myId: string): string {
+  if (!game || !GAME_REGISTRY[lobby.config.gameId].isPerfectInfo) return myId;
+  if (!('players' in game) || !('turnIndex' in game)) return myId;
+  const turnState = game as { players: { id: string }[]; turnIndex: number };
+  const turnPlayer = turnState.players[turnState.turnIndex];
+  if (!turnPlayer) return myId;
+  const lobbyPlayer = lobby.players.find((p) => p.id === turnPlayer.id);
+  return lobbyPlayer?.isLocal ? lobbyPlayer.id : myId;
 }
 
 export function App() {
@@ -79,9 +90,10 @@ export function App() {
     host.broadcast({ kind: 'lobby', lobby: nextLobby });
 
     if (nextLobby.phase === 'playing' && nextGame) {
-      setClientGameState(sanitizeGameState(nextLobby.config.gameId, nextGame, myId));
+      const hostViewPlayerId = resolveHostActorId(nextLobby, nextGame, myId);
+      setClientGameState(sanitizeGameState(nextLobby.config.gameId, nextGame, hostViewPlayerId));
       for (const p of nextLobby.players) {
-        if (!p.isHost && !p.isBot) {
+        if (!p.isHost && !p.isBot && !p.isLocal) {
           host.sendTo(p.id, {
             kind: 'gameState',
             gameId: nextLobby.config.gameId,
@@ -303,6 +315,8 @@ export function App() {
   const handleAddBot = () => {
     const cur = lobbyRef.current;
     if (!cur || role !== 'host') return;
+    const meta = GAME_REGISTRY[cur.config.gameId];
+    if (cur.players.length >= meta.maxPlayers) return;
     const botCount = cur.players.filter((p) => p.isBot).length + 1;
     const bot: PlayerInfo = {
       id: `bot-${Date.now()}-${botCount}`,
@@ -312,6 +326,24 @@ export function App() {
       connected: true,
     };
     syncAllClients({ ...cur, players: [...cur.players, bot] }, null);
+  };
+
+  const handleAddLocalPlayer = () => {
+    const cur = lobbyRef.current;
+    if (!cur || role !== 'host') return;
+    const meta = GAME_REGISTRY[cur.config.gameId];
+    if (!meta.isPerfectInfo) return;
+    if (cur.players.length >= meta.maxPlayers) return;
+    if (cur.players.some((p) => p.isLocal)) return;
+    const localPlayer: PlayerInfo = {
+      id: `local-${Date.now()}`,
+      name: 'プレイヤー2',
+      isHost: false,
+      isBot: false,
+      isLocal: true,
+      connected: true,
+    };
+    syncAllClients({ ...cur, players: [...cur.players, localPlayer] }, null);
   };
 
   const handleRemovePlayer = (pid: string) => {
@@ -326,8 +358,14 @@ export function App() {
   const handleUpdateConfig = (gameId: GameId, rules: GameRulesMap[GameId]) => {
     const cur = lobbyRef.current;
     if (!cur || role !== 'host') return;
+    const nextMeta = GAME_REGISTRY[gameId];
+    let nextPlayers = cur.players;
+    if (!nextMeta.isPerfectInfo && cur.players.some((p) => p.isLocal)) {
+      nextPlayers = cur.players.filter((p) => !p.isLocal);
+      showToast('非完全情報ゲームのためローカル2Pを外しました');
+    }
     syncAllClients(
-      { ...cur, config: { ...cur.config, gameId, rules } },
+      { ...cur, players: nextPlayers, config: { ...cur.config, gameId, rules } },
       null
     );
   };
@@ -396,7 +434,8 @@ export function App() {
       const curLobby = lobbyRef.current;
       const curGame = internalGameRef.current;
       if (!curLobby || !curGame) return;
-      const res = applyGameAction(curLobby.config.gameId, curGame, myId, action);
+      const actorId = resolveHostActorId(curLobby, curGame, myId);
+      const res = applyGameAction(curLobby.config.gameId, curGame, actorId, action);
       if (res.error) {
         showToast(res.error);
         return;
@@ -430,6 +469,7 @@ export function App() {
           myId={myId}
           isHost={role === 'host'}
           onAddBot={handleAddBot}
+          onAddLocalPlayer={handleAddLocalPlayer}
           onRemovePlayer={handleRemovePlayer}
           onUpdateConfig={handleUpdateConfig}
           onStartGame={handleStartGame}
@@ -443,6 +483,7 @@ export function App() {
           rules={lobby.config.rules}
           gameState={clientGameState}
           isHost={role === 'host'}
+          isLocalPassAndPlay={role === 'host' && lobby.players.some((p) => p.isLocal)}
           onAction={handleGameAction}
           onRestart={handleStartGame}
           onBackToLobby={handleBackToLobby}

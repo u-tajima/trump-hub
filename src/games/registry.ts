@@ -23,6 +23,7 @@ export interface GameMeta<T extends GameId = GameId> {
   icon: GameIconKey;
   minPlayers: number;
   maxPlayers: number;
+  isPerfectInfo?: boolean;
   description: string;
   defaultRules: GameRulesMap[T];
   ruleFields: RuleFieldDef[];
@@ -419,6 +420,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'disc',
     minPlayers: 2,
     maxPlayers: 2,
+    isPerfectInfo: true,
     description: '相手の石を挟んで自分の色に変えよう！パス自動スキップや6×6クイック対戦に対応。',
     defaultRules: {
       boardSize: 8,
@@ -446,6 +448,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'grid',
     minPlayers: 2,
     maxPlayers: 2,
+    isPerfectInfo: true,
     description: '縦・横・斜めのいずれかに自分の石を5つ並べよう。盤面サイズや長連ルールを選択可能。',
     defaultRules: {
       boardSize: 13,
@@ -474,6 +477,7 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
     icon: 'columns',
     minPlayers: 2,
     maxPlayers: 2,
+    isPerfectInfo: true,
     description: '上からコインを落として縦・横・斜めに4つ連続で並べよう！スマホ片手でサクッと遊べます。',
     defaultRules: {
       cols: 7,

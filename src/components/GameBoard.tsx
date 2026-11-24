@@ -39,6 +39,7 @@ interface GameBoardProps {
   rules: GameRulesMap[GameId];
   gameState: unknown;
   isHost: boolean;
+  isLocalPassAndPlay?: boolean;
   onAction: (action: { type: string; payload?: unknown }) => void;
   onRestart: () => void;
   onBackToLobby: () => void;
@@ -56,6 +57,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   rules,
   gameState,
   isHost,
+  isLocalPassAndPlay = false,
   onAction,
   onRestart,
   onBackToLobby,
@@ -148,13 +150,25 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           <HoldemBoard state={gameState as HoldemClientState} onAction={onAction} />
         )}
         {gameId === 'reversi' && (
-          <ReversiBoard state={gameState as ReversiClientState} onAction={onAction} />
+          <ReversiBoard
+            state={gameState as ReversiClientState}
+            onAction={onAction}
+            isLocalPassAndPlay={isLocalPassAndPlay}
+          />
         )}
         {gameId === 'gomoku' && (
-          <GomokuBoard state={gameState as GomokuClientState} onAction={onAction} />
+          <GomokuBoard
+            state={gameState as GomokuClientState}
+            onAction={onAction}
+            isLocalPassAndPlay={isLocalPassAndPlay}
+          />
         )}
         {gameId === 'connect4' && (
-          <Connect4Board state={gameState as Connect4ClientState} onAction={onAction} />
+          <Connect4Board
+            state={gameState as Connect4ClientState}
+            onAction={onAction}
+            isLocalPassAndPlay={isLocalPassAndPlay}
+          />
         )}
         {gameId === 'chinchiro' && (
           <ChinchiroBoard state={gameState as ChinchiroClientState} onAction={onAction} />

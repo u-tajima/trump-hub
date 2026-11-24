@@ -1,0 +1,22 @@
+.badge.local {
+  background: rgba(56, 189, 248, 0.22);
+  color: #7dd3fc;
+}
+
+.text-sky {
+  color: #38bdf8;
+}
+
+.lobby-add-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chip-btn.local-accent {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #bae6fd;
+}

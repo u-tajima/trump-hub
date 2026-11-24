@@ -4,12 +4,18 @@ import type { Connect4ClientState } from '../../games/connect4';
 interface Connect4BoardProps {
   state: Connect4ClientState;
   onAction: (action: { type: string; payload?: unknown }) => void;
+  isLocalPassAndPlay?: boolean;
 }
 
-export const Connect4Board: React.FC<Connect4BoardProps> = ({ state, onAction }) => {
+export const Connect4Board: React.FC<Connect4BoardProps> = ({
+  state,
+  onAction,
+  isLocalPassAndPlay = false,
+}) => {
   const current = state.players[state.turnIndex];
   const isMyTurn = state.phase === 'playing' && current.id === state.myId;
   const cols = state.rules.cols;
+  const winner = state.players.find((p) => p.id === state.winnerId);
 
   const isWinCell = (r: number, c: number) =>
     state.winningLine.some((w) => w.row === r && w.col === c);
@@ -20,12 +26,15 @@ export const Connect4Board: React.FC<Connect4BoardProps> = ({ state, onAction })
         {state.players.map((p) => {
           const active = state.phase === 'playing' && current.id === p.id;
           return (
-            <div key={p.id} className={`opp-pill ${active ? 'active' : ''} ${p.id === state.myId ? 'me' : ''}`}>
+            <div
+              key={p.id}
+              className={`opp-pill ${active ? 'active' : ''} ${!isLocalPassAndPlay && p.id === state.myId ? 'me' : ''}`}
+            >
               <div className="opp-name">
                 <span className={`mini-dot ${p.disc === 1 ? 'red' : 'yellow'}`} /> {p.name}
               </div>
               <div className="opp-meta">
-                {active ? (p.id === state.myId ? 'あなたの番' : '相手の番') : '待機'}
+                {active ? (isLocalPassAndPlay ? '手番' : p.id === state.myId ? 'あなたの番' : '相手の番') : '待機'}
               </div>
             </div>
           );
@@ -69,6 +78,8 @@ export const Connect4Board: React.FC<Connect4BoardProps> = ({ state, onAction })
           <h3>
             {state.winnerId === 'draw'
               ? '引き分け！'
+              : isLocalPassAndPlay
+              ? `${winner?.name ?? ''} の勝利！`
               : state.winnerId === state.myId
               ? 'あなたの勝利！'
               : '相手の勝利…'}

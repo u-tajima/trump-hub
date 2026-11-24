@@ -4,12 +4,18 @@ import type { ReversiClientState } from '../../games/reversi';
 interface ReversiBoardProps {
   state: ReversiClientState;
   onAction: (action: { type: string; payload?: unknown }) => void;
+  isLocalPassAndPlay?: boolean;
 }
 
-export const ReversiBoard: React.FC<ReversiBoardProps> = ({ state, onAction }) => {
+export const ReversiBoard: React.FC<ReversiBoardProps> = ({
+  state,
+  onAction,
+  isLocalPassAndPlay = false,
+}) => {
   const current = state.players[state.turnIndex];
   const isMyTurn = state.phase === 'playing' && current.id === state.myId;
   const n = state.board.length;
+  const winner = state.players.find((p) => p.id === state.winnerId);
 
   const isValid = (r: number, c: number) =>
     isMyTurn && state.validMoves.some((m) => m.row === r && m.col === c);
@@ -21,7 +27,10 @@ export const ReversiBoard: React.FC<ReversiBoardProps> = ({ state, onAction }) =
           const active = state.phase === 'playing' && current.id === p.id;
           const count = p.color === 1 ? state.counts.black : state.counts.white;
           return (
-            <div key={p.id} className={`opp-pill ${active ? 'active' : ''} ${p.id === state.myId ? 'me' : ''}`}>
+            <div
+              key={p.id}
+              className={`opp-pill ${active ? 'active' : ''} ${!isLocalPassAndPlay && p.id === state.myId ? 'me' : ''}`}
+            >
               <div className="opp-name">
                 <span className={`mini-dot ${p.color === 1 ? 'black' : 'white'}`} /> {p.name}
               </div>
@@ -65,6 +74,8 @@ export const ReversiBoard: React.FC<ReversiBoardProps> = ({ state, onAction }) =
           <h3>
             {state.winnerId === 'draw'
               ? '引き分け！'
+              : isLocalPassAndPlay
+              ? `${winner?.name ?? ''} の勝利！`
               : state.winnerId === state.myId
               ? 'あなたの勝利！'
               : '相手の勝利…'}

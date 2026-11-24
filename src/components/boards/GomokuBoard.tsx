@@ -4,12 +4,18 @@ import type { GomokuClientState } from '../../games/gomoku';
 interface GomokuBoardProps {
   state: GomokuClientState;
   onAction: (action: { type: string; payload?: unknown }) => void;
+  isLocalPassAndPlay?: boolean;
 }
 
-export const GomokuBoard: React.FC<GomokuBoardProps> = ({ state, onAction }) => {
+export const GomokuBoard: React.FC<GomokuBoardProps> = ({
+  state,
+  onAction,
+  isLocalPassAndPlay = false,
+}) => {
   const current = state.players[state.turnIndex];
   const isMyTurn = state.phase === 'playing' && current.id === state.myId;
   const n = state.board.length;
+  const winner = state.players.find((p) => p.id === state.winnerId);
 
   const isWinCell = (r: number, c: number) =>
     state.winningLine.some((w) => w.row === r && w.col === c);
@@ -20,7 +26,10 @@ export const GomokuBoard: React.FC<GomokuBoardProps> = ({ state, onAction }) => 
         {state.players.map((p) => {
           const active = state.phase === 'playing' && current.id === p.id;
           return (
-            <div key={p.id} className={`opp-pill ${active ? 'active' : ''} ${p.id === state.myId ? 'me' : ''}`}>
+            <div
+              key={p.id}
+              className={`opp-pill ${active ? 'active' : ''} ${!isLocalPassAndPlay && p.id === state.myId ? 'me' : ''}`}
+            >
               <div className="opp-name">
                 <span className={`mini-dot ${p.stone === 1 ? 'black' : 'white'}`} /> {p.name}
               </div>
@@ -63,6 +72,8 @@ export const GomokuBoard: React.FC<GomokuBoardProps> = ({ state, onAction }) => 
           <h3>
             {state.winnerId === 'draw'
               ? '引き分け！'
+              : isLocalPassAndPlay
+              ? `${winner?.name ?? ''} の勝利！`
               : state.winnerId === state.myId
               ? 'あなたの勝利！'
               : '相手の勝利…'}

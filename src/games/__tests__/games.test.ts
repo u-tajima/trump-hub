@@ -588,3 +588,42 @@ describe('Enhanced CPU AI', () => {
     expect(act).toEqual({ type: 'place', payload: { row: 0, col: 0 } });
   });
 });
+
+describe('Perfect Information Local Pass-and-Play', () => {
+  it('marks only reversi, gomoku, and connect4 as perfect information games', () => {
+    const perfectIds = Object.values(GAME_REGISTRY)
+      .filter((g) => g.isPerfectInfo)
+      .map((g) => g.id)
+      .sort();
+    expect(perfectIds).toEqual(['connect4', 'gomoku', 'reversi']);
+  });
+
+  it('allows host and local player to alternate turns in reversi, gomoku, and connect4', () => {
+    const localPlayers: PlayerInfo[] = [
+      { id: 'host-1', name: 'ホスト', isHost: true, isBot: false, connected: true },
+      { id: 'local-2', name: 'プレイヤー2', isHost: false, isBot: false, isLocal: true, connected: true },
+    ];
+
+    // Reversi
+    let rev = initReversi(localPlayers, GAME_REGISTRY.reversi.defaultRules);
+    expect(rev.players[rev.turnIndex].id).toBe('host-1');
+    rev = applyReversiAction(rev, 'host-1', { type: 'place', payload: { row: 2, col: 3 } }).state;
+    expect(rev.players[rev.turnIndex].id).toBe('local-2');
+    rev = applyReversiAction(rev, 'local-2', { type: 'place', payload: { row: 2, col: 2 } }).state;
+    expect(rev.players[rev.turnIndex].id).toBe('host-1');
+
+    // Gomoku
+    let gom = initGomoku(localPlayers, GAME_REGISTRY.gomoku.defaultRules);
+    gom = applyGomokuAction(gom, 'host-1', { type: 'place', payload: { row: 6, col: 6 } }).state;
+    expect(gom.players[gom.turnIndex].id).toBe('local-2');
+    gom = applyGomokuAction(gom, 'local-2', { type: 'place', payload: { row: 6, col: 7 } }).state;
+    expect(gom.players[gom.turnIndex].id).toBe('host-1');
+
+    // Connect4
+    let c4 = initConnect4(localPlayers, GAME_REGISTRY.connect4.defaultRules);
+    c4 = applyConnect4Action(c4, 'host-1', { type: 'drop', payload: { col: 3 } }).state;
+    expect(c4.players[c4.turnIndex].id).toBe('local-2');
+    c4 = applyConnect4Action(c4, 'local-2', { type: 'drop', payload: { col: 3 } }).state;
+    expect(c4.players[c4.turnIndex].id).toBe('host-1');
+  });
+});

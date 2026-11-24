@@ -131,6 +131,7 @@ export interface PlayerInfo {
   name: string;
   isHost: boolean;
   isBot: boolean;
+  isLocal?: boolean;
   connected: boolean;
 }
 

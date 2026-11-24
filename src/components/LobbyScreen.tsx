@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { Bot, Check, ClipboardList, Copy, LogOut, Play, QrCode, Share2, SlidersHorizontal, Trash2, User } from 'lucide-react';
+import { Bot, Check, ClipboardList, Copy, LogOut, Play, QrCode, Share2, SlidersHorizontal, Trash2, User, Users } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { GAME_LIST, GAME_REGISTRY } from '../games/registry';
 import type { GameId, GameRulesMap, LobbyState } from '../types/game';
 import { buildInviteUrl } from '../utils/roomCode';
 import { GameIcon } from './GameIcon';
 import { RuleConfigurator } from './RuleConfigurator';
+import './LobbyScreen.css';
 
 interface LobbyScreenProps {
   lobby: LobbyState;
   myId: string;
   isHost: boolean;
   onAddBot: () => void;
+  onAddLocalPlayer: () => void;
   onRemovePlayer: (playerId: string) => void;
   onUpdateConfig: (gameId: GameId, rules: GameRulesMap[GameId]) => void;
   onStartGame: () => void;
@@ -24,6 +26,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   myId,
   isHost,
   onAddBot,
+  onAddLocalPlayer,
   onRemovePlayer,
   onUpdateConfig,
   onStartGame,
@@ -121,10 +124,18 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
             参加者 ({lobby.players.length}/{meta.maxPlayers})
           </h2>
           {isHost && lobby.config.gameId !== 'scoreboard' && lobby.players.length < meta.maxPlayers && (
-            <button type="button" className="chip-btn accent" onClick={onAddBot}>
-              <Bot size={15} />
-              CPU追加
-            </button>
+            <div className="lobby-add-actions">
+              {meta.isPerfectInfo && !lobby.players.some((p) => p.isLocal) && (
+                <button type="button" className="chip-btn local-accent" onClick={onAddLocalPlayer}>
+                  <Users size={15} />
+                  ローカル追加
+                </button>
+              )}
+              <button type="button" className="chip-btn accent" onClick={onAddBot}>
+                <Bot size={15} />
+                CPU追加
+              </button>
+            </div>
           )}
         </div>
 
@@ -132,10 +143,17 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           {lobby.players.map((p) => (
             <li key={p.id} className={`player-row ${p.id === myId ? 'is-me' : ''}`}>
               <div className="player-row-left">
-                {p.isBot ? <Bot size={18} className="text-amber" /> : <User size={18} />}
+                {p.isBot ? (
+                  <Bot size={18} className="text-amber" />
+                ) : p.isLocal ? (
+                  <Users size={18} className="text-sky" />
+                ) : (
+                  <User size={18} />
+                )}
                 <span className="player-name">{p.name}</span>
                 {p.isHost && <span className="badge host">HOST</span>}
                 {p.id === myId && <span className="badge me">あなた</span>}
+                {p.isLocal && <span className="badge local">ローカル</span>}
                 {p.isBot && <span className="badge bot">CPU</span>}
               </div>
               {isHost && p.id !== myId && (
@@ -199,7 +217,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           {!canStart && (
             <div className="warn-text">
               {lobby.players.length < meta.minPlayers
-                ? `あと ${meta.minPlayers - lobby.players.length} 人（またはCPU）必要です`
+                ? meta.isPerfectInfo
+                  ? `あと ${meta.minPlayers - lobby.players.length} 人（ローカル追加またはCPU）必要です`
+                  : `あと ${meta.minPlayers - lobby.players.length} 人（またはCPU）必要です`
                 : `最大 ${meta.maxPlayers} 人までプレイできます`}
             </div>
           )}
