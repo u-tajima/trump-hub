@@ -525,7 +525,7 @@ export const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
         {/* アクションバー（ダイスロール / ベアオフ） */}
         {state.phase === 'playing' && (
           <div
-            className="action-bar"
+            className="action-bar sticky-bottom-bar"
             style={{ width: '100%', maxWidth: 404, justifyContent: 'center' }}
           >
             {isMyTurn && state.subPhase === 'roll' && (
