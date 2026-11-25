@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Crosshair, Flame, Trophy } from 'lucide-react';
+import { Flame, Navigation, ShieldAlert, Trophy, Zap } from 'lucide-react';
 import {
   COIN_SOCCER_COIN_RADIUS,
   COIN_SOCCER_GOAL_DEPTH,
@@ -19,6 +19,7 @@ import {
   type CoinSoccerClientState,
   type CoinSoccerCoin,
 } from '../../games/coinSoccer';
+import { computeFlickVelocity, type FlickSample } from '../../utils/flickInput';
 import './CoinSoccerBoard.css';
 
 interface CoinSoccerBoardProps {
@@ -47,17 +48,16 @@ interface PulseRing {
   maxRadius: number;
 }
 
-interface DragAimState {
+interface FlickGestureState {
   pointerId: number;
   coinIndex: CoinIndex;
-  startX: number;
-  startY: number;
-  currX: number;
-  currY: number;
+  samples: FlickSample[];
 }
 
-const MAX_DRAG_DIST = 185;
-const MIN_DRAG_DIST = 16;
+const FLICK_MIN_DISTANCE = 18;
+const FLICK_MAX_SWIPE_VEL = 1.55;
+const FLICK_MIN_SWIPE_VEL = 0.16;
+const FLICK_TRAIL_MAX_POINTS = 14;
 
 function drawPitchBackground(ctx: CanvasRenderingContext2D, rotatedView: boolean): void {
   const W = COIN_SOCCER_WIDTH;
@@ -405,7 +405,7 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
     rings: [],
   });
 
-  const dragRef = useRef<DragAimState | null>(null);
+  const flickRef = useRef<FlickGestureState | null>(null);
   const lastPlayedShotIdRef = useRef<number>(state.lastShot?.shotId ?? 0);
 
   const latestRef = useRef({
@@ -573,65 +573,45 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
           const drawCoinsList = anim.active ? anim.coins : curState.coins;
           const activeCoinIdx = anim.active
             ? anim.flickedIndex
-            : dragRef.current?.coinIndex ?? curSelected;
+            : flickRef.current?.coinIndex ?? curSelected;
 
           // ゲート破線ガイド（操作可能時・再生中とも表示して分かりやすく）
           if (curState.phase === 'playing' || anim.active) {
             drawGateGuide(ctx, drawCoinsList, activeCoinIdx);
           }
 
-          // ドラッグ中のエイム＆パワーガイド
-          const drag = dragRef.current;
-          if (drag && !anim.active && curCanControl) {
-            const coin = curState.coins[drag.coinIndex];
-            const pullX = drag.startX - drag.currX;
-            const pullY = drag.startY - drag.currY;
-            const pullDist = Math.hypot(pullX, pullY);
+          // フリック中の短いスワイプ軌跡（光のトレイル）
+          const flick = flickRef.current;
+          if (flick && !anim.active && curCanControl && flick.samples.length >= 2) {
+            const trail = flick.samples.slice(-FLICK_TRAIL_MAX_POINTS);
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            for (let i = 1; i < trail.length; i++) {
+              const prev = trail[i - 1];
+              const curr = trail[i];
+              const ratio = i / (trail.length - 1);
 
-            if (pullDist >= MIN_DRAG_DIST) {
-              const clampedDist = Math.min(MAX_DRAG_DIST, pullDist);
-              const powerRatio = clampedDist / MAX_DRAG_DIST;
-              const dirX = pullX / pullDist;
-              const dirY = pullY / pullDist;
-
-              const ringColor =
-                powerRatio < 0.45 ? '#34d399' : powerRatio < 0.78 ? '#f59e0b' : '#ef4444';
-
-              ctx.save();
-              // パワーリング
-              ctx.strokeStyle = ringColor;
-              ctx.lineWidth = 4.5;
+              ctx.strokeStyle = `rgba(253, 224, 71, ${0.08 + ratio * 0.34})`;
+              ctx.lineWidth = 4 + ratio * 12;
               ctx.beginPath();
-              ctx.arc(coin.x, coin.y, COIN_SOCCER_COIN_RADIUS + 12 + powerRatio * 22, 0, Math.PI * 2);
+              ctx.moveTo(prev.x, prev.y);
+              ctx.lineTo(curr.x, curr.y);
               ctx.stroke();
 
-              // 後ろ引きライン
-              const tailX = coin.x - dirX * clampedDist * 0.72;
-              const tailY = coin.y - dirY * clampedDist * 0.72;
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-              ctx.lineWidth = 3.5;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${0.18 + ratio * 0.72})`;
+              ctx.lineWidth = 1.5 + ratio * 4.5;
               ctx.beginPath();
-              ctx.moveTo(coin.x, coin.y);
-              ctx.lineTo(tailX, tailY);
+              ctx.moveTo(prev.x, prev.y);
+              ctx.lineTo(curr.x, curr.y);
               ctx.stroke();
-
-              ctx.fillStyle = ringColor;
-              ctx.beginPath();
-              ctx.arc(tailX, tailY, 8, 0, Math.PI * 2);
-              ctx.fill();
-
-              // 前方エイム点線
-              const rayLen = 140 + powerRatio * 240;
-              ctx.strokeStyle = ringColor;
-              ctx.lineWidth = 3.5;
-              ctx.setLineDash([10, 8]);
-              ctx.beginPath();
-              ctx.moveTo(coin.x, coin.y);
-              ctx.lineTo(coin.x + dirX * rayLen, coin.y + dirY * rayLen);
-              ctx.stroke();
-              ctx.setLineDash([]);
-              ctx.restore();
             }
+            const tip = trail[trail.length - 1];
+            ctx.fillStyle = 'rgba(254, 240, 138, 0.92)';
+            ctx.beginPath();
+            ctx.arc(tip.x, tip.y, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
           }
 
           // 3枚のコインを描画
@@ -697,7 +677,7 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
     e.currentTarget.setPointerCapture(e.pointerId);
     const pt = toLogicalCoords(e.clientX, e.clientY);
 
-    // タップした位置に最も近いコインが半径+32px以内なら自動選択
+    // タップした位置に最も近いコインが半径+34px以内なら自動選択
     let chosen: CoinIndex = selectedCoin;
     let nearestDist = COIN_SOCCER_COIN_RADIUS + 34;
     for (let i = 0; i < 3; i++) {
@@ -710,48 +690,52 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
     }
     setSelectedCoin(chosen);
 
-    dragRef.current = {
+    flickRef.current = {
       pointerId: e.pointerId,
       coinIndex: chosen,
-      startX: pt.x,
-      startY: pt.y,
-      currX: pt.x,
-      currY: pt.y,
+      samples: [{ x: pt.x, y: pt.y, t: performance.now() }],
     };
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
+    const flick = flickRef.current;
+    if (!flick || flick.pointerId !== e.pointerId) return;
     const pt = toLogicalCoords(e.clientX, e.clientY);
-    dragRef.current.currX = pt.x;
-    dragRef.current.currY = pt.y;
+    flick.samples.push({ x: pt.x, y: pt.y, t: performance.now() });
+    if (flick.samples.length > 60) {
+      flick.samples.shift();
+    }
   };
 
-  const finishDrag = (e: React.PointerEvent<HTMLCanvasElement>, cancelled: boolean) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    dragRef.current = null;
+  const finishFlick = (e: React.PointerEvent<HTMLCanvasElement>, cancelled: boolean) => {
+    const flick = flickRef.current;
+    if (!flick || flick.pointerId !== e.pointerId) return;
+    flickRef.current = null;
 
     if (cancelled || !canControl) return;
 
-    const pullX = drag.startX - drag.currX;
-    const pullY = drag.startY - drag.currY;
-    const pullDist = Math.hypot(pullX, pullY);
-    if (pullDist < MIN_DRAG_DIST) return;
+    const pt = toLogicalCoords(e.clientX, e.clientY);
+    const prev = flick.samples[flick.samples.length - 1];
+    if (!prev || Math.hypot(pt.x - prev.x, pt.y - prev.y) > 0.5) {
+      flick.samples.push({ x: pt.x, y: pt.y, t: performance.now() });
+    }
 
-    const clamped = Math.min(MAX_DRAG_DIST, pullDist);
-    const powerRatio = (clamped - MIN_DRAG_DIST) / (MAX_DRAG_DIST - MIN_DRAG_DIST);
-    const speed =
-      COIN_SOCCER_MIN_SPEED +
-      Math.pow(powerRatio, 1.06) * (COIN_SOCCER_MAX_SPEED - COIN_SOCCER_MIN_SPEED);
+    const result = computeFlickVelocity(flick.samples, {
+      minSpeed: COIN_SOCCER_MIN_SPEED,
+      maxSpeed: COIN_SOCCER_MAX_SPEED,
+      minDistance: FLICK_MIN_DISTANCE,
+      maxSwipeVelocity: FLICK_MAX_SWIPE_VEL,
+      minSwipeVelocity: FLICK_MIN_SWIPE_VEL,
+    });
+    if (!result) return;
 
     onAction(
       {
         type: 'flick',
         payload: {
-          coinIndex: drag.coinIndex,
-          vx: (pullX / pullDist) * speed,
-          vy: (pullY / pullDist) * speed,
+          coinIndex: flick.coinIndex,
+          vx: result.vx,
+          vy: result.vy,
         },
       },
       isLocalPassAndPlay ? activePlayer.id : undefined
@@ -804,6 +788,22 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
         </div>
       </div>
 
+      {state.phase === 'playing' && (
+        <div className="coinsoccer-status-bar">
+          {state.passStreak === 0 ? (
+            <span className="coinsoccer-rule-pill locked">
+              <ShieldAlert size={13} />
+              パス必須（1撃ゴール禁止）
+            </span>
+          ) : (
+            <span className="coinsoccer-rule-pill unlocked">
+              <Zap size={13} />
+              シュート解放！
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="coinsoccer-pitch-stage">
         <canvas
           ref={canvasRef}
@@ -812,8 +812,8 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
           className={`coinsoccer-canvas ${!canControl ? 'disabled' : ''}`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
-          onPointerUp={(e) => finishDrag(e, false)}
-          onPointerCancel={(e) => finishDrag(e, true)}
+          onPointerUp={(e) => finishFlick(e, false)}
+          onPointerCancel={(e) => finishFlick(e, true)}
         />
         {goalBanner && <div className="coinsoccer-goal-banner">{goalBanner}</div>}
         {toastText && !goalBanner && <div className="coinsoccer-toast">{toastText}</div>}
@@ -840,12 +840,12 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
             ))}
           </div>
           <div className="coinsoccer-status-hint">
-            <Crosshair size={14} />
+            <Navigation size={14} />
             <span>
               {isAnimating
                 ? 'シュート中...'
                 : canControl
-                ? `${activePlayer.name}: 破線の間を通して弾く`
+                ? '狙う方向へスッと弾く'
                 : `${activePlayer.name} の番を待機中`}
             </span>
           </div>

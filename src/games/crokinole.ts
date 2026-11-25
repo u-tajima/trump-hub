@@ -742,20 +742,29 @@ export function computeCrokinoleBotAction(
     }
   }
 
+  const applyHumanJitter = (shot: { angle: number; vx: number; vy: number }) => {
+    const baseSpeed = Math.hypot(shot.vx, shot.vy);
+    const baseAngle = Math.atan2(shot.vy, shot.vx);
+    // 人間らしい自然な角度ブレ（±2.5度）と速度ブレ（±6%）
+    const maxAngleJitterRad = (2.5 * Math.PI) / 180;
+    const angleJitter = (Math.random() - 0.5) * 2 * maxAngleJitterRad;
+    const speedScale = 0.94 + Math.random() * 0.12;
+    const clampedSpeed = Math.max(
+      CROKINOLE_MIN_SHOT_SPEED,
+      Math.min(CROKINOLE_MAX_SHOT_SPEED, baseSpeed * speedScale)
+    );
+    const finalAngle = baseAngle + angleJitter;
+    return {
+      angle: shot.angle,
+      vx: Math.cos(finalAngle) * clampedSpeed,
+      vy: Math.sin(finalAngle) * clampedSpeed,
+    };
+  };
+
   if (bestShot !== null) {
-    const chosen: { angle: number; vx: number; vy: number } = bestShot;
-    // 微小揺らぎ（±1度、速度±2.5%）
-    const jitterAngle = (Math.random() - 0.5) * 0.036;
-    const speedScale = 0.975 + Math.random() * 0.05;
-    const cosJ = Math.cos(jitterAngle);
-    const sinJ = Math.sin(jitterAngle);
     return {
       type: 'shoot',
-      payload: {
-        angle: chosen.angle,
-        vx: (chosen.vx * cosJ - chosen.vy * sinJ) * speedScale,
-        vy: (chosen.vx * sinJ + chosen.vy * cosJ) * speedScale,
-      },
+      payload: applyHumanJitter(bestShot),
     };
   }
 
@@ -765,10 +774,10 @@ export function computeCrokinoleBotAction(
   const dist = Math.max(1, Math.hypot(dx, dy));
   return {
     type: 'shoot',
-    payload: {
+    payload: applyHumanJitter({
       angle: range.center,
       vx: (dx / dist) * 18,
       vy: (dy / dist) * 18,
-    },
+    }),
   };
 }

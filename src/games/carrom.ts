@@ -902,25 +902,37 @@ export function computeCarromBotAction(
             CARROM_MAX_SHOT_SPEED * 0.92,
             Math.max(18, (shotDist + distToPocket * 0.85) * 0.033 / Math.max(0.5, alignment))
           );
-          // わずかな人間味のある揺らぎ（±1.2度）
-          const jitter = (Math.random() - 0.5) * 0.04;
-          const cosJ = Math.cos(jitter);
-          const sinJ = Math.sin(jitter);
-          const finalDirX = shotDirX * cosJ - shotDirY * sinJ;
-          const finalDirY = shotDirX * sinJ + shotDirY * cosJ;
-
           bestShot = {
             strikerX: sx,
-            vx: finalDirX * basePower,
-            vy: finalDirY * basePower,
+            vx: shotDirX * basePower,
+            vy: shotDirY * basePower,
           };
         }
       }
     }
   }
 
+  const applyHumanJitter = (shot: { strikerX: number; vx: number; vy: number }) => {
+    const baseSpeed = Math.hypot(shot.vx, shot.vy);
+    const baseAngle = Math.atan2(shot.vy, shot.vx);
+    // 人間らしい自然な角度ブレ（±2.2度）と速度ブレ（±5%）
+    const maxAngleJitterRad = (2.2 * Math.PI) / 180;
+    const angleJitter = (Math.random() - 0.5) * 2 * maxAngleJitterRad;
+    const speedScale = 0.95 + Math.random() * 0.1;
+    const clampedSpeed = Math.max(
+      CARROM_MIN_SHOT_SPEED,
+      Math.min(CARROM_MAX_SHOT_SPEED, baseSpeed * speedScale)
+    );
+    const finalAngle = baseAngle + angleJitter;
+    return {
+      strikerX: shot.strikerX,
+      vx: Math.cos(finalAngle) * clampedSpeed,
+      vy: Math.sin(finalAngle) * clampedSpeed,
+    };
+  };
+
   if (bestShot) {
-    return { type: 'shoot', payload: bestShot };
+    return { type: 'shoot', payload: applyHumanJitter(bestShot) };
   }
 
   // フォールバック: 自色パックの1つに向かってブレイクショット
@@ -933,10 +945,10 @@ export function computeCarromBotAction(
 
   return {
     type: 'shoot',
-    payload: {
+    payload: applyHumanJitter({
       strikerX: sx,
       vx: (dx / dist) * power,
       vy: (dy / dist) * power,
-    },
+    }),
   };
 }

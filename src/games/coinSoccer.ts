@@ -9,7 +9,7 @@ export const COIN_SOCCER_GOAL_RIGHT = COIN_SOCCER_GOAL_LEFT + COIN_SOCCER_GOAL_W
 export const COIN_SOCCER_GOAL_DEPTH = 26;
 export const COIN_SOCCER_POST_RADIUS = 8;
 export const COIN_SOCCER_COIN_RADIUS = 26;
-export const COIN_SOCCER_MAX_SPEED = 36;
+export const COIN_SOCCER_MAX_SPEED = 21;
 export const COIN_SOCCER_MIN_SPEED = 2.6;
 export const COIN_SOCCER_MAX_STEPS = 320;
 
@@ -46,6 +46,7 @@ export type CoinSoccerShotOutcome =
   | 'foul_collision'
   | 'foul_out'
   | 'foul_own_goal'
+  | 'foul_direct_goal'
   | 'foul_no_gate';
 
 export interface CoinSoccerShotRecord {
@@ -548,23 +549,33 @@ export function applyCoinSoccerAction(
   let lastLog = '';
 
   if (goalScored === targetGoal && !collidedCoin) {
-    // 相手ゴールへシュート成功！
-    outcome = 'goal';
-    nextPlayers[shooterIndex].score += 1;
-    const isSuper = passedGate;
-    summary = isSuper
-      ? `スーパーゴール！ (${shooter.name})`
-      : `ゴール！ (${shooter.name})`;
-
-    if (nextPlayers[shooterIndex].score >= state.rules.winScore) {
-      phase = 'finished';
-      winnerId = shooter.id;
-      lastLog = `${summary} ${shooter.name} の勝利！`;
-      nextCoins = createCoinSoccerKickoffCoins(opponentIndex);
-    } else {
+    if (state.passStreak === 0) {
+      // まだ1回も間通しパスを成功させていない状態での直接ゴールは禁止（ファウル）
+      outcome = 'foul_direct_goal';
+      summary = '一撃ゴール禁止（ファウル）！';
       nextTurnIndex = opponentIndex;
-      nextCoins = createCoinSoccerKickoffCoins(opponentIndex);
-      lastLog = `${summary} → ${nextPlayers[opponentIndex].name} のキックオフ`;
+      nextPassStreak = 0;
+      nextCoins = normalizeCoinsInsidePitch(simCoins, initialCoins);
+      lastLog = `${shooter.name}: ${summary} → ${nextPlayers[opponentIndex].name} の番`;
+    } else {
+      // 1回以上間通しパス成功後であればシュート成立！
+      outcome = 'goal';
+      nextPlayers[shooterIndex].score += 1;
+      const isSuper = passedGate;
+      summary = isSuper
+        ? `スーパーゴール！ (${shooter.name})`
+        : `ゴール！ (${shooter.name})`;
+
+      if (nextPlayers[shooterIndex].score >= state.rules.winScore) {
+        phase = 'finished';
+        winnerId = shooter.id;
+        lastLog = `${summary} ${shooter.name} の勝利！`;
+        nextCoins = createCoinSoccerKickoffCoins(opponentIndex);
+      } else {
+        nextTurnIndex = opponentIndex;
+        nextCoins = createCoinSoccerKickoffCoins(opponentIndex);
+        lastLog = `${summary} → ${nextPlayers[opponentIndex].name} のキックオフ`;
+      }
     }
   } else if (goalScored === ownGoal) {
     outcome = 'foul_own_goal';
@@ -713,6 +724,8 @@ export function computeCoinSoccerBotAction(
 
     let score = 0;
     if (goal === targetGoal) {
+      // 1撃ゴール禁止：まだ間通しパスを成功させていないターンでは直接ゴールを避ける
+      if (state.passStreak === 0) return;
       score = 10000 + (passedGate ? 500 : 0) - speed * 2;
     } else if (passedGate) {
       const endCoin = simCoins[coinIndex];
@@ -745,19 +758,21 @@ export function computeCoinSoccerBotAction(
     const a = state.coins[o1];
     const b = state.coins[o2];
 
-    // 1. 直接ゴール狙い（中央・左右やや内側）
-    const goalTargetsX = [goalCenterX, goalCenterX - 42, goalCenterX + 42];
-    for (const gx of goalTargetsX) {
-      const dx = gx - c.x;
-      const dy = targetGoalY - c.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 10) continue;
-      const ux = dx / dist;
-      const uy = dy / dist;
-      const neededSpeed = Math.min(COIN_SOCCER_MAX_SPEED, Math.max(12, dist * 0.048 + 7));
-      evaluateCandidate(idx, ux, uy, neededSpeed);
-      if (neededSpeed + 5 <= COIN_SOCCER_MAX_SPEED) {
-        evaluateCandidate(idx, ux, uy, neededSpeed + 5);
+    // 1. 直接ゴール狙い（シュート解放後のみ：中央・左右やや内側）
+    if (state.passStreak >= 1) {
+      const goalTargetsX = [goalCenterX, goalCenterX - 42, goalCenterX + 42];
+      for (const gx of goalTargetsX) {
+        const dx = gx - c.x;
+        const dy = targetGoalY - c.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 10) continue;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        const neededSpeed = Math.min(COIN_SOCCER_MAX_SPEED, Math.max(9, dist * 0.036 + 5));
+        evaluateCandidate(idx, ux, uy, neededSpeed);
+        if (neededSpeed + 3.5 <= COIN_SOCCER_MAX_SPEED) {
+          evaluateCandidate(idx, ux, uy, neededSpeed + 3.5);
+        }
       }
     }
 
@@ -776,9 +791,9 @@ export function computeCoinSoccerBotAction(
         const uy = dy / dist;
 
         const speeds = [
-          Math.max(8, dist * 0.042 + 4),
-          Math.max(12, dist * 0.055 + 7),
-          Math.min(COIN_SOCCER_MAX_SPEED * 0.85, dist * 0.07 + 10),
+          Math.max(6.5, dist * 0.032 + 3.2),
+          Math.max(9.5, dist * 0.044 + 5),
+          Math.min(COIN_SOCCER_MAX_SPEED * 0.88, dist * 0.056 + 7.5),
         ];
         for (const sp of speeds) {
           evaluateCandidate(idx, ux, uy, Math.min(COIN_SOCCER_MAX_SPEED, sp));
@@ -789,16 +804,21 @@ export function computeCoinSoccerBotAction(
 
   if (bestAction !== null) {
     const chosen: { coinIndex: CoinIndex; vx: number; vy: number } = bestAction;
-    // 人間味のある微小揺らぎ（±1.2度）
-    const jitter = (Math.random() - 0.5) * 0.042;
-    const cosJ = Math.cos(jitter);
-    const sinJ = Math.sin(jitter);
+    // 人間らしい自然なブレ（角度 ±2.5度、速度 ±6%）
+    const angleJitter = (Math.random() - 0.5) * 2 * ((2.5 * Math.PI) / 180);
+    const speedFactor = 1 + (Math.random() - 0.5) * 0.12;
+    const baseSpeed = Math.hypot(chosen.vx, chosen.vy);
+    const nextSpeed = Math.max(
+      COIN_SOCCER_MIN_SPEED,
+      Math.min(COIN_SOCCER_MAX_SPEED, baseSpeed * speedFactor)
+    );
+    const baseAngle = Math.atan2(chosen.vy, chosen.vx) + angleJitter;
     return {
       type: 'flick',
       payload: {
         coinIndex: chosen.coinIndex,
-        vx: chosen.vx * cosJ - chosen.vy * sinJ,
-        vy: chosen.vx * sinJ + chosen.vy * cosJ,
+        vx: Math.cos(baseAngle) * nextSpeed,
+        vy: Math.sin(baseAngle) * nextSpeed,
       },
     };
   }
@@ -808,12 +828,13 @@ export function computeCoinSoccerBotAction(
   const dx = goalCenterX - c0.x;
   const dy = targetGoalY - c0.y;
   const dist = Math.max(1, Math.hypot(dx, dy));
+  const fallbackSpeed = Math.min(COIN_SOCCER_MAX_SPEED, 11);
   return {
     type: 'flick',
     payload: {
       coinIndex: 0,
-      vx: (dx / dist) * 14,
-      vy: (dy / dist) * 14,
+      vx: (dx / dist) * fallbackSpeed,
+      vy: (dy / dist) * fallbackSpeed,
     },
   };
 }

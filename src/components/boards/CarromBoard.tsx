@@ -19,6 +19,7 @@ import {
   type CarromPiece,
   type CarromStriker,
 } from '../../games/carrom';
+import { computeFlickVelocity, type FlickSample } from '../../utils/flickInput';
 import './CarromBoard.css';
 
 interface CarromBoardProps {
@@ -46,16 +47,22 @@ interface PocketRing {
   color: string;
 }
 
-interface DragAimState {
+interface FlickDragState {
   pointerId: number;
-  startX: number;
-  startY: number;
-  currX: number;
-  currY: number;
+  samples: FlickSample[];
 }
 
-const MAX_DRAG_DIST = 210;
-const MIN_DRAG_DIST = 18;
+const CARROM_FLICK_OPTIONS = {
+  minSpeed: CARROM_MIN_SHOT_SPEED,
+  maxSpeed: CARROM_MAX_SHOT_SPEED,
+  minDistance: 24,
+  minSwipeVelocity: 0.35,
+  maxSwipeVelocity: 3.6,
+} as const;
+
+const TRAIL_WINDOW_MS = 180;
+const MAX_TRAIL_POINTS = 14;
+const MAX_RECORDED_SAMPLES = 48;
 
 function drawBoardBackground(ctx: CanvasRenderingContext2D): void {
   const S = CARROM_BOARD_SIZE;
@@ -397,41 +404,59 @@ function drawStriker(
   ctx.restore();
 }
 
-function computeAimRayEnd(
-  sx: number,
-  sy: number,
-  dx: number,
-  dy: number,
-  pieces: readonly CarromPiece[]
-): { x: number; y: number } {
-  const minWall = CARROM_WALL_INSET + CARROM_STRIKER_RADIUS;
-  const maxWall = CARROM_BOARD_SIZE - CARROM_WALL_INSET - CARROM_STRIKER_RADIUS;
+function drawFlickTrail(
+  ctx: CanvasRenderingContext2D,
+  samples: readonly FlickSample[],
+  now: number
+): void {
+  const recent = samples
+    .filter((s) => now - s.t <= TRAIL_WINDOW_MS)
+    .slice(-MAX_TRAIL_POINTS);
+  if (recent.length < 2) return;
 
-  let bestT = 560;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
 
-  if (dx < -0.001) bestT = Math.min(bestT, (minWall - sx) / dx);
-  if (dx > 0.001) bestT = Math.min(bestT, (maxWall - sx) / dx);
-  if (dy < -0.001) bestT = Math.min(bestT, (minWall - sy) / dy);
-  if (dy > 0.001) bestT = Math.min(bestT, (maxWall - sy) / dy);
+  for (let i = 1; i < recent.length; i++) {
+    const prev = recent[i - 1];
+    const curr = recent[i];
+    const progress = i / (recent.length - 1);
+    const ageFade = Math.max(0, 1 - (now - curr.t) / TRAIL_WINDOW_MS);
+    const alpha = progress * ageFade;
 
-  const hitR = CARROM_STRIKER_RADIUS + CARROM_PIECE_RADIUS;
-  for (const p of pieces) {
-    if (p.pocketed) continue;
-    const ocx = p.x - sx;
-    const ocy = p.y - sy;
-    const proj = ocx * dx + ocy * dy;
-    if (proj <= 0 || proj > bestT) continue;
-    const perpSq = ocx * ocx + ocy * ocy - proj * proj;
-    if (perpSq < hitR * hitR) {
-      const hitT = proj - Math.sqrt(hitR * hitR - perpSq);
-      if (hitT > 0 && hitT < bestT) bestT = hitT;
-    }
+    // 外側の淡い光彩
+    ctx.strokeStyle = `rgba(251, 191, 36, ${(alpha * 0.38).toFixed(3)})`;
+    ctx.lineWidth = 4 + progress * 12;
+    ctx.beginPath();
+    ctx.moveTo(prev.x, prev.y);
+    ctx.lineTo(curr.x, curr.y);
+    ctx.stroke();
+
+    // 芯の明るい光のライン
+    ctx.strokeStyle = `rgba(255, 251, 235, ${(alpha * 0.85).toFixed(3)})`;
+    ctx.lineWidth = 1.5 + progress * 4.5;
+    ctx.beginPath();
+    ctx.moveTo(prev.x, prev.y);
+    ctx.lineTo(curr.x, curr.y);
+    ctx.stroke();
   }
 
-  return {
-    x: sx + dx * Math.max(0, bestT),
-    y: sy + dy * Math.max(0, bestT),
-  };
+  // 指先の控えめな光点
+  const tip = recent[recent.length - 1];
+  const tipFade = Math.max(0, 1 - (now - tip.t) / TRAIL_WINDOW_MS);
+  if (tipFade > 0.05) {
+    const glow = ctx.createRadialGradient(tip.x, tip.y, 1, tip.x, tip.y, 14);
+    glow.addColorStop(0, `rgba(255, 251, 235, ${(tipFade * 0.9).toFixed(3)})`);
+    glow.addColorStop(0.5, `rgba(245, 158, 11, ${(tipFade * 0.45).toFixed(3)})`);
+    glow.addColorStop(1, 'rgba(245, 158, 11, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(tip.x, tip.y, 14, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
 }
 
 export const CarromBoard: React.FC<CarromBoardProps> = ({
@@ -480,7 +505,7 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
     rings: [],
   });
 
-  const dragRef = useRef<DragAimState | null>(null);
+  const dragRef = useRef<FlickDragState | null>(null);
   const lastPlayedShotIdRef = useRef<number>(state.lastShot?.shotId ?? 0);
 
   // 最新ステートを描画ループから読むためのRef
@@ -644,7 +669,7 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
             drawPiece(ctx, p);
           }
 
-          // エイムガイド描画（ドラッグ中）
+          // フリック中の控えめなチャージリング＆短いスワイプ軌跡（光のトレイル）
           const drag = dragRef.current;
           const strikerToDraw: CarromStriker = anim.active
             ? anim.striker
@@ -656,78 +681,35 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
                 pocketed: false,
               };
 
-          if (drag && !anim.active && curCanControl) {
-            const pullX = drag.startX - drag.currX;
-            const pullY = drag.startY - drag.currY;
-            const pullDist = Math.hypot(pullX, pullY);
+          if (drag && !anim.active && curCanControl && drag.samples.length >= 2) {
+            const now = performance.now();
+            const first = drag.samples[0];
+            const last = drag.samples[drag.samples.length - 1];
+            const totalDist = Math.hypot(last.x - first.x, last.y - first.y);
 
-            if (pullDist >= MIN_DRAG_DIST) {
-              const clampedDist = Math.min(MAX_DRAG_DIST, pullDist);
-              const powerRatio = clampedDist / MAX_DRAG_DIST;
-              const dirX = pullX / pullDist;
-              const dirY = pullY / pullDist;
+            if (totalDist >= 8) {
+              const previewFlick = computeFlickVelocity(drag.samples, CARROM_FLICK_OPTIONS);
+              const chargeRatio = previewFlick
+                ? previewFlick.powerRatio
+                : Math.min(0.25, totalDist / 160);
 
-              // パワーリング
-              const ringColor =
-                powerRatio < 0.45
-                  ? '#10b981'
-                  : powerRatio < 0.78
-                  ? '#f59e0b'
-                  : '#ef4444';
-
+              // ストライカー周りの控えめなチャージリング
               ctx.save();
-              ctx.strokeStyle = ringColor;
-              ctx.lineWidth = 5;
+              ctx.strokeStyle = `rgba(245, 158, 11, ${(0.28 + chargeRatio * 0.42).toFixed(3)})`;
+              ctx.lineWidth = 3 + chargeRatio * 2;
               ctx.beginPath();
               ctx.arc(
                 strikerToDraw.x,
                 strikerToDraw.y,
-                CARROM_STRIKER_RADIUS + 14 + powerRatio * 26,
+                CARROM_STRIKER_RADIUS + 10 + chargeRatio * 14,
                 0,
                 Math.PI * 2
               );
               ctx.stroke();
-
-              // 引っ張りライン（後ろ方向）
-              const tailX = strikerToDraw.x - dirX * clampedDist * 0.72;
-              const tailY = strikerToDraw.y - dirY * clampedDist * 0.72;
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
-              ctx.lineWidth = 4;
-              ctx.beginPath();
-              ctx.moveTo(strikerToDraw.x, strikerToDraw.y);
-              ctx.lineTo(tailX, tailY);
-              ctx.stroke();
-
-              ctx.fillStyle = ringColor;
-              ctx.beginPath();
-              ctx.arc(tailX, tailY, 9, 0, Math.PI * 2);
-              ctx.fill();
-
-              // 狙い方向の点線ガイド
-              const rayEnd = computeAimRayEnd(
-                strikerToDraw.x,
-                strikerToDraw.y,
-                dirX,
-                dirY,
-                curState.pieces
-              );
-              ctx.strokeStyle = ringColor;
-              ctx.lineWidth = 4;
-              ctx.setLineDash([12, 10]);
-              ctx.beginPath();
-              ctx.moveTo(strikerToDraw.x, strikerToDraw.y);
-              ctx.lineTo(rayEnd.x, rayEnd.y);
-              ctx.stroke();
-              ctx.setLineDash([]);
-
-              // 着弾予測ゴースト円
-              ctx.strokeStyle = ringColor;
-              ctx.lineWidth = 2.5;
-              ctx.globalAlpha = 0.7;
-              ctx.beginPath();
-              ctx.arc(rayEnd.x, rayEnd.y, CARROM_STRIKER_RADIUS, 0, Math.PI * 2);
-              ctx.stroke();
               ctx.restore();
+
+              // 指が通った短いスワイプ軌跡（光のトレイル）
+              drawFlickTrail(ctx, drag.samples, now);
             }
           }
 
@@ -792,18 +774,22 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
     const pt = toLogicalCoords(e.clientX, e.clientY);
     dragRef.current = {
       pointerId: e.pointerId,
-      startX: pt.x,
-      startY: pt.y,
-      currX: pt.x,
-      currY: pt.y,
+      samples: [{ x: pt.x, y: pt.y, t: performance.now() }],
     };
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
     const pt = toLogicalCoords(e.clientX, e.clientY);
-    dragRef.current.currX = pt.x;
-    dragRef.current.currY = pt.y;
+    const now = performance.now();
+    const prev = drag.samples[drag.samples.length - 1];
+    if (!prev || Math.hypot(pt.x - prev.x, pt.y - prev.y) >= 1.5 || now - prev.t >= 8) {
+      drag.samples.push({ x: pt.x, y: pt.y, t: now });
+      if (drag.samples.length > MAX_RECORDED_SAMPLES) {
+        drag.samples.shift();
+      }
+    }
   };
 
   const finishDrag = (e: React.PointerEvent<HTMLCanvasElement>, cancelled: boolean) => {
@@ -813,27 +799,23 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
 
     if (cancelled || !canControl) return;
 
-    const pullX = drag.startX - drag.currX;
-    const pullY = drag.startY - drag.currY;
-    const pullDist = Math.hypot(pullX, pullY);
-    if (pullDist < MIN_DRAG_DIST) return;
+    const pt = toLogicalCoords(e.clientX, e.clientY);
+    const now = performance.now();
+    const prev = drag.samples[drag.samples.length - 1];
+    if (!prev || Math.hypot(pt.x - prev.x, pt.y - prev.y) >= 0.5) {
+      drag.samples.push({ x: pt.x, y: pt.y, t: now });
+    }
 
-    const clamped = Math.min(MAX_DRAG_DIST, pullDist);
-    const powerRatio = (clamped - MIN_DRAG_DIST) / (MAX_DRAG_DIST - MIN_DRAG_DIST);
-    const speed =
-      CARROM_MIN_SHOT_SPEED +
-      Math.pow(powerRatio, 1.08) * (CARROM_MAX_SHOT_SPEED - CARROM_MIN_SHOT_SPEED);
-
-    const vx = (pullX / pullDist) * speed;
-    const vy = (pullY / pullDist) * speed;
+    const flick = computeFlickVelocity(drag.samples, CARROM_FLICK_OPTIONS);
+    if (!flick) return;
 
     onAction(
       {
         type: 'shoot',
         payload: {
           strikerX: resolvedStrikerX,
-          vx,
-          vy,
+          vx: flick.vx,
+          vy: flick.vy,
         },
       },
       isLocalPassAndPlay ? activePlayer.id : undefined
@@ -961,7 +943,7 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
               {isAnimating
                 ? 'ショット中...'
                 : canControl
-                ? `${activePlayer.name} の番: 盤面を後ろに引いて発射`
+                ? `${activePlayer.name} の番: スライダーで位置を決め、狙う方向へスッと弾く`
                 : `${activePlayer.name} のショットを待機中`}
             </span>
             <span>{activePlayer.color === 'white' ? '白' : '黒'}</span>

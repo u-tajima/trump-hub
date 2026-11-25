@@ -46,6 +46,7 @@ import {
   SCOREBOARD_TTL_MS,
 } from '../../utils/scoreBoard';
 import { resolveHostLocalView, SPECTATOR_VIEW_ID } from '../../utils/localPlay';
+import { computeFlickVelocity } from '../../utils/flickInput';
 import type { LobbyState } from '../../types/game';
 
 const makePlayers = (count: number): PlayerInfo[] =>
@@ -1229,6 +1230,59 @@ describe('9 new games engines (Hex, Checkers, Backgammon, GunjinShogi, CoinSocce
     cr = applyCrokinoleAction(cr, 'p1', crAct!).state;
     expect(cr.lastShot).not.toBeNull();
     expect(cr.nextBotActionAt).toBeGreaterThan(Date.now() - 100);
+
+    // コインサッカー一撃ゴール禁止: passStreak === 0 で直接ゴールに入ると foul_direct_goal で無得点・交代
+    let direct = initCoinSoccer(makePlayers(2), { winScore: 3 });
+    direct.passStreak = 0;
+    direct.coins = [
+      { id: 0, x: 300, y: 120, vx: 0, vy: 0, outOfBounds: false, inGoal: null },
+      { id: 1, x: 120, y: 500, vx: 0, vy: 0, outOfBounds: false, inGoal: null },
+      { id: 2, x: 480, y: 500, vx: 0, vy: 0, outOfBounds: false, inGoal: null },
+    ];
+    direct = applyCoinSoccerAction(direct, 'p1', {
+      type: 'flick',
+      payload: { coinIndex: 0, vx: 0, vy: -18 },
+    }).state;
+    expect(direct.lastShot?.outcome).toBe('foul_direct_goal');
+    expect(direct.players[0].score).toBe(0);
+    expect(direct.turnIndex).toBe(1);
+
+    // passStreak >= 1 なら相手ゴールへ叩き込んで得点成立
+    let afterPass = initCoinSoccer(makePlayers(2), { winScore: 3 });
+    afterPass.passStreak = 1;
+    afterPass.coins = [
+      { id: 0, x: 300, y: 120, vx: 0, vy: 0, outOfBounds: false, inGoal: null },
+      { id: 1, x: 120, y: 500, vx: 0, vy: 0, outOfBounds: false, inGoal: null },
+      { id: 2, x: 480, y: 500, vx: 0, vy: 0, outOfBounds: false, inGoal: null },
+    ];
+    afterPass = applyCoinSoccerAction(afterPass, 'p1', {
+      type: 'flick',
+      payload: { coinIndex: 0, vx: 0, vy: -18 },
+    }).state;
+    expect(afterPass.lastShot?.outcome).toBe('goal');
+    expect(afterPass.players[0].score).toBe(1);
+
+    // computeFlickVelocity: 短いタップは null、曲がったフリックは手のブレ(wobbleDeg)を反映
+    expect(
+      computeFlickVelocity(
+        [
+          { x: 100, y: 100, t: 0 },
+          { x: 103, y: 102, t: 20 },
+        ],
+        { minSpeed: 4, maxSpeed: 20, minDistance: 20, maxSwipeVelocity: 2 }
+      )
+    ).toBeNull();
+    const curved = computeFlickVelocity(
+      [
+        { x: 300, y: 500, t: 0 },
+        { x: 300, y: 420, t: 40 },
+        { x: 335, y: 340, t: 80 },
+      ],
+      { minSpeed: 4, maxSpeed: 20, minDistance: 20, maxSwipeVelocity: 2 }
+    );
+    expect(curved).not.toBeNull();
+    expect(curved!.wobbleDeg).toBeGreaterThan(1);
+    expect(curved!.vx).toBeGreaterThan(0);
   });
 
   it('OneNight, WordWolf, and Insider: enforce human-only, secret isolation, and full flow', () => {

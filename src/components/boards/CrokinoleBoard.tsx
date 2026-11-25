@@ -21,6 +21,7 @@ import {
   type CrokinoleClientState,
   type CrokinoleDisc,
 } from '../../games/crokinole';
+import { computeFlickVelocity, type FlickSample } from '../../utils/flickInput';
 import './CrokinoleBoard.css';
 
 interface CrokinoleBoardProps {
@@ -49,16 +50,78 @@ interface EffectRing {
   maxRadius: number;
 }
 
-interface DragAimState {
+interface FlickDragState {
   pointerId: number;
-  startX: number;
-  startY: number;
-  currX: number;
-  currY: number;
+  samples: FlickSample[];
 }
 
-const MAX_DRAG_DIST = 210;
-const MIN_DRAG_DIST = 18;
+const CROKINOLE_FLICK_OPTIONS = {
+  minSpeed: CROKINOLE_MIN_SHOT_SPEED,
+  maxSpeed: CROKINOLE_MAX_SHOT_SPEED,
+  minDistance: 24,
+  minSwipeVelocity: 0.35,
+  maxSwipeVelocity: 3.6,
+} as const;
+
+const TRAIL_WINDOW_MS = 180;
+const MAX_TRAIL_POINTS = 14;
+const MAX_RECORDED_SAMPLES = 48;
+
+function drawCrokinoleFlickTrail(
+  ctx: CanvasRenderingContext2D,
+  samples: readonly FlickSample[],
+  now: number,
+  ownerIndex: 0 | 1
+): void {
+  const recent = samples
+    .filter((s) => now - s.t <= TRAIL_WINDOW_MS)
+    .slice(-MAX_TRAIL_POINTS);
+  if (recent.length < 2) return;
+
+  const glowRgb = ownerIndex === 0 ? '251, 191, 36' : '248, 113, 113';
+  const coreRgb = ownerIndex === 0 ? '255, 251, 235' : '254, 242, 242';
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (let i = 1; i < recent.length; i++) {
+    const prev = recent[i - 1];
+    const curr = recent[i];
+    const progress = i / (recent.length - 1);
+    const ageFade = Math.max(0, 1 - (now - curr.t) / TRAIL_WINDOW_MS);
+    const alpha = progress * ageFade;
+
+    ctx.strokeStyle = `rgba(${glowRgb}, ${(alpha * 0.4).toFixed(3)})`;
+    ctx.lineWidth = 4 + progress * 12;
+    ctx.beginPath();
+    ctx.moveTo(prev.x, prev.y);
+    ctx.lineTo(curr.x, curr.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = `rgba(${coreRgb}, ${(alpha * 0.88).toFixed(3)})`;
+    ctx.lineWidth = 1.5 + progress * 4.5;
+    ctx.beginPath();
+    ctx.moveTo(prev.x, prev.y);
+    ctx.lineTo(curr.x, curr.y);
+    ctx.stroke();
+  }
+
+  const tip = recent[recent.length - 1];
+  const tipFade = Math.max(0, 1 - (now - tip.t) / TRAIL_WINDOW_MS);
+  if (tipFade > 0.05) {
+    const glow = ctx.createRadialGradient(tip.x, tip.y, 1, tip.x, tip.y, 14);
+    glow.addColorStop(0, `rgba(${coreRgb}, ${(tipFade * 0.9).toFixed(3)})`);
+    glow.addColorStop(0.5, `rgba(${glowRgb}, ${(tipFade * 0.45).toFixed(3)})`);
+    glow.addColorStop(1, `rgba(${glowRgb}, 0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(tip.x, tip.y, 14, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
 
 function drawCrokinoleBoard(
   ctx: CanvasRenderingContext2D,
@@ -373,7 +436,7 @@ export const CrokinoleBoard: React.FC<CrokinoleBoardProps> = ({
     rings: [],
   });
 
-  const dragRef = useRef<DragAimState | null>(null);
+  const dragRef = useRef<FlickDragState | null>(null);
   const lastPlayedShotIdRef = useRef<number>(state.lastShot?.shotId ?? 0);
 
   const latestRef = useRef({
@@ -573,62 +636,10 @@ export const CrokinoleBoard: React.FC<CrokinoleBoardProps> = ({
             drawCrokinoleDisc(ctx, d, false);
           }
 
-          // ドラッグ中のエイム＆パワーガイド
+          // フリック中の短いスワイプ軌跡（光のトレイル）
           const drag = dragRef.current;
-          if (drag && !anim.active && curCanControl) {
-            const pullX = drag.startX - drag.currX;
-            const pullY = drag.startY - drag.currY;
-            const pullDist = Math.hypot(pullX, pullY);
-
-            if (pullDist >= MIN_DRAG_DIST) {
-              const clampedDist = Math.min(MAX_DRAG_DIST, pullDist);
-              const powerRatio = clampedDist / MAX_DRAG_DIST;
-              const dirX = pullX / pullDist;
-              const dirY = pullY / pullDist;
-
-              const ringColor =
-                powerRatio < 0.45 ? '#10b981' : powerRatio < 0.78 ? '#f59e0b' : '#ef4444';
-
-              ctx.save();
-              ctx.strokeStyle = ringColor;
-              ctx.lineWidth = 5;
-              ctx.beginPath();
-              ctx.arc(
-                curPreviewPos.x,
-                curPreviewPos.y,
-                CROKINOLE_DISC_RADIUS + 13 + powerRatio * 24,
-                0,
-                Math.PI * 2
-              );
-              ctx.stroke();
-
-              // 後ろ引きライン
-              const tailX = curPreviewPos.x - dirX * clampedDist * 0.7;
-              const tailY = curPreviewPos.y - dirY * clampedDist * 0.7;
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-              ctx.lineWidth = 4;
-              ctx.beginPath();
-              ctx.moveTo(curPreviewPos.x, curPreviewPos.y);
-              ctx.lineTo(tailX, tailY);
-              ctx.stroke();
-
-              ctx.fillStyle = ringColor;
-              ctx.beginPath();
-              ctx.arc(tailX, tailY, 9, 0, Math.PI * 2);
-              ctx.fill();
-
-              // 前方エイム点線
-              const rayLen = 180 + powerRatio * 340;
-              ctx.strokeStyle = ringColor;
-              ctx.lineWidth = 4;
-              ctx.setLineDash([12, 10]);
-              ctx.beginPath();
-              ctx.moveTo(curPreviewPos.x, curPreviewPos.y);
-              ctx.lineTo(curPreviewPos.x + dirX * rayLen, curPreviewPos.y + dirY * rayLen);
-              ctx.stroke();
-              ctx.setLineDash([]);
-              ctx.restore();
-            }
+          if (drag && !anim.active && curCanControl && drag.samples.length >= 2) {
+            drawCrokinoleFlickTrail(ctx, drag.samples, performance.now(), curState.turnIndex);
           }
 
           // 発射待機ディスクのプレビュー描画
@@ -700,18 +711,22 @@ export const CrokinoleBoard: React.FC<CrokinoleBoardProps> = ({
     const pt = toLogicalCoords(e.clientX, e.clientY);
     dragRef.current = {
       pointerId: e.pointerId,
-      startX: pt.x,
-      startY: pt.y,
-      currX: pt.x,
-      currY: pt.y,
+      samples: [{ x: pt.x, y: pt.y, t: performance.now() }],
     };
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
     const pt = toLogicalCoords(e.clientX, e.clientY);
-    dragRef.current.currX = pt.x;
-    dragRef.current.currY = pt.y;
+    const now = performance.now();
+    const prev = drag.samples[drag.samples.length - 1];
+    if (!prev || Math.hypot(pt.x - prev.x, pt.y - prev.y) >= 1.5 || now - prev.t >= 8) {
+      drag.samples.push({ x: pt.x, y: pt.y, t: now });
+      if (drag.samples.length > MAX_RECORDED_SAMPLES) {
+        drag.samples.shift();
+      }
+    }
   };
 
   const finishDrag = (e: React.PointerEvent<HTMLCanvasElement>, cancelled: boolean) => {
@@ -721,24 +736,23 @@ export const CrokinoleBoard: React.FC<CrokinoleBoardProps> = ({
 
     if (cancelled || !canControl) return;
 
-    const pullX = drag.startX - drag.currX;
-    const pullY = drag.startY - drag.currY;
-    const pullDist = Math.hypot(pullX, pullY);
-    if (pullDist < MIN_DRAG_DIST) return;
+    const pt = toLogicalCoords(e.clientX, e.clientY);
+    const now = performance.now();
+    const prev = drag.samples[drag.samples.length - 1];
+    if (!prev || Math.hypot(pt.x - prev.x, pt.y - prev.y) >= 0.5) {
+      drag.samples.push({ x: pt.x, y: pt.y, t: now });
+    }
 
-    const clamped = Math.min(MAX_DRAG_DIST, pullDist);
-    const powerRatio = (clamped - MIN_DRAG_DIST) / (MAX_DRAG_DIST - MIN_DRAG_DIST);
-    const speed =
-      CROKINOLE_MIN_SHOT_SPEED +
-      Math.pow(powerRatio, 1.08) * (CROKINOLE_MAX_SHOT_SPEED - CROKINOLE_MIN_SHOT_SPEED);
+    const flick = computeFlickVelocity(drag.samples, CROKINOLE_FLICK_OPTIONS);
+    if (!flick) return;
 
     onAction(
       {
         type: 'shoot',
         payload: {
           angle: resolvedShootAngle,
-          vx: (pullX / pullDist) * speed,
-          vy: (pullY / pullDist) * speed,
+          vx: flick.vx,
+          vy: flick.vy,
         },
       },
       isLocalPassAndPlay ? activePlayer.id : undefined
@@ -851,7 +865,7 @@ export const CrokinoleBoard: React.FC<CrokinoleBoardProps> = ({
               {isAnimating
                 ? 'ショット中...'
                 : canControl
-                ? `${activePlayer.name} の番: 後ろに引いて発射`
+                ? `${activePlayer.name} の番: 狙う方向へスッと弾く`
                 : `${activePlayer.name} のショットを待機中`}
             </span>
             <span>{activePlayer.color === 'ivory' ? '白木' : '紅木'}</span>
