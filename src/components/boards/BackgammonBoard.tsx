@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dices, LogOut } from 'lucide-react';
 import type { BackgammonClientState } from '../../games/backgammon';
+import { GameDice3DTray } from '../GameDice3DTray';
 
 interface BackgammonBoardProps {
   state: BackgammonClientState;
@@ -82,9 +83,23 @@ export const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
   isLocalPassAndPlay = false,
 }) => {
   const [manualFrom, setManualFrom] = useState<number | 'bar' | null>(null);
+  const [rollSeq, setRollSeq] = useState<number>(0);
+  const [displayDice, setDisplayDice] = useState<[number, number]>(
+    state.dice ? [state.dice[0], state.dice[1]] : [3, 5]
+  );
+  const prevDiceRef = useRef<[number, number] | null>(state.dice);
   const current = state.players[state.turnIndex];
   const isMyTurn = state.phase === 'playing' && current.id === state.myId;
   const winner = state.players.find((p) => p.id === state.winnerId);
+
+  // 新しい state.dice が確定したタイミングで3D物理ロールを発火
+  useEffect(() => {
+    if (state.dice && state.dice !== prevDiceRef.current) {
+      setDisplayDice([state.dice[0], state.dice[1]]);
+      setRollSeq((seq) => seq + 1);
+    }
+    prevDiceRef.current = state.dice;
+  }, [state.dice]);
 
   // 動かせる移動元セット
   const movableFromSet = useMemo(() => {
@@ -520,6 +535,16 @@ export const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
 
             {bottomRight.map((idx) => renderPoint(idx, false))}
           </div>
+        </div>
+
+        {/* 3D物理ダイストレイ */}
+        <div style={{ width: '100%', maxWidth: 404 }}>
+          <GameDice3DTray
+            dice={displayDice}
+            rollTrigger={rollSeq}
+            dimmed={state.subPhase === 'roll'}
+            height={88}
+          />
         </div>
 
         {/* アクションバー（ダイスロール / ベアオフ） */}

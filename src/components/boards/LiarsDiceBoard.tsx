@@ -18,6 +18,7 @@ import {
   type LiarsDiceBid,
   type LiarsDiceClientState,
 } from '../../games/liarsDice';
+import { GameDice3DTray } from '../GameDice3DTray';
 
 interface LiarsDiceBoardProps {
   state: LiarsDiceClientState;
@@ -574,20 +575,17 @@ export const LiarsDiceBoard: React.FC<LiarsDiceBoardProps> = ({ state, onAction 
             </span>
             <span>残り {me.dice.length}個</span>
           </div>
-          <div className="ld-dice-inline" style={{ justifyContent: 'center' }}>
-            {me.dice.map((d, i) => (
-              <DieSvg
-                key={i}
-                value={d}
-                size={48}
-                highlight={
-                  state.currentBid !== null &&
-                  isDieMatchingFace(d, state.currentBid.face, state.rules.onesWild)
-                }
-                wild={state.rules.onesWild && d === 1}
-              />
-            ))}
-          </div>
+          <GameDice3DTray
+            dice={me.dice}
+            rollTrigger={state.round}
+            highlighted={me.dice.map(
+              (d) =>
+                (state.currentBid !== null &&
+                  isDieMatchingFace(d, state.currentBid.face, state.rules.onesWild)) ||
+                (state.rules.onesWild && d === 1)
+            )}
+            height={126}
+          />
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Award, Check, Dices, Lock, Sparkles, Trophy, Unlock } from 'lucide-react';
 import {
   evaluateYachtCategory,
@@ -9,100 +9,12 @@ import {
   type YachtCategory,
   type YachtClientState,
 } from '../../games/yacht';
+import { GameDice3DTray } from '../GameDice3DTray';
 
 interface YachtBoardProps {
   state: YachtClientState;
   onAction: (action: { type: string; payload?: unknown }) => void;
 }
-
-const PIP_COORDS: Record<number, Array<[number, number]>> = {
-  1: [[32, 32]],
-  2: [
-    [19, 19],
-    [45, 45],
-  ],
-  3: [
-    [19, 19],
-    [32, 32],
-    [45, 45],
-  ],
-  4: [
-    [19, 19],
-    [45, 19],
-    [19, 45],
-    [45, 45],
-  ],
-  5: [
-    [19, 19],
-    [45, 19],
-    [32, 32],
-    [19, 45],
-    [45, 45],
-  ],
-  6: [
-    [19, 17],
-    [45, 17],
-    [19, 32],
-    [45, 32],
-    [19, 47],
-    [45, 47],
-  ],
-};
-
-interface SvgDieProps {
-  value: number;
-  held?: boolean;
-  rolling?: boolean;
-  dimmed?: boolean;
-  size?: number;
-}
-
-const SvgDie: React.FC<SvgDieProps> = ({
-  value,
-  held = false,
-  rolling = false,
-  dimmed = false,
-  size = 54,
-}) => {
-  const pips = PIP_COORDS[value] ?? PIP_COORDS[1];
-  const isOne = value === 1;
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      className={`yacht-die-svg ${rolling ? 'rolling' : ''} ${held ? 'held' : ''} ${dimmed ? 'dimmed' : ''}`}
-      aria-label={`サイコロ ${value}`}
-    >
-      <defs>
-        <linearGradient id="yachtDieFace" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="100%" stopColor="#e2e8f0" />
-        </linearGradient>
-      </defs>
-      <rect
-        x="3"
-        y="3"
-        width="58"
-        height="58"
-        rx="13"
-        fill="url(#yachtDieFace)"
-        stroke={held ? '#f59e0b' : '#cbd5e1'}
-        strokeWidth={held ? '4' : '2'}
-      />
-      {pips.map(([cx, cy], idx) => (
-        <circle
-          key={idx}
-          cx={cx}
-          cy={cy}
-          r={isOne ? 7.4 : 5.4}
-          fill={isOne ? '#dc2626' : '#0f172a'}
-        />
-      ))}
-    </svg>
-  );
-};
 
 export const YachtBoard: React.FC<YachtBoardProps> = ({ state, onAction }) => {
   const current = state.players[state.turnIndex];
@@ -121,22 +33,6 @@ export const YachtBoard: React.FC<YachtBoardProps> = ({ state, onAction }) => {
       setViewingId(state.myId);
     }
   }, [isMyTurn, state.myId, state.turnIndex]);
-
-  // Brief tumble animation when rollSeq increments
-  const [animatingRoll, setAnimatingRoll] = useState<boolean>(false);
-  const prevRollSeqRef = useRef<number>(state.rollSeq);
-
-  useEffect(() => {
-    if (state.rollSeq !== prevRollSeqRef.current) {
-      prevRollSeqRef.current = state.rollSeq;
-      if (state.rollSeq > 0) {
-        setAnimatingRoll(true);
-        const timer = window.setTimeout(() => setAnimatingRoll(false), 380);
-        return () => window.clearTimeout(timer);
-      }
-      setAnimatingRoll(false);
-    }
-  }, [state.rollSeq]);
 
   const viewedPlayer =
     state.players.find((p) => p.id === viewingId) ??
@@ -270,68 +166,58 @@ export const YachtBoard: React.FC<YachtBoardProps> = ({ state, onAction }) => {
           border-color: #fde68a;
           box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
         }
-        .yacht-dice-row {
+        .yacht-hold-row {
           display: grid;
           grid-template-columns: repeat(5, minmax(0, 1fr));
           gap: 6px;
-          justify-items: center;
         }
-        .yacht-die-btn {
-          background: transparent;
-          border: none;
-          padding: 2px;
+        .yacht-hold-btn {
+          background: rgba(0, 0, 0, 0.34);
+          border: 1.5px solid rgba(255, 255, 255, 0.14);
+          border-radius: 10px;
+          padding: 5px 4px;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 4px;
+          justify-content: center;
+          gap: 2px;
+          min-height: 44px;
+          color: var(--text-main);
           cursor: pointer;
-          transition: transform 0.15s ease;
+          transition: border-color 0.14s ease, background 0.14s ease, transform 0.1s ease;
         }
-        .yacht-die-btn:disabled {
+        .yacht-hold-btn:disabled {
           cursor: default;
+          opacity: 0.72;
         }
-        .yacht-die-btn.held {
-          transform: translateY(-4px);
+        .yacht-hold-btn:not(:disabled):active {
+          transform: scale(0.96);
         }
-        .yacht-die-svg {
-          width: 100%;
-          max-width: 56px;
-          height: auto;
-          filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.42));
-          transition: filter 0.15s ease, opacity 0.15s ease;
+        .yacht-hold-btn.held {
+          border-color: var(--accent-gold);
+          background: rgba(245, 158, 11, 0.22);
+          box-shadow: 0 0 10px rgba(245, 158, 11, 0.28);
         }
-        .yacht-die-svg.held {
-          filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.65));
+        .yacht-hold-val {
+          font-size: 14px;
+          font-weight: 900;
+          line-height: 1.1;
+          color: #f8fafc;
         }
-        .yacht-die-svg.dimmed {
-          opacity: 0.45;
+        .yacht-hold-val.is-one {
+          color: #f87171;
         }
-        .yacht-die-svg.rolling {
-          animation: yachtDieSpin 0.36s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        @keyframes yachtDieSpin {
-          0% { transform: rotate(0deg) scale(0.84); }
-          45% { transform: rotate(170deg) scale(1.1); }
-          100% { transform: rotate(360deg) scale(1); }
-        }
-        .yacht-hold-badge {
+        .yacht-hold-tag {
           display: inline-flex;
           align-items: center;
           gap: 2px;
           font-size: 9px;
           font-weight: 800;
           letter-spacing: 0.04em;
-          padding: 2px 5px;
-          border-radius: 999px;
           color: var(--text-muted);
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid transparent;
-          min-height: 17px;
         }
-        .yacht-hold-badge.held {
-          color: #1c1917;
-          background: var(--accent-gold);
-          border-color: #fde68a;
+        .yacht-hold-btn.held .yacht-hold-tag {
+          color: #fde68a;
         }
         .yacht-sheet-card {
           background: var(--bg-panel);
@@ -519,29 +405,36 @@ export const YachtBoard: React.FC<YachtBoardProps> = ({ state, onAction }) => {
             </span>
           </div>
 
-          <div className="yacht-dice-row">
+          <GameDice3DTray
+            dice={state.dice}
+            rollTrigger={state.rollSeq}
+            held={state.held}
+            dimmed={state.rollsUsed === 0}
+            height={146}
+            interactive={canHold}
+            onDieClick={(idx) => onAction({ type: 'toggleHold', payload: { index: idx } })}
+          />
+
+          <div className="yacht-hold-row">
             {state.dice.map((die, idx) => {
               const isHeld = state.held[idx];
-              const isRollingNow = animatingRoll && !isHeld;
               return (
                 <button
                   key={idx}
                   type="button"
-                  className={`yacht-die-btn ${isHeld ? 'held' : ''}`}
+                  className={`yacht-hold-btn ${isHeld ? 'held' : ''}`}
                   disabled={!canHold}
                   onClick={() => {
                     if (canHold) {
                       onAction({ type: 'toggleHold', payload: { index: idx } });
                     }
                   }}
+                  aria-label={`サイコロ ${idx + 1} (${die}) ${isHeld ? 'ホールド中' : '解除'}`}
                 >
-                  <SvgDie
-                    value={die}
-                    held={isHeld}
-                    rolling={isRollingNow}
-                    dimmed={state.rollsUsed === 0}
-                  />
-                  <span className={`yacht-hold-badge ${isHeld ? 'held' : ''}`}>
+                  <span className={`yacht-hold-val ${die === 1 ? 'is-one' : ''}`}>
+                    {state.rollsUsed === 0 ? '-' : die}
+                  </span>
+                  <span className="yacht-hold-tag">
                     {isHeld ? (
                       <>
                         <Lock size={9} /> KEEP
@@ -551,7 +444,7 @@ export const YachtBoard: React.FC<YachtBoardProps> = ({ state, onAction }) => {
                         <Unlock size={9} /> FREE
                       </>
                     ) : (
-                      <span>&nbsp;</span>
+                      <span>{state.rollsUsed === 0 ? 'WAIT' : 'LOCK'}</span>
                     )}
                   </span>
                 </button>
