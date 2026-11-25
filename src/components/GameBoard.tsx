@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, BookOpen, ClipboardList, Eye, EyeOff, RotateCcw, Users, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, ClipboardList, Eye, EyeOff, RotateCcw, SlidersHorizontal, Users, X } from 'lucide-react';
 import type { AirHockeyClientState } from '../games/airhockey';
 import type { BackgammonClientState } from '../games/backgammon';
 import type { BattleshipClientState } from '../games/battleship';
@@ -41,6 +41,7 @@ import type { YachtClientState } from '../games/yacht';
 import type { GameId, GameRulesMap, ScoreBoardRoomRules } from '../types/game';
 import type { ScoreBoardOp, ScoreBoardState } from '../utils/scoreBoard';
 import { GameIcon } from './GameIcon';
+import { GameRuleGuide } from './GameRuleGuide';
 import { RuleConfigurator } from './RuleConfigurator';
 import { AirHockeyBoard } from './boards/AirHockeyBoard';
 import { BackgammonBoard } from './boards/BackgammonBoard';
@@ -126,6 +127,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   roomPlayerNames = [],
 }) => {
   const [showRuleModal, setShowRuleModal] = useState(false);
+  const [ruleModalTab, setRuleModalTab] = useState<'guide' | 'config'>('guide');
   const meta = GAME_REGISTRY[gameId];
   const phase = (gameState as { phase?: string })?.phase;
 
@@ -480,8 +482,34 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               </button>
             </div>
             <p className="panel-desc">{meta.description}</p>
-            <div className="rules-drawer">
-              <RuleConfigurator gameId={gameId} rules={rules} readOnly />
+            <div className="rule-sub-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={ruleModalTab === 'guide'}
+                className={`rule-sub-tab ${ruleModalTab === 'guide' ? 'active' : ''}`}
+                onClick={() => setRuleModalTab('guide')}
+              >
+                <BookOpen size={14} />
+                遊び方・ルール
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={ruleModalTab === 'config'}
+                className={`rule-sub-tab ${ruleModalTab === 'config' ? 'active' : ''}`}
+                onClick={() => setRuleModalTab('config')}
+              >
+                <SlidersHorizontal size={14} />
+                この部屋の設定
+              </button>
+            </div>
+            <div className="rules-drawer" style={{ maxHeight: '58dvh', overflowY: 'auto' }}>
+              {ruleModalTab === 'guide' ? (
+                <GameRuleGuide gameId={gameId} />
+              ) : (
+                <RuleConfigurator gameId={gameId} rules={rules} readOnly />
+              )}
             </div>
           </div>
         </div>

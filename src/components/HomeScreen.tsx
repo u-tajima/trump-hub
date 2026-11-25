@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  BookOpen,
   ClipboardList,
   Dices,
   DoorOpen,
@@ -15,6 +16,7 @@ import { useFavoriteGames } from '../utils/favorites';
 import { normalizeRoomCode } from '../utils/roomCode';
 import { GameIcon } from './GameIcon';
 import { GamePicker } from './GamePicker';
+import { GameRuleGuide } from './GameRuleGuide';
 import { RuleConfigurator } from './RuleConfigurator';
 
 export type ToolChoiceId = 'dice' | 'roulette' | 'scoreboard';
@@ -126,6 +128,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     yacht: { ...GAME_REGISTRY.yacht.defaultRules },
     liarsdice: { ...GAME_REGISTRY.liarsdice.defaultRules },
   }));
+  const [showGuide, setShowGuide] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showScoreToolRules, setShowScoreToolRules] = useState(false);
 
@@ -342,14 +345,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </div>
             </div>
 
-            <button
-              type="button"
-              className="secondary-btn full-width"
-              onClick={() => setShowRules((v) => !v)}
-            >
-              <Sparkles size={16} />
-              {showRules ? 'ローカルルール設定を閉じる' : 'ローカルルールを設定する'}
-            </button>
+            <div className="home-rule-actions">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => {
+                  setShowGuide((v) => !v);
+                  if (!showGuide) setShowRules(false);
+                }}
+              >
+                <BookOpen size={15} />
+                {showGuide ? '遊び方を閉じる' : '遊び方・ルール'}
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => {
+                  setShowRules((v) => !v);
+                  if (!showRules) setShowGuide(false);
+                }}
+              >
+                <Sparkles size={15} />
+                {showRules ? '設定を閉じる' : 'ルール設定'}
+              </button>
+            </div>
+
+            {showGuide && (
+              <div className="rules-drawer">
+                <GameRuleGuide gameId={selectedGame} />
+              </div>
+            )}
 
             {showRules && (
               <div className="rules-drawer">

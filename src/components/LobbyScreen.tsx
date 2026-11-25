@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowLeftRight,
+  BookOpen,
   Bot,
   Check,
   ClipboardList,
@@ -23,6 +24,7 @@ import { useFavoriteGames } from '../utils/favorites';
 import { buildInviteUrl } from '../utils/roomCode';
 import { GameIcon } from './GameIcon';
 import { GamePicker } from './GamePicker';
+import { GameRuleGuide } from './GameRuleGuide';
 import { RuleConfigurator } from './RuleConfigurator';
 import './LobbyScreen.css';
 
@@ -54,6 +56,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [ruleTab, setRuleTab] = useState<'guide' | 'config'>('guide');
   const [showGamePicker, setShowGamePicker] = useState(false);
   const { favorites, toggleFavorite, isFavorite } = useFavoriteGames();
 
@@ -257,12 +260,38 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
         {showRules && (
           <div className="rules-drawer">
-            <RuleConfigurator
-              gameId={lobby.config.gameId}
-              rules={lobby.config.rules}
-              readOnly={!isHost}
-              onChange={(nextRules) => onUpdateConfig(lobby.config.gameId, nextRules)}
-            />
+            <div className="rule-sub-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={ruleTab === 'guide'}
+                className={`rule-sub-tab ${ruleTab === 'guide' ? 'active' : ''}`}
+                onClick={() => setRuleTab('guide')}
+              >
+                <BookOpen size={14} />
+                遊び方・ルール
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={ruleTab === 'config'}
+                className={`rule-sub-tab ${ruleTab === 'config' ? 'active' : ''}`}
+                onClick={() => setRuleTab('config')}
+              >
+                <SlidersHorizontal size={14} />
+                ローカルルール設定
+              </button>
+            </div>
+            {ruleTab === 'guide' ? (
+              <GameRuleGuide gameId={lobby.config.gameId} />
+            ) : (
+              <RuleConfigurator
+                gameId={lobby.config.gameId}
+                rules={lobby.config.rules}
+                readOnly={!isHost}
+                onChange={(nextRules) => onUpdateConfig(lobby.config.gameId, nextRules)}
+              />
+            )}
           </div>
         )}
       </section>

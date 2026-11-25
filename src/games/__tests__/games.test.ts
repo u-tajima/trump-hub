@@ -13,6 +13,7 @@ import { applyMemoryAction, computeMemoryBotAction, initMemory } from '../memory
 import { applyOldMaidAction, initOldMaid } from '../oldMaid';
 import { applyPokerAction, computePokerBotAction, evaluatePokerHand, initPoker } from '../poker';
 import { GAME_REGISTRY } from '../registry';
+import { GAME_RULE_GUIDES } from '../ruleGuides';
 import { applyReversiAction, computeReversiBotAction, initReversi } from '../reversi';
 import { applyRouletteAction, EUROPEAN_WHEEL_ORDER, getRouletteColor, initRoulette } from '../roulette';
 import { applySevensAction, canPlaceNormalCard, computeSevensBotAction, initSevens } from '../sevens';
@@ -1343,5 +1344,17 @@ describe('9 new games engines (Hex, Checkers, Backgammon, GunjinShogi, CoinSocce
     const solver = inPlayers.find((p) => p.id !== ins.masterId)!;
     ins = applyInsiderAction(ins, 'p1', { type: 'markSolved', payload: { solverId: solver.id } }).state;
     expect(ins.subPhase).toBe('discussion');
+  });
+
+  it('provides complete structured rule guides for all registered games', () => {
+    const allIds = Object.keys(GAME_REGISTRY) as (keyof typeof GAME_REGISTRY)[];
+    expect(allIds.length).toBeGreaterThanOrEqual(38);
+    for (const id of allIds) {
+      const guide = GAME_RULE_GUIDES[id];
+      expect(guide, `missing guide for ${id}`).toBeDefined();
+      expect(guide.goal.trim().length).toBeGreaterThan(5);
+      expect(guide.flow.length).toBeGreaterThanOrEqual(3);
+      expect(guide.points.length).toBeGreaterThanOrEqual(3);
+    }
   });
 });
