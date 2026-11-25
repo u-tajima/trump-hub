@@ -65,6 +65,7 @@ export function App() {
   const lobbyRef = useRef<LobbyState | null>(null);
   const internalGameRef = useRef<AnyInternalState | null>(null);
   const roomScoreBoardRef = useRef<ScoreBoardState | null>(null);
+  const lastGameUpdateAtRef = useRef<number>(0);
 
   const handleNameChange = (name: string) => {
     setPlayerName(name);
@@ -79,6 +80,9 @@ export function App() {
   const syncAllClients = useCallback((nextLobby: LobbyState, nextGame: AnyInternalState | null) => {
     lobbyRef.current = nextLobby;
     internalGameRef.current = nextGame;
+    if (nextGame) {
+      lastGameUpdateAtRef.current = Date.now();
+    }
     setLobby(nextLobby);
 
     const host = hostSessionRef.current;
@@ -145,20 +149,37 @@ export function App() {
   }, []);
 
   // ホスト側ゲームループ (Bot思考・タイムアウト処理)
+  // プレイヤーの操作直後に即座にCPUが反応して見失わないよう、状態変化から一定の思考時間を空けてから実行する
   useEffect(() => {
     if (role !== 'host' || lobby?.phase !== 'playing') return;
-    const intervalMs = lobby.config.gameId === 'speed' ? 400 : 800;
+    const minBotDelayMs = lobby.config.gameId === 'speed' ? 650 : 1250;
 
     const timer = window.setInterval(() => {
       const curLobby = lobbyRef.current;
       const curGame = internalGameRef.current;
       if (!curLobby || curLobby.phase !== 'playing' || !curGame) return;
 
+      // 既にエンジン側で独自タイマーを持つタイムアウト処理（神経衰弱のリセット・ダウトの猶予終了）は遅延させない
+      const isDueTimeout =
+        (curLobby.config.gameId === 'memory' &&
+          'awaitingReset' in curGame &&
+          Boolean(curGame.awaitingReset)) ||
+        (curLobby.config.gameId === 'doubt' &&
+          'subPhase' in curGame &&
+          curGame.subPhase === 'doubtWindow' &&
+          'windowEndsAt' in curGame &&
+          typeof curGame.windowEndsAt === 'number' &&
+          Date.now() >= curGame.windowEndsAt);
+
+      if (!isDueTimeout && Date.now() - lastGameUpdateAtRef.current < minBotDelayMs) {
+        return;
+      }
+
       const updated = tickGameEngine(curLobby.config.gameId, curGame);
       if (updated) {
         syncAllClients(curLobby, updated);
       }
-    }, intervalMs);
+    }, 200);
 
     return () => window.clearInterval(timer);
   }, [role, lobby?.phase, lobby?.config.gameId, syncAllClients]);
