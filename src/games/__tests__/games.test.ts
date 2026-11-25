@@ -1283,6 +1283,20 @@ describe('9 new games engines (Hex, Checkers, Backgammon, GunjinShogi, CoinSocce
     expect(curved).not.toBeNull();
     expect(curved!.wobbleDeg).toBeGreaterThan(1);
     expect(curved!.vx).toBeGreaterThan(0);
+
+    // 160msウィンドウ制限: 最初の160msは上方向(vy<0)、その後500msで真右(vx>0)へ曲げても上方向として計算される
+    const windowed = computeFlickVelocity(
+      [
+        { x: 300, y: 500, t: 0 },
+        { x: 300, y: 430, t: 60 },
+        { x: 300, y: 360, t: 120 },
+        { x: 600, y: 360, t: 500 },
+      ],
+      { minSpeed: 4, maxSpeed: 20, minDistance: 20, maxSwipeVelocity: 2 }
+    );
+    expect(windowed).not.toBeNull();
+    expect(windowed!.vy).toBeLessThan(-3);
+    expect(Math.abs(windowed!.vx)).toBeLessThan(0.5);
   });
 
   it('OneNight, WordWolf, and Insider: enforce human-only, secret isolation, and full flow', () => {

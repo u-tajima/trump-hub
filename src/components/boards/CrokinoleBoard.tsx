@@ -21,7 +21,12 @@ import {
   type CrokinoleClientState,
   type CrokinoleDisc,
 } from '../../games/crokinole';
-import { computeFlickVelocity, type FlickSample } from '../../utils/flickInput';
+import {
+  computeFlickVelocity,
+  FLICK_CAPTURE_MS,
+  FLICK_MOVE_START_DIST,
+  type FlickSample,
+} from '../../utils/flickInput';
 import './CrokinoleBoard.css';
 
 interface CrokinoleBoardProps {
@@ -53,6 +58,8 @@ interface EffectRing {
 interface FlickDragState {
   pointerId: number;
   samples: FlickSample[];
+  moveStartedAt: number | null;
+  autoTimer: number | null;
 }
 
 const CROKINOLE_FLICK_OPTIONS = {
@@ -705,13 +712,56 @@ export const CrokinoleBoard: React.FC<CrokinoleBoardProps> = ({
     [rotatedView]
   );
 
+  const clearDrag = useCallback((drag: FlickDragState | null) => {
+    if (drag?.autoTimer != null) {
+      window.clearTimeout(drag.autoTimer);
+      drag.autoTimer = null;
+    }
+    if (dragRef.current === drag) {
+      dragRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearDrag(dragRef.current);
+    };
+  }, [clearDrag]);
+
+  const commitDrag = useCallback(
+    (drag: FlickDragState) => {
+      if (dragRef.current !== drag) return;
+      clearDrag(drag);
+      if (!canControl) return;
+
+      const flick = computeFlickVelocity(drag.samples, CROKINOLE_FLICK_OPTIONS);
+      if (!flick) return;
+
+      onAction(
+        {
+          type: 'shoot',
+          payload: {
+            angle: resolvedShootAngle,
+            vx: flick.vx,
+            vy: flick.vy,
+          },
+        },
+        isLocalPassAndPlay ? activePlayer.id : undefined
+      );
+    },
+    [activePlayer.id, canControl, clearDrag, isLocalPassAndPlay, onAction, resolvedShootAngle]
+  );
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!canControl) return;
+    clearDrag(dragRef.current);
     e.currentTarget.setPointerCapture(e.pointerId);
     const pt = toLogicalCoords(e.clientX, e.clientY);
     dragRef.current = {
       pointerId: e.pointerId,
       samples: [{ x: pt.x, y: pt.y, t: performance.now() }],
+      moveStartedAt: null,
+      autoTimer: null,
     };
   };
 
@@ -727,14 +777,29 @@ export const CrokinoleBoard: React.FC<CrokinoleBoardProps> = ({
         drag.samples.shift();
       }
     }
+
+    // 弾き始めからコンマ数秒（FLICK_CAPTURE_MS）だけ読み取って自動発射
+    if (drag.moveStartedAt === null) {
+      const origin = drag.samples[0];
+      if (Math.hypot(pt.x - origin.x, pt.y - origin.y) >= FLICK_MOVE_START_DIST) {
+        drag.moveStartedAt = now;
+        drag.autoTimer = window.setTimeout(() => {
+          commitDrag(drag);
+        }, FLICK_CAPTURE_MS);
+      }
+    } else if (now - drag.moveStartedAt >= FLICK_CAPTURE_MS) {
+      commitDrag(drag);
+    }
   };
 
   const finishDrag = (e: React.PointerEvent<HTMLCanvasElement>, cancelled: boolean) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
-    dragRef.current = null;
 
-    if (cancelled || !canControl) return;
+    if (cancelled || !canControl) {
+      clearDrag(drag);
+      return;
+    }
 
     const pt = toLogicalCoords(e.clientX, e.clientY);
     const now = performance.now();
@@ -743,20 +808,7 @@ export const CrokinoleBoard: React.FC<CrokinoleBoardProps> = ({
       drag.samples.push({ x: pt.x, y: pt.y, t: now });
     }
 
-    const flick = computeFlickVelocity(drag.samples, CROKINOLE_FLICK_OPTIONS);
-    if (!flick) return;
-
-    onAction(
-      {
-        type: 'shoot',
-        payload: {
-          angle: resolvedShootAngle,
-          vx: flick.vx,
-          vy: flick.vy,
-        },
-      },
-      isLocalPassAndPlay ? activePlayer.id : undefined
-    );
+    commitDrag(drag);
   };
 
   const p0 = state.players[0];

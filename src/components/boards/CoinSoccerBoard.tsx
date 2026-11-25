@@ -19,7 +19,12 @@ import {
   type CoinSoccerClientState,
   type CoinSoccerCoin,
 } from '../../games/coinSoccer';
-import { computeFlickVelocity, type FlickSample } from '../../utils/flickInput';
+import {
+  computeFlickVelocity,
+  FLICK_CAPTURE_MS,
+  FLICK_MOVE_START_DIST,
+  type FlickSample,
+} from '../../utils/flickInput';
 import './CoinSoccerBoard.css';
 
 interface CoinSoccerBoardProps {
@@ -52,6 +57,8 @@ interface FlickGestureState {
   pointerId: number;
   coinIndex: CoinIndex;
   samples: FlickSample[];
+  moveStartedAt: number | null;
+  autoTimer: number | null;
 }
 
 const FLICK_MIN_DISTANCE = 18;
@@ -672,8 +679,55 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
     [rotatedView]
   );
 
+  const clearFlick = useCallback((flick: FlickGestureState | null) => {
+    if (flick?.autoTimer != null) {
+      window.clearTimeout(flick.autoTimer);
+      flick.autoTimer = null;
+    }
+    if (flickRef.current === flick) {
+      flickRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearFlick(flickRef.current);
+    };
+  }, [clearFlick]);
+
+  const commitFlick = useCallback(
+    (flick: FlickGestureState) => {
+      if (flickRef.current !== flick) return;
+      clearFlick(flick);
+      if (!canControl) return;
+
+      const result = computeFlickVelocity(flick.samples, {
+        minSpeed: COIN_SOCCER_MIN_SPEED,
+        maxSpeed: COIN_SOCCER_MAX_SPEED,
+        minDistance: FLICK_MIN_DISTANCE,
+        maxSwipeVelocity: FLICK_MAX_SWIPE_VEL,
+        minSwipeVelocity: FLICK_MIN_SWIPE_VEL,
+      });
+      if (!result) return;
+
+      onAction(
+        {
+          type: 'flick',
+          payload: {
+            coinIndex: flick.coinIndex,
+            vx: result.vx,
+            vy: result.vy,
+          },
+        },
+        isLocalPassAndPlay ? activePlayer.id : undefined
+      );
+    },
+    [activePlayer.id, canControl, clearFlick, isLocalPassAndPlay, onAction]
+  );
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!canControl) return;
+    clearFlick(flickRef.current);
     e.currentTarget.setPointerCapture(e.pointerId);
     const pt = toLogicalCoords(e.clientX, e.clientY);
 
@@ -694,6 +748,8 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
       pointerId: e.pointerId,
       coinIndex: chosen,
       samples: [{ x: pt.x, y: pt.y, t: performance.now() }],
+      moveStartedAt: null,
+      autoTimer: null,
     };
   };
 
@@ -701,18 +757,34 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
     const flick = flickRef.current;
     if (!flick || flick.pointerId !== e.pointerId) return;
     const pt = toLogicalCoords(e.clientX, e.clientY);
-    flick.samples.push({ x: pt.x, y: pt.y, t: performance.now() });
+    const now = performance.now();
+    flick.samples.push({ x: pt.x, y: pt.y, t: now });
     if (flick.samples.length > 60) {
       flick.samples.shift();
+    }
+
+    // 弾き始めからコンマ数秒（FLICK_CAPTURE_MS）だけ読み取って自動発射
+    if (flick.moveStartedAt === null) {
+      const origin = flick.samples[0];
+      if (Math.hypot(pt.x - origin.x, pt.y - origin.y) >= FLICK_MOVE_START_DIST) {
+        flick.moveStartedAt = now;
+        flick.autoTimer = window.setTimeout(() => {
+          commitFlick(flick);
+        }, FLICK_CAPTURE_MS);
+      }
+    } else if (now - flick.moveStartedAt >= FLICK_CAPTURE_MS) {
+      commitFlick(flick);
     }
   };
 
   const finishFlick = (e: React.PointerEvent<HTMLCanvasElement>, cancelled: boolean) => {
     const flick = flickRef.current;
     if (!flick || flick.pointerId !== e.pointerId) return;
-    flickRef.current = null;
 
-    if (cancelled || !canControl) return;
+    if (cancelled || !canControl) {
+      clearFlick(flick);
+      return;
+    }
 
     const pt = toLogicalCoords(e.clientX, e.clientY);
     const prev = flick.samples[flick.samples.length - 1];
@@ -720,26 +792,7 @@ export const CoinSoccerBoard: React.FC<CoinSoccerBoardProps> = ({
       flick.samples.push({ x: pt.x, y: pt.y, t: performance.now() });
     }
 
-    const result = computeFlickVelocity(flick.samples, {
-      minSpeed: COIN_SOCCER_MIN_SPEED,
-      maxSpeed: COIN_SOCCER_MAX_SPEED,
-      minDistance: FLICK_MIN_DISTANCE,
-      maxSwipeVelocity: FLICK_MAX_SWIPE_VEL,
-      minSwipeVelocity: FLICK_MIN_SWIPE_VEL,
-    });
-    if (!result) return;
-
-    onAction(
-      {
-        type: 'flick',
-        payload: {
-          coinIndex: flick.coinIndex,
-          vx: result.vx,
-          vy: result.vy,
-        },
-      },
-      isLocalPassAndPlay ? activePlayer.id : undefined
-    );
+    commitFlick(flick);
   };
 
   const p0 = state.players[0];

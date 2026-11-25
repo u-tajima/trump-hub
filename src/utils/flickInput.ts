@@ -4,6 +4,12 @@
  * 実際に指を弾いた軌跡の最終区間ベクトル＋直前の横ブレ成分をそのまま発射ベクトルへ変換する。
  */
 
+/** 指が動き出してからスワイプを読み取る時間ウィンドウ（0.16秒＝コンマ数秒） */
+export const FLICK_CAPTURE_MS = 160;
+
+/** 「弾き始め」を検知する論理座標上の最小移動距離 */
+export const FLICK_MOVE_START_DIST = 6;
+
 export interface FlickSample {
   x: number; // 盤面論理座標X
   y: number; // 盤面論理座標Y
@@ -29,17 +35,40 @@ export interface FlickComputeOptions {
   maxSwipeVelocity: number;
   /** 最低パワーの基準スワイプ速度（論理px / ms） */
   minSwipeVelocity?: number;
+  /** 読み取り上限時間（ミリ秒）。未指定時は FLICK_CAPTURE_MS (160ms) */
+  captureWindowMs?: number;
 }
 
 /**
- * 記録されたポインタ軌跡（論理座標）から発射速度ベクトルを算出する。
- * - 速度: リリース直前 95ms 以内の実測移動速度をベースに算出
- * - 角度: リリース直前区間の実測方向をベースに、直前セグメントとの角度差（手のブレ）を自然に反映
+ * 記録されたポインタ軌跡（論理座標）から、動き出し後のコンマ数秒間（既定160ms）のスワイプだけを使って発射速度ベクトルを算出する。
+ * - 速度: ウィンドウ内リリース直前区間の実測移動速度をベースに算出
+ * - 角度: ウィンドウ内の実測方向をベースに、直前セグメントとの角度差（手のブレ）を自然に反映
  */
 export function computeFlickVelocity(
-  samples: FlickSample[],
+  rawSamples: FlickSample[],
   options: FlickComputeOptions
 ): FlickResult | null {
+  if (rawSamples.length < 2) return null;
+
+  // 動き出しサンプルを特定し、そこから captureWindowMs 以内のサンプルだけを切り出す
+  const captureMs = options.captureWindowMs ?? FLICK_CAPTURE_MS;
+  const origin = rawSamples[0];
+  let startIdx = 0;
+  for (let i = 1; i < rawSamples.length; i++) {
+    if (Math.hypot(rawSamples[i].x - origin.x, rawSamples[i].y - origin.y) >= FLICK_MOVE_START_DIST) {
+      startIdx = i - 1;
+      break;
+    }
+  }
+  const startTime = rawSamples[startIdx].t;
+  const samples: FlickSample[] = [];
+  for (let i = startIdx; i < rawSamples.length; i++) {
+    if (rawSamples[i].t - startTime <= captureMs + 16 || samples.length < 2) {
+      samples.push(rawSamples[i]);
+    } else {
+      break;
+    }
+  }
   if (samples.length < 2) return null;
 
   const first = samples[0];

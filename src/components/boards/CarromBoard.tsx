@@ -19,7 +19,12 @@ import {
   type CarromPiece,
   type CarromStriker,
 } from '../../games/carrom';
-import { computeFlickVelocity, type FlickSample } from '../../utils/flickInput';
+import {
+  computeFlickVelocity,
+  FLICK_CAPTURE_MS,
+  FLICK_MOVE_START_DIST,
+  type FlickSample,
+} from '../../utils/flickInput';
 import './CarromBoard.css';
 
 interface CarromBoardProps {
@@ -50,6 +55,8 @@ interface PocketRing {
 interface FlickDragState {
   pointerId: number;
   samples: FlickSample[];
+  moveStartedAt: number | null;
+  autoTimer: number | null;
 }
 
 const CARROM_FLICK_OPTIONS = {
@@ -768,13 +775,56 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
     [rotatedView]
   );
 
+  const clearDrag = useCallback((drag: FlickDragState | null) => {
+    if (drag?.autoTimer != null) {
+      window.clearTimeout(drag.autoTimer);
+      drag.autoTimer = null;
+    }
+    if (dragRef.current === drag) {
+      dragRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearDrag(dragRef.current);
+    };
+  }, [clearDrag]);
+
+  const commitDrag = useCallback(
+    (drag: FlickDragState) => {
+      if (dragRef.current !== drag) return;
+      clearDrag(drag);
+      if (!canControl) return;
+
+      const flick = computeFlickVelocity(drag.samples, CARROM_FLICK_OPTIONS);
+      if (!flick) return;
+
+      onAction(
+        {
+          type: 'shoot',
+          payload: {
+            strikerX: resolvedStrikerX,
+            vx: flick.vx,
+            vy: flick.vy,
+          },
+        },
+        isLocalPassAndPlay ? activePlayer.id : undefined
+      );
+    },
+    [activePlayer.id, canControl, clearDrag, isLocalPassAndPlay, onAction, resolvedStrikerX]
+  );
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!canControl) return;
+    clearDrag(dragRef.current);
     e.currentTarget.setPointerCapture(e.pointerId);
     const pt = toLogicalCoords(e.clientX, e.clientY);
     dragRef.current = {
       pointerId: e.pointerId,
       samples: [{ x: pt.x, y: pt.y, t: performance.now() }],
+      moveStartedAt: null,
+      autoTimer: null,
     };
   };
 
@@ -790,14 +840,29 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
         drag.samples.shift();
       }
     }
+
+    // 弾き始めからコンマ数秒（FLICK_CAPTURE_MS）だけ読み取って自動発射
+    if (drag.moveStartedAt === null) {
+      const origin = drag.samples[0];
+      if (Math.hypot(pt.x - origin.x, pt.y - origin.y) >= FLICK_MOVE_START_DIST) {
+        drag.moveStartedAt = now;
+        drag.autoTimer = window.setTimeout(() => {
+          commitDrag(drag);
+        }, FLICK_CAPTURE_MS);
+      }
+    } else if (now - drag.moveStartedAt >= FLICK_CAPTURE_MS) {
+      commitDrag(drag);
+    }
   };
 
   const finishDrag = (e: React.PointerEvent<HTMLCanvasElement>, cancelled: boolean) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
-    dragRef.current = null;
 
-    if (cancelled || !canControl) return;
+    if (cancelled || !canControl) {
+      clearDrag(drag);
+      return;
+    }
 
     const pt = toLogicalCoords(e.clientX, e.clientY);
     const now = performance.now();
@@ -806,20 +871,7 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
       drag.samples.push({ x: pt.x, y: pt.y, t: now });
     }
 
-    const flick = computeFlickVelocity(drag.samples, CARROM_FLICK_OPTIONS);
-    if (!flick) return;
-
-    onAction(
-      {
-        type: 'shoot',
-        payload: {
-          strikerX: resolvedStrikerX,
-          vx: flick.vx,
-          vy: flick.vy,
-        },
-      },
-      isLocalPassAndPlay ? activePlayer.id : undefined
-    );
+    commitDrag(drag);
   };
 
   // スライダー値（回転ビュー時は左右反転して直感的に操作できるようにする）
@@ -943,7 +995,7 @@ export const CarromBoard: React.FC<CarromBoardProps> = ({
               {isAnimating
                 ? 'ショット中...'
                 : canControl
-                ? `${activePlayer.name} の番: スライダーで位置を決め、狙う方向へスッと弾く`
+                ? `${activePlayer.name} の番: 狙う方向へスッと弾く`
                 : `${activePlayer.name} のショットを待機中`}
             </span>
             <span>{activePlayer.color === 'white' ? '白' : '黒'}</span>
