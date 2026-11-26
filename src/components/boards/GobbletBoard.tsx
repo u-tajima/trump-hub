@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Layers, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import type {
   GobbletClientState,
   GobbletCoord,
@@ -405,32 +405,6 @@ export const GobbletBoard: React.FC<GobbletBoardProps> = ({
                           pointerEvents: 'none',
                         }}
                       />
-                    )}
-
-                    {/* 下に駒が隠れていることを示す控えめなスタックインジケータ（中身の色は非表示） */}
-                    {cell.depth > 1 && (
-                      <span
-                        title={`下に${cell.depth - 1}個`}
-                        style={{
-                          position: 'absolute',
-                          right: 6,
-                          bottom: 5,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 2,
-                          padding: '2px 5px',
-                          borderRadius: 999,
-                          background: 'rgba(15, 23, 42, 0.72)',
-                          border: '1px solid rgba(255, 255, 255, 0.28)',
-                          color: '#e2e8f0',
-                          fontSize: 9,
-                          fontWeight: 800,
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        <Layers size={10} />
-                        {cell.depth}
-                      </span>
                     )}
                   </button>
                 );
