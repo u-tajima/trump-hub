@@ -1434,6 +1434,197 @@ export const GAME_REGISTRY: { [K in GameId]: GameMeta<K> } = {
       },
     ],
   },
+  gobblet: {
+    id: 'gobblet',
+    category: 'board',
+    name: 'かぶせ三目並べ',
+    subtitle: '大中小の駒を被せ合う記憶＆頭脳の○×戦',
+    icon: 'layers',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '3×3盤面で大・中・小（各2個）の駒を使い、小さい駒の上から大きい駒をかぶせたり盤上の駒を動かしたりして3目並べよう！',
+    defaultRules: {
+      allowBoardMove: true,
+    },
+    ruleFields: [
+      {
+        key: 'allowBoardMove',
+        label: '盤上の駒の移動あり',
+        description: 'ONにすると一度盤面に置いた自分の駒を持ち上げて別マスへ移動・かぶせできる（公式準拠）',
+        type: 'boolean',
+      },
+    ],
+  },
+  corridor: {
+    id: 'corridor',
+    category: 'board',
+    name: '壁おき迷路レース',
+    subtitle: '進むか壁で塞ぐか！対岸を目指す迷路対決',
+    icon: 'grid',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '自分の駒を対岸ゴールへ進めるか、壁を置いて相手の進路を遠回りさせるか！完全封鎖禁止の本格迷路バトル。',
+    defaultRules: {
+      boardSize: 9,
+      wallsPerPlayer: 10,
+    },
+    ruleFields: [
+      {
+        key: 'boardSize',
+        label: '盤面サイズ',
+        description: '7×7は短時間、9×9は公式サイズ',
+        type: 'select',
+        options: [
+          { value: 7, label: '7×7（クイック）' },
+          { value: 9, label: '9×9（標準）' },
+        ],
+      },
+      {
+        key: 'wallsPerPlayer',
+        label: '持ち壁の本数',
+        description: '各プレイヤーが置ける壁の総数',
+        type: 'select',
+        options: [
+          { value: 6, label: '6本（クイック）' },
+          { value: 10, label: '10本（標準）' },
+        ],
+      },
+    ],
+  },
+  towerclimb: {
+    id: 'towerclimb',
+    category: 'board',
+    name: '3段タワー登り',
+    subtitle: '動いて積んで3段目の頂上を目指す立体戦略',
+    icon: 'crown',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '5×5盤面に2駒を配置し、1マス移動→隣マスにブロックを1段建築！4段目ドームで相手を封鎖しつつ先に3段目へ登れば勝利。',
+    defaultRules: {
+      enableDome: true,
+    },
+    ruleFields: [
+      {
+        key: 'enableDome',
+        label: '4段目ドーム封鎖あり',
+        description: 'ONにすると3段目の上にドームを建てて侵入不可にできる（公式ルール）',
+        type: 'boolean',
+      },
+    ],
+  },
+  cardshogi: {
+    id: 'cardshogi',
+    category: 'board',
+    name: 'カード循環ミニ将棋',
+    subtitle: '使った動きカードが相手へ回る5×5読み合い',
+    icon: 'swords',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '5×5盤面・各5駒。手元2枚の移動カードから1枚選んで駒を動かすと、そのカードが中央を経由して相手へ回る！王取りか王座到達で勝利。',
+    defaultRules: {
+      allowTempleWin: true,
+    },
+    ruleFields: [
+      {
+        key: 'allowTempleWin',
+        label: '相手王座への到達勝ちあり',
+        description: 'ONにすると自分の王を相手の初期王座マスへ進めても勝利（公式ルール）',
+        type: 'boolean',
+      },
+    ],
+  },
+  hexpush: {
+    id: 'hexpush',
+    category: 'board',
+    name: '六角押し出し相撲',
+    subtitle: '2〜3玉で相手を押し出す六角盤面の力比べ',
+    icon: 'hexagon',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '六角盤面で自分の玉を1〜3個まとめて動かし、数の優位で相手の玉を盤外へ押し出そう！先に規定個数を落とした方の勝利。',
+    defaultRules: {
+      pushOutTarget: 6,
+    },
+    ruleFields: [
+      {
+        key: 'pushOutTarget',
+        label: '勝利押し出し数',
+        description: '相手の玉を何個場外へ落とせば勝利か',
+        type: 'select',
+        options: [
+          { value: 4, label: '4個（クイック）' },
+          { value: 6, label: '6個（公式標準）' },
+        ],
+      },
+    ],
+  },
+  hasamishogi: {
+    id: 'hasamishogi',
+    category: 'board',
+    name: 'はさみ将棋',
+    subtitle: '縦横スライドで相手の駒を挟んで取る伝統対戦',
+    icon: 'shield',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '9×9盤面で9枚の駒を飛車のように縦横へ動かし、相手の駒を挟んで取ろう！複数枚同時挟みや角挟みにも対応。',
+    defaultRules: {
+      captureTarget: 5,
+    },
+    ruleFields: [
+      {
+        key: 'captureTarget',
+        label: '勝利獲得枚数',
+        description: '先にこの枚数の相手駒を取れば勝利',
+        type: 'select',
+        options: [
+          { value: 5, label: '5枚先取（標準）' },
+          { value: 7, label: '7枚先取（ロング）' },
+        ],
+      },
+    ],
+  },
+  connect4_3d: {
+    id: 'connect4_3d',
+    category: 'board',
+    name: '立体4目並べ',
+    subtitle: '4×4×4の立体空間で縦横斜め＋高さに4つ揃えろ',
+    icon: 'box',
+    minPlayers: 2,
+    maxPlayers: 2,
+    isPerfectInfo: true,
+    localPlayMode: 'direct',
+    description:
+      '4×4×4（全64マス・76本の勝利ライン）の立体四目並べ！4つの階層を見渡しながら立体斜めラインを決めよう。',
+    defaultRules: {
+      gravityMode: true,
+    },
+    ruleFields: [
+      {
+        key: 'gravityMode',
+        label: '重力落下モード（下から積む）',
+        description: 'ONにすると各柱の1段目から順に積み上がる。OFFで全64マスどこでも自由配置',
+        type: 'boolean',
+      },
+    ],
+  },
   coinsoccer: {
     id: 'coinsoccer',
     category: 'action',

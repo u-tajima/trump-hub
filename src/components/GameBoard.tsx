@@ -4,20 +4,26 @@ import type { AirHockeyClientState } from '../games/airhockey';
 import type { BackgammonClientState } from '../games/backgammon';
 import type { BattleshipClientState } from '../games/battleship';
 import type { BlackjackClientState } from '../games/blackjack';
+import type { CardShogiClientState } from '../games/cardShogi';
 import type { CarromClientState } from '../games/carrom';
 import type { CheckersClientState } from '../games/checkers';
 import type { ChessClientState } from '../games/chess';
 import type { ChinchiroClientState } from '../games/chinchiro';
 import type { CoinSoccerClientState } from '../games/coinSoccer';
 import type { Connect4ClientState } from '../games/connect4';
+import type { Connect4_3DClientState } from '../games/connect4_3d';
+import type { CorridorClientState } from '../games/corridor';
 import type { Crazy8ClientState } from '../games/crazy8';
 import type { CrokinoleClientState } from '../games/crokinole';
 import type { DaifugoClientState } from '../games/daifugo';
 import type { DotsAndBoxesClientState } from '../games/dotsAndBoxes';
 import type { DoubtClientState } from '../games/doubt';
+import type { GobbletClientState } from '../games/gobblet';
 import type { GomokuClientState } from '../games/gomoku';
 import type { GunjinShogiClientState } from '../games/gunjinshogi';
+import type { HasamiShogiClientState } from '../games/hasamiShogi';
 import type { HexClientState } from '../games/hex';
+import type { HexPushClientState } from '../games/hexPush';
 import type { HitAndBlowClientState } from '../games/hitAndBlow';
 import type { HoldemClientState } from '../games/holdem';
 import type { IgoClientState } from '../games/igo';
@@ -35,6 +41,7 @@ import { GAME_REGISTRY } from '../games/registry';
 import type { SevensClientState } from '../games/sevens';
 import type { ShogiClientState } from '../games/shogi';
 import type { SpeedClientState } from '../games/speed';
+import type { TowerClimbClientState } from '../games/towerClimb';
 import type { WerewolfClientState } from '../games/werewolf';
 import type { WordWolfClientState } from '../games/wordWolf';
 import type { YachtClientState } from '../games/yacht';
@@ -47,20 +54,26 @@ import { AirHockeyBoard } from './boards/AirHockeyBoard';
 import { BackgammonBoard } from './boards/BackgammonBoard';
 import { BattleshipBoard } from './boards/BattleshipBoard';
 import { BlackjackBoard } from './boards/BlackjackBoard';
+import { CardShogiBoard } from './boards/CardShogiBoard';
 import { CarromBoard } from './boards/CarromBoard';
 import { CheckersBoard } from './boards/CheckersBoard';
 import { ChessBoard } from './boards/ChessBoard';
 import { ChinchiroBoard } from './boards/ChinchiroBoard';
 import { CoinSoccerBoard } from './boards/CoinSoccerBoard';
 import { Connect4Board } from './boards/Connect4Board';
+import { Connect4_3DBoard } from './boards/Connect4_3DBoard';
+import { CorridorBoard } from './boards/CorridorBoard';
 import { Crazy8Board } from './boards/Crazy8Board';
 import { CrokinoleBoard } from './boards/CrokinoleBoard';
 import { DaifugoBoard } from './boards/DaifugoBoard';
 import { DotsAndBoxesBoard } from './boards/DotsAndBoxesBoard';
 import { DoubtBoard } from './boards/DoubtBoard';
+import { GobbletBoard } from './boards/GobbletBoard';
 import { GomokuBoard } from './boards/GomokuBoard';
 import { GunjinShogiBoard } from './boards/GunjinShogiBoard';
+import { HasamiShogiBoard } from './boards/HasamiShogiBoard';
 import { HexBoard } from './boards/HexBoard';
+import { HexPushBoard } from './boards/HexPushBoard';
 import { HitAndBlowBoard } from './boards/HitAndBlowBoard';
 import { HoldemBoard } from './boards/HoldemBoard';
 import { IgoBoard } from './boards/IgoBoard';
@@ -78,6 +91,7 @@ import { ScoreRoomBoard } from './boards/ScoreRoomBoard';
 import { SevensBoard } from './boards/SevensBoard';
 import { ShogiBoard } from './boards/ShogiBoard';
 import { SpeedBoard } from './boards/SpeedBoard';
+import { TowerClimbBoard } from './boards/TowerClimbBoard';
 import { WerewolfBoard } from './boards/WerewolfBoard';
 import { WordWolfBoard } from './boards/WordWolfBoard';
 import { YachtBoard } from './boards/YachtBoard';
@@ -446,6 +460,55 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <InsiderBoard
                 state={gameState as InsiderClientState}
                 isHost={isHost}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'gobblet' && (
+              <GobbletBoard
+                state={gameState as GobbletClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'corridor' && (
+              <CorridorBoard
+                state={gameState as CorridorClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'towerclimb' && (
+              <TowerClimbBoard
+                state={gameState as TowerClimbClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'cardshogi' && (
+              <CardShogiBoard
+                state={gameState as CardShogiClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'hexpush' && (
+              <HexPushBoard
+                state={gameState as HexPushClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'hasamishogi' && (
+              <HasamiShogiBoard
+                state={gameState as HasamiShogiClientState}
+                onAction={onAction}
+                isLocalPassAndPlay={isLocalPassAndPlay}
+              />
+            )}
+            {gameId === 'connect4_3d' && (
+              <Connect4_3DBoard
+                state={gameState as Connect4_3DClientState}
                 onAction={onAction}
                 isLocalPassAndPlay={isLocalPassAndPlay}
               />

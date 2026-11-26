@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Anchor,
   Binary,
+  Box,
   Brain,
   Circle,
   CircleDot,
@@ -64,7 +65,8 @@ export type GameIconKey =
   | 'compass'
   | 'flag'
   | 'messageSquare'
-  | 'helpCircle';
+  | 'helpCircle'
+  | 'box';
 
 interface GameIconProps {
   name: GameIconKey;
@@ -136,5 +138,7 @@ export const GameIcon: React.FC<GameIconProps> = ({ name, size = 18, className }
       return <MessageSquare size={size} className={className} />;
     case 'helpCircle':
       return <HelpCircle size={size} className={className} />;
+    case 'box':
+      return <Box size={size} className={className} />;
   }
 };

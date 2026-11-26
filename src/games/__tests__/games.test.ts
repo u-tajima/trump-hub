@@ -40,6 +40,13 @@ import { applyHexAction, computeHexBotAction, initHex } from '../hex';
 import { applyInsiderAction, initInsider, sanitizeInsiderState } from '../insider';
 import { applyOneNightAction, initOneNight, sanitizeOneNightState } from '../oneNight';
 import { applyWordWolfAction, initWordWolf, sanitizeWordWolfState } from '../wordWolf';
+import { applyCardShogiAction, computeCardShogiBotAction, initCardShogi } from '../cardShogi';
+import { applyConnect4_3DAction, computeConnect4_3DBotAction, initConnect4_3D } from '../connect4_3d';
+import { applyCorridorAction, computeCorridorBotAction, initCorridor } from '../corridor';
+import { applyGobbletAction, computeGobbletBotAction, initGobblet } from '../gobblet';
+import { applyHasamiShogiAction, computeHasamiShogiBotAction, initHasamiShogi } from '../hasamiShogi';
+import { applyHexPushAction, computeHexPushBotAction, initHexPush } from '../hexPush';
+import { applyTowerClimbAction, computeTowerClimbBotAction, initTowerClimb } from '../towerClimb';
 import {
   applyScoreBoardOp,
   createEmptyScoreBoard,
@@ -626,19 +633,26 @@ describe('Perfect Information Local Pass-and-Play', () => {
     expect(perfectIds).toEqual([
       'airhockey',
       'backgammon',
+      'cardshogi',
       'carrom',
       'checkers',
       'chess',
       'coinsoccer',
       'connect4',
+      'connect4_3d',
+      'corridor',
       'crokinole',
       'dotsandboxes',
+      'gobblet',
       'gomoku',
+      'hasamishogi',
       'hex',
+      'hexpush',
       'igo',
       'mancala',
       'reversi',
       'shogi',
+      'towerclimb',
     ]);
   });
 
@@ -1348,7 +1362,7 @@ describe('9 new games engines (Hex, Checkers, Backgammon, GunjinShogi, CoinSocce
 
   it('provides complete structured rule guides for all registered games', () => {
     const allIds = Object.keys(GAME_REGISTRY) as (keyof typeof GAME_REGISTRY)[];
-    expect(allIds.length).toBeGreaterThanOrEqual(38);
+    expect(allIds.length).toBeGreaterThanOrEqual(45);
     for (const id of allIds) {
       const guide = GAME_RULE_GUIDES[id];
       expect(guide, `missing guide for ${id}`).toBeDefined();
@@ -1356,5 +1370,72 @@ describe('9 new games engines (Hex, Checkers, Backgammon, GunjinShogi, CoinSocce
       expect(guide.flow.length).toBeGreaterThanOrEqual(3);
       expect(guide.points.length).toBeGreaterThanOrEqual(3);
     }
+  });
+
+  it('7 new abstract board games: Gobblet, Corridor, TowerClimb, CardShogi, HexPush, HasamiShogi, Connect4_3D', () => {
+    const p2 = makePlayers(2);
+    p2[0].isBot = true;
+    p2[1].isBot = true;
+
+    // 1. Gobblet: 小の上に大をかぶせられる＆Botが合法手を返す
+    let gb = initGobblet(p2, { allowBoardMove: true });
+    gb = applyGobbletAction(gb, 'p1', { type: 'place', payload: { size: 1, toRow: 1, toCol: 1 } }).state;
+    gb = applyGobbletAction(gb, 'p2', { type: 'place', payload: { size: 3, toRow: 1, toCol: 1 } }).state;
+    expect(gb.board[1][1].length).toBe(2);
+    expect(gb.board[1][1][1].size).toBe(3);
+    expect(computeGobbletBotAction(gb)).not.toBeNull();
+
+    // 2. Corridor: 壁設置と移動・Bot動作
+    let co = initCorridor(p2, { boardSize: 9, wallsPerPlayer: 10 });
+    const coWall = applyCorridorAction(co, 'p1', { type: 'placeWall', payload: { orientation: 'h', row: 0, col: 4 } });
+    expect(coWall.error).toBeUndefined();
+    co = coWall.state;
+    expect(computeCorridorBotAction(co)).not.toBeNull();
+
+    // 3. TowerClimb: 配置→移動→建築とBot動作
+    let tc = initTowerClimb(p2, { enableDome: true });
+    for (let i = 0; i < 4; i++) {
+      const act = computeTowerClimbBotAction(tc)!;
+      expect(act).not.toBeNull();
+      tc = applyTowerClimbAction(tc, tc.players[tc.turnIndex].id, act).state;
+    }
+    expect(tc.subPhase).toBe('move');
+    const tcMove = computeTowerClimbBotAction(tc)!;
+    tc = applyTowerClimbAction(tc, tc.players[tc.turnIndex].id, tcMove).state;
+    expect(tc.subPhase).toBe('build');
+
+    // 4. CardShogi: カードを使って移動すると中央カードと交換される
+    let cs = initCardShogi(p2, { allowTempleWin: true });
+    const prevCenter = cs.centerCard;
+    const csAct = computeCardShogiBotAction(cs)!;
+    expect(csAct).not.toBeNull();
+    cs = applyCardShogiAction(cs, 'p1', csAct).state;
+    expect(cs.centerCard).not.toBe(prevCenter);
+
+    // 5. HexPush: 61マス初期配置（各14玉）＆Bot合法手
+    let hp = initHexPush(p2, { pushOutTarget: 6 });
+    const hpAct = computeHexPushBotAction(hp)!;
+    expect(hpAct).not.toBeNull();
+    const hpRes = applyHexPushAction(hp, 'p1', hpAct);
+    expect(hpRes.error).toBeUndefined();
+
+    // 6. HasamiShogi: 縦横移動＆Bot合法手
+    let hs = initHasamiShogi(p2, { captureTarget: 5 });
+    const hsAct = computeHasamiShogiBotAction(hs)!;
+    expect(hsAct).not.toBeNull();
+    const hsRes = applyHasamiShogiAction(hs, 'p1', hsAct);
+    expect(hsRes.error).toBeUndefined();
+
+    // 7. Connect4_3D: 重力モードで1F→2Fへ積み上がり、立体垂直4目で勝利
+    let c3 = initConnect4_3D(p2, { gravityMode: true });
+    for (let z = 0; z < 3; z++) {
+      c3 = applyConnect4_3DAction(c3, 'p1', { type: 'place', payload: { z: 0, row: 1, col: 1 } }).state;
+      c3 = applyConnect4_3DAction(c3, 'p2', { type: 'place', payload: { z: 0, row: 0, col: 0 } }).state;
+    }
+    c3 = applyConnect4_3DAction(c3, 'p1', { type: 'place', payload: { z: 0, row: 1, col: 1 } }).state;
+    expect(c3.phase).toBe('finished');
+    expect(c3.winnerId).toBe('p1');
+    expect(c3.winningLine.length).toBe(4);
+    expect(computeConnect4_3DBotAction(initConnect4_3D(p2, { gravityMode: true }))).not.toBeNull();
   });
 });

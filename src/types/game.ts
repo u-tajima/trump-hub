@@ -27,6 +27,13 @@ export type GameId =
   | 'checkers'
   | 'backgammon'
   | 'gunjinshogi'
+  | 'gobblet'
+  | 'corridor'
+  | 'towerclimb'
+  | 'cardshogi'
+  | 'hexpush'
+  | 'hasamishogi'
+  | 'connect4_3d'
   | 'carrom'
   | 'airhockey'
   | 'coinsoccer'
@@ -263,6 +270,35 @@ export interface InsiderRules {
   discussionSec: number;     // 告発議論タイム（秒）
 }
 
+export interface GobbletRules {
+  allowBoardMove: boolean;   // 盤上に置いた駒の移動を許可するか（公式ルール: true）
+}
+
+export interface CorridorRules {
+  boardSize: 7 | 9;          // 盤面サイズ（7x7クイック / 9x9標準）
+  wallsPerPlayer: 6 | 10;    // 1人あたりの持ち壁本数
+}
+
+export interface TowerClimbRules {
+  enableDome: boolean;       // 4段目にドームを置いて封鎖できるか（公式ルール: true）
+}
+
+export interface CardShogiRules {
+  allowTempleWin: boolean;   // 相手の王座マスへ自分の王を運んでも勝ちにするか（公式: true）
+}
+
+export interface HexPushRules {
+  pushOutTarget: 4 | 6;      // 勝利に必要な場外押し出し数（4個クイック / 6個公式）
+}
+
+export interface HasamiShogiRules {
+  captureTarget: 5 | 7;      // 勝利に必要な獲得枚数（5枚標準 / 7枚ロング）
+}
+
+export interface Connect4_3DRules {
+  gravityMode: boolean;      // ON: 下の層から積み上がる（スコアフォー式） / OFF: どの層にも自由配置
+}
+
 export type GameRulesMap = {
   scoreboard: ScoreBoardRoomRules;
   daifugo: DaifugoRules;
@@ -290,6 +326,13 @@ export type GameRulesMap = {
   checkers: CheckersRules;
   backgammon: BackgammonRules;
   gunjinshogi: GunjinShogiRules;
+  gobblet: GobbletRules;
+  corridor: CorridorRules;
+  towerclimb: TowerClimbRules;
+  cardshogi: CardShogiRules;
+  hexpush: HexPushRules;
+  hasamishogi: HasamiShogiRules;
+  connect4_3d: Connect4_3DRules;
   carrom: CarromRules;
   airhockey: AirHockeyRules;
   coinsoccer: CoinSoccerRules;

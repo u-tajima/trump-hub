@@ -26,6 +26,13 @@ import {
   sanitizeBlackjackState,
 } from './blackjack';
 import {
+  applyCardShogiAction,
+  type CardShogiInternalState,
+  computeCardShogiBotAction,
+  initCardShogi,
+  sanitizeCardShogiState,
+} from './cardShogi';
+import {
   applyCarromAction,
   type CarromInternalState,
   computeCarromBotAction,
@@ -68,6 +75,20 @@ import {
   sanitizeConnect4State,
 } from './connect4';
 import {
+  applyConnect4_3DAction,
+  computeConnect4_3DBotAction,
+  type Connect4_3DInternalState,
+  initConnect4_3D,
+  sanitizeConnect4_3DState,
+} from './connect4_3d';
+import {
+  applyCorridorAction,
+  computeCorridorBotAction,
+  type CorridorInternalState,
+  initCorridor,
+  sanitizeCorridorState,
+} from './corridor';
+import {
   applyCrazy8Action,
   computeCrazy8BotAction,
   type Crazy8InternalState,
@@ -103,6 +124,13 @@ import {
   sanitizeDoubtState,
 } from './doubt';
 import {
+  applyGobbletAction,
+  computeGobbletBotAction,
+  type GobbletInternalState,
+  initGobblet,
+  sanitizeGobbletState,
+} from './gobblet';
+import {
   applyGomokuAction,
   computeGomokuBotAction,
   type GomokuInternalState,
@@ -117,12 +145,26 @@ import {
   sanitizeGunjinShogiState,
 } from './gunjinshogi';
 import {
+  applyHasamiShogiAction,
+  computeHasamiShogiBotAction,
+  type HasamiShogiInternalState,
+  initHasamiShogi,
+  sanitizeHasamiShogiState,
+} from './hasamiShogi';
+import {
   applyHexAction,
   computeHexBotAction,
   type HexInternalState,
   initHex,
   sanitizeHexState,
 } from './hex';
+import {
+  applyHexPushAction,
+  computeHexPushBotAction,
+  type HexPushInternalState,
+  initHexPush,
+  sanitizeHexPushState,
+} from './hexPush';
 import {
   applyHitAndBlowAction,
   computeHitAndBlowBotAction,
@@ -234,6 +276,13 @@ import {
   type SpeedInternalState,
 } from './speed';
 import {
+  applyTowerClimbAction,
+  computeTowerClimbBotAction,
+  initTowerClimb,
+  sanitizeTowerClimbState,
+  type TowerClimbInternalState,
+} from './towerClimb';
+import {
   applyWerewolfAction,
   initWerewolf,
   sanitizeWerewolfState,
@@ -257,12 +306,15 @@ import type {
   BackgammonRules,
   BattleshipRules,
   BlackjackRules,
+  CardShogiRules,
   CarromRules,
   CheckersRules,
   ChessRules,
   ChinchiroRules,
   CoinSoccerRules,
   Connect4Rules,
+  Connect4_3DRules,
+  CorridorRules,
   Crazy8Rules,
   CrokinoleRules,
   DaifugoRules,
@@ -270,8 +322,11 @@ import type {
   DoubtRules,
   GameId,
   GameRulesMap,
+  GobbletRules,
   GomokuRules,
   GunjinShogiRules,
+  HasamiShogiRules,
+  HexPushRules,
   HexRules,
   HitAndBlowRules,
   HoldemRules,
@@ -291,6 +346,7 @@ import type {
   SevensRules,
   ShogiRules,
   SpeedRules,
+  TowerClimbRules,
   WerewolfRules,
   WordWolfRules,
   YachtRules,
@@ -328,6 +384,13 @@ export type AnyInternalState =
   | CheckersInternalState
   | BackgammonInternalState
   | GunjinShogiInternalState
+  | GobbletInternalState
+  | CorridorInternalState
+  | TowerClimbInternalState
+  | CardShogiInternalState
+  | HexPushInternalState
+  | HasamiShogiInternalState
+  | Connect4_3DInternalState
   | CarromInternalState
   | AirHockeyInternalState
   | CoinSoccerInternalState
@@ -405,6 +468,20 @@ export function initGameEngine(
       return initBackgammon(players, rules as BackgammonRules);
     case 'gunjinshogi':
       return initGunjinShogi(players, rules as GunjinShogiRules);
+    case 'gobblet':
+      return initGobblet(players, rules as GobbletRules);
+    case 'corridor':
+      return initCorridor(players, rules as CorridorRules);
+    case 'towerclimb':
+      return initTowerClimb(players, rules as TowerClimbRules);
+    case 'cardshogi':
+      return initCardShogi(players, rules as CardShogiRules);
+    case 'hexpush':
+      return initHexPush(players, rules as HexPushRules);
+    case 'hasamishogi':
+      return initHasamiShogi(players, rules as HasamiShogiRules);
+    case 'connect4_3d':
+      return initConnect4_3D(players, rules as Connect4_3DRules);
     case 'carrom':
       return initCarrom(players, rules as CarromRules);
     case 'airhockey':
@@ -491,6 +568,20 @@ export function applyGameAction(
       return applyBackgammonAction(state as BackgammonInternalState, playerId, action);
     case 'gunjinshogi':
       return applyGunjinShogiAction(state as GunjinShogiInternalState, playerId, action);
+    case 'gobblet':
+      return applyGobbletAction(state as GobbletInternalState, playerId, action);
+    case 'corridor':
+      return applyCorridorAction(state as CorridorInternalState, playerId, action);
+    case 'towerclimb':
+      return applyTowerClimbAction(state as TowerClimbInternalState, playerId, action);
+    case 'cardshogi':
+      return applyCardShogiAction(state as CardShogiInternalState, playerId, action);
+    case 'hexpush':
+      return applyHexPushAction(state as HexPushInternalState, playerId, action);
+    case 'hasamishogi':
+      return applyHasamiShogiAction(state as HasamiShogiInternalState, playerId, action);
+    case 'connect4_3d':
+      return applyConnect4_3DAction(state as Connect4_3DInternalState, playerId, action);
     case 'carrom':
       return applyCarromAction(state as CarromInternalState, playerId, action);
     case 'airhockey':
@@ -572,6 +663,20 @@ export function sanitizeGameState(gameId: GameId, state: AnyInternalState, playe
       return sanitizeBackgammonState(state as BackgammonInternalState, playerId);
     case 'gunjinshogi':
       return sanitizeGunjinShogiState(state as GunjinShogiInternalState, playerId);
+    case 'gobblet':
+      return sanitizeGobbletState(state as GobbletInternalState, playerId);
+    case 'corridor':
+      return sanitizeCorridorState(state as CorridorInternalState, playerId);
+    case 'towerclimb':
+      return sanitizeTowerClimbState(state as TowerClimbInternalState, playerId);
+    case 'cardshogi':
+      return sanitizeCardShogiState(state as CardShogiInternalState, playerId);
+    case 'hexpush':
+      return sanitizeHexPushState(state as HexPushInternalState, playerId);
+    case 'hasamishogi':
+      return sanitizeHasamiShogiState(state as HasamiShogiInternalState, playerId);
+    case 'connect4_3d':
+      return sanitizeConnect4_3DState(state as Connect4_3DInternalState, playerId);
     case 'carrom':
       return sanitizeCarromState(state as CarromInternalState, playerId);
     case 'airhockey':
@@ -933,5 +1038,61 @@ export function tickGameEngine(gameId: GameId, state: AnyInternalState): AnyInte
     case 'wordwolf':
     case 'insider':
       return null;
+    case 'gobblet': {
+      const s = state as GobbletInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeGobbletBotAction(s);
+      if (!act) return null;
+      return applyGobbletAction(s, current.id, act).state;
+    }
+    case 'corridor': {
+      const s = state as CorridorInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeCorridorBotAction(s);
+      if (!act) return null;
+      return applyCorridorAction(s, current.id, act).state;
+    }
+    case 'towerclimb': {
+      const s = state as TowerClimbInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeTowerClimbBotAction(s);
+      if (!act) return null;
+      return applyTowerClimbAction(s, current.id, act).state;
+    }
+    case 'cardshogi': {
+      const s = state as CardShogiInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeCardShogiBotAction(s);
+      if (!act) return null;
+      return applyCardShogiAction(s, current.id, act).state;
+    }
+    case 'hexpush': {
+      const s = state as HexPushInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeHexPushBotAction(s);
+      if (!act) return null;
+      return applyHexPushAction(s, current.id, act).state;
+    }
+    case 'hasamishogi': {
+      const s = state as HasamiShogiInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeHasamiShogiBotAction(s);
+      if (!act) return null;
+      return applyHasamiShogiAction(s, current.id, act).state;
+    }
+    case 'connect4_3d': {
+      const s = state as Connect4_3DInternalState;
+      const current = s.players[s.turnIndex];
+      if (!current?.isBot) return null;
+      const act = computeConnect4_3DBotAction(s);
+      if (!act) return null;
+      return applyConnect4_3DAction(s, current.id, act).state;
+    }
   }
 }
